@@ -30,6 +30,7 @@ class Character:
     untargetable: bool
     acted: bool
     stunned: bool
+    ignoring: bool = False
     hp: int
     damage_reduction: int
     sistema_CAI_stage: int = 1

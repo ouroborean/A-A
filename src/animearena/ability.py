@@ -1,4 +1,5 @@
 from operator import add
+from random import randint
 import PIL
 from PIL import Image
 from pathlib import Path
@@ -289,7 +290,7 @@ def target_one_cut_killing(user: "CharacterManager",
             total_targets += 1
     else:
         for enemy in enemyTeam:
-            if enemy.hostile_target(targeting) and enemy.has_effect(EffectType.MARK, "Red Eyed Killer"):
+            if enemy.hostile_target(targeting) and enemy.has_effect(EffectType.MARK, "Red-Eyed Killer"):
                 if not fake_targeting:
                     enemy.set_targeted()
                 total_targets += 1
@@ -643,18 +644,21 @@ def target_transform(user: "CharacterManager",
 
 #region Execution
 #(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#region Naruto Execution
 def exe_rasengan(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if not user.check_countered():
         base_damage = 25
         stun_duration = 2
-        if user.has_effect(EffectType.MARK, "Sage Mode"):
-            base_damage = 50
+        if user.has_effect(EffectType.ALL_BOOST, "Sage Mode"):
             stun_duration = 4
         for target in user.current_targets:
-            user.deal_damage(base_damage, target)
-            target.add_effect(Effect(Ability("naruto2"), EffectType.ALL_STUN, user, stun_duration, lambda eff: "This character is stunned."))
-            user.check_on_stun(target)
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(base_damage, target)
+                target.add_effect(Effect(Ability("naruto2"), EffectType.ALL_STUN, user, stun_duration, lambda eff: "This character is stunned."))
+        user.check_on_stun()
         user.check_on_use()
+        user.check_on_harm()
 
 def exe_shadow_clones(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(Ability("naruto1"), EffectType.ALL_DR, user, 5, lambda eff: "Naruto has 10 points of damage reduction.", mag=10))
@@ -667,8 +671,10 @@ def exe_naruto_taijutsu(user: "CharacterManager", playerTeam: list["CharacterMan
     if not user.check_countered():
         base_damage = 30
         for target in user.current_targets:
-            user.deal_damage(base_damage, target)
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(base_damage, target)
         user.check_on_use()
+        user.check_on_harm()
 
 def exe_substitution(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(Ability("naruto4"), EffectType.ALL_INVULN, user, 2, lambda eff: "Naruto is invulnerable."))
@@ -679,27 +685,163 @@ def exe_sage_mode(user: "CharacterManager", playerTeam: list["CharacterManager"]
     user.scene.player_display.team.energy_pool[Energy.SPECIAL] += 1
     user.add_effect(Effect(Ability("narutoalt1"), EffectType.ALL_INVULN, user, 3, lambda eff: "Naruto is invulnerable."))
     user.add_effect(Effect(Ability("narutoalt1"), EffectType.ABILITY_SWAP, user, 3, lambda eff: "Uzumaki Barrage has been replaced by Toad Taijutsu.", mag=33))
-    user.add_effect(Effect(Ability("narutoalt1"), EffectType.MARK, user, 3, lambda eff: "Rasengan stun duration and damage are doubled."))
+    user.add_effect(Effect(Ability("narutoalt1"), EffectType.ALL_BOOST, user, 3, lambda eff: "Rasengan stun duration and damage are doubled.", mag=225))
     user.check_on_use()
 
 def exe_uzumaki_barrage(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if not user.check_countered():
         base_damage = 15
+        stunned = False
         for target in user.current_targets:
-            user.deal_damage(base_damage, target)
-            if user.has_effect(EffectType.MARK, "Uzumaki Barrage"):
-                target.add_effect(Effect(Ability("narutoalt2"), EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                user.check_on_stun(target)
+            if target.final_can_effect(user.check_bypass_effects()) and not target.has_effect(EffectType.MARK, "Rapid Deflection"):
+                user.deal_damage(base_damage, target)
+                if user.has_effect(EffectType.MARK, "Uzumaki Barrage"):
+                    target.add_effect(Effect(Ability("narutoalt2"), EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
+                    stunned = True
             user.add_effect(Effect(Ability("narutoalt2"), EffectType.MARK, user, 3, lambda eff: "Uzumaki Barrage will stun its target for one turn."))
+        if stunned:
+            user.check_on_stun()
         user.check_on_use()
+        user.check_on_harm()
 
 def exe_toad_taijutsu(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if not user.check_countered():
         base_damage = 35
         for target in user.current_targets:
-            user.deal_damage(base_damage, target)
-            target.add_effect(Effect(Ability("narutoalt3"), EffectType.COST_ADJUST, user, 4, lambda eff: "This character's ability costs have been increased by 2 random energy.", mag=52))
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(base_damage, target)
+                target.add_effect(Effect(Ability("narutoalt3"), EffectType.COST_ADJUST, user, 4, lambda eff: "This character's ability costs have been increased by 2 random energy.", mag=52))
         user.check_on_use()
+        user.check_on_harm()
+#endregion
+#region Aizen Execution
+def exe_shatter(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                target.add_effect(Effect(Ability("aizen1"), EffectType.COST_ADJUST, user, 2, lambda eff: "This character's ability costs are increased by one random energy.", mag=51))
+                target.add_effect(Effect(Ability("aizen1"), EffectType.MARK, user, 3, lambda eff: "This character will take 20 additional damage from Overwhelming Power."))
+                target.add_effect(Effect(Ability("aizen1"), EffectType.MARK, user, 3, lambda eff: "If Black Coffin is used on this enemy, it will also affect their allies."))
+            
+                #Black Coffin
+                if target.has_effect(EffectType.MARK, "Black Coffin"):
+                    for ability in target.source.current_abilities:
+                        if ability.cooldown_remaining > 0:
+                            ability.cooldown_remaining += 2
+                if target.has_effect(EffectType.MARK, "Overwhelming Power"):
+                    user.add_effect(Effect(Ability("aizen1"), EffectType.COST_ADJUST, user, 2, lambda eff: "Aizen's ability costs have been reduced by one random energy.", mag=-51))
+
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_overwhelming_power(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            base_damage=25
+            if target.has_effect(EffectType.MARK, "Shatter, Kyoka Suigetsu"):
+                base_damage += 20
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(base_damage, target)
+                target.add_effect(Effect(Ability("aizen2"), EffectType.MARK, user, 3, lambda eff: "If Shatter, Kyoka Suigetsu is used on this character, Aizen's abilities will cost one fewer random energy for one turn."))
+                target.add_effect(Effect(Ability("aizen2"), EffectType.MARK, user, 3, lambda eff: "If Black Coffin is used on this enemy, they will take 20 damage."))
+                if target.has_effect(EffectType.MARK, "Black Coffin"):
+                    target.add_effect(Effect(Ability("aizen2"), EffectType.DEF_NEGATE, user, 3, lambda eff: "This character cannot reduce damage or become invulnerable."))
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_black_coffin(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+
+        if user.primary_target.final_can_effect(user.check_bypass_effects()):
+            if user.primary_target.has_effect(EffectType.MARK, "Shatter, Kyoka Suigetsu"):
+                for enemy in enemyTeam:
+                    if enemy != user.primary_target and enemy.hostile_target(user.check_bypass_effects()):
+                        user.current_targets.append(enemy)
+
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                target.add_effect(Effect(Ability("aizen3"), EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
+                target.add_effect(Effect(Ability("aizen3"), EffectType.MARK, user, 3, lambda eff: "If Shatter, Kyoka Suigetsu is used on this character, all of their active cooldowns will be increased by 2."))
+                target.add_effect(Effect(Ability("aizen3"), EffectType.MARK, user, 3, lambda eff: "If Overwhelming Power is used on this character, they will be unable to reduce damage or become invulnerable for 2 turns."))
+                if target.has_effect(EffectType.MARK, "Overwhelming Power"):
+                    base_damage = 20
+                    user.deal_damage(base_damage, target)
+        user.check_on_stun()
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_effortless_guard(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(Ability("aizen4"), EffectType.ALL_INVULN, user, 2, lambda eff: "Aizen is invulnerable."))
+    user.check_on_use()
+#endregion
+#region Akame Execution
+def exe_red_eyed_killer(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                target.add_effect(Effect(Ability("akame1"), EffectType.MARK, user, 3, lambda eff: "Akame can use One Cut Killing on this character."))
+    user.check_on_use()
+
+def exe_one_cut_killing(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()) or (user.has_effect(EffectType.MARK, "Little War Horn") and target.final_can_effect("FULLBYPASS")):
+                base_damage = 100
+                user.deal_aff_damage(base_damage, target)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_little_war_horn(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(Ability("akame3"), EffectType.MARK, user, 5, lambda eff: "Akame can use One Cut Killing on any target."))
+    user.check_on_use()
+
+def exe_rapid_deflection(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(Ability("akame4"), EffectType.ALL_INVULN, user, 2, lambda eff: "Akame is invulnerable."))
+    user.check_on_use()
+#endregion
+#region Astolfo Execution
+def exe_casseur(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    for target in user.current_targets:
+        target.add_effect(Effect(user.used_ability, EffectType.COUNTER, user, 2, lambda eff: "Astolfo will counter the first harmful Special or Mental ability used against this character. This effect is invisible until triggered.", invisible = True))
+    user.check_on_help()
+    user.check_on_use()
+
+def exe_trap(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            base_damage = 20
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(base_damage, target)
+                target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 2, lambda eff: "This character cannot have their damage boosted over its base value."))
+                if target.has_boosts():
+                    user.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff: f"Astolfo will deal {eff.mag * 5} additional damage with Trap of Argalia - Down With A Touch!", mag=1))
+                
+        user.check_on_use()
+        user.check_on_harm()
+            
+
+def exe_luna(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.id < 3:
+                hostile_effects = [eff for eff in target.source.current_effects if eff.user.is_enemy()]
+                if hostile_effects:
+                    target.full_remove_effect(hostile_effects[randint(0, len(hostile_effects) - 1)].name)
+                    user.apply_stack_effect(Effect(Ability("astolfo1"), EffectType.STACK, user, 280000, lambda eff: f"Astolfo will deal {eff.mag * 5} additional damage with Trap of Argalia - Down With A Touch!", mag=1))
+            if target.id > 2:
+                if target.final_can_effect(user.check_bypass_effects()):
+                    target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 4, lambda eff: "This character cannot have their damage boosted over its base value."))
+        user.check_on_use()
+        user.check_on_help()
+        user.check_on_harm()
+        
+
+                    
+
+def exe_kosmos(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Astolfo is invulnerable."))
+    user.check_on_use()
+
 #endregion
 
 ability_info_db = {
@@ -756,7 +898,7 @@ ability_info_db = {
         +
         "all their currently active cooldowns are increased by 2. If the enemy is marked by Overwhelming Power, Aizen's abilities will cost one less random energy on the following turn.",
         [0, 0, 1, 0, 1, 1], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_shatter
     ],
     "aizen2": [
         "Overwhelming Power",
@@ -764,41 +906,41 @@ ability_info_db = {
         +
         " that enemy will be unable to reduce damage or become invulnerable for 2 turns. If that enemy is marked with Shatter, Kyoka Suigetsu, Overwhelming Power deals 20 bonus damage to them.",
         [1, 0, 0, 0, 1, 1], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_overwhelming_power
     ],
     "aizen3": [
         "Black Coffin",
         "Target enemy is stunned and marked with Black Coffin for 1 turn. If the enemy is marked with Overwhelming Power, they will also take 20 damage. If the"
         +
         " enemy is marked with Shatter, Kyoka Suigetsu, then Black Coffin also affects their allies.",
-        [0, 1, 0, 0, 1, 1], Target.SINGLE, default_target("HOSTILE")
+        [0, 1, 0, 0, 1, 1], Target.SINGLE, default_target("HOSTILE"), exe_black_coffin
     ],
     "aizen4": [
         "Effortless Guard", "Aizen becomes invulnerable for 1 turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_effortless_guard
     ],
     "akame1": [
         "Red-Eyed Killer",
         "Akame marks an enemy for 1 turn. During this time, she can use One-Cut Killing on the target.",
         [0, 0, 1, 0, 0, 0], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_red_eyed_killer
     ],
     "akame2": [
         "One Cut Killing",
         "Akame instantly kills a target marked with Red-Eyed Killer.",
-        [0, 0, 0, 2, 1, 1], Target.SINGLE, target_one_cut_killing
+        [0, 0, 0, 2, 1, 1], Target.SINGLE, target_one_cut_killing, exe_one_cut_killing
     ],
     "akame3": [
         "Little War Horn",
         "For two turns, Akame can use One Cut Killing on any target, regardless of their effects.",
         [0, 0, 0, 0, 2, 5], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_little_war_horn
     ],
     "akame4": [
         "Rapid Deflection", "Akame becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_rapid_deflection
     ],
     "astolfo1": [
         "Casseur de Logistille",
@@ -806,24 +948,24 @@ ability_info_db = {
         +
         " will be countered and the user will be stunned and isolated for 1 turn. This ability is invisible until triggered.",
         [0, 0, 0, 1, 0, 3], Target.SINGLE,
-        default_target("HELPFUL")
+        default_target("HELPFUL"), exe_casseur
     ],
     "astolfo2": [
         "Trap of Argalia - Down With A Touch!",
         "Astolfo deals 20 piercing damage to target enemy. For one turn, they cannot have their damage boosted above its default value. If the target's damage is currently boosted, Trap of Argalia will permanently "
         + "deal 5 additional damage.", [1, 0, 0, 0, 0, 0], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_trap
     ],
     "astolfo3": [
         "La Black Luna",
         "Astolfo removes one hostile effect from every member of his team, and for 2 turns, no enemy can have their damage boosted above its default value. For every hostile effect removed, Trap of Argalia will permanently"
         + " deal 5 additional damage.", [0, 1, 0, 0, 1, 2], Target.ALL_TARGET,
-        default_target("ALL")
+        default_target("ALL"), exe_luna
     ],
     "astolfo4": [
         "Akhilleus Kosmos", "Astolfo becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_kosmos
     ],
     "cmary1": [
         "Quickdraw - Pistol",

@@ -158,7 +158,7 @@ class Scene:
         # if height is on auto, then set it to a function of the margin plus
         # the space required for all lines
         if height is None:
-            true_height = vertical_margin + y_offset * len(lines) + 15
+            true_height = vertical_margin + (13 * len(lines))
         else:
             true_height = vertical_margin + height
 

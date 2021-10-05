@@ -51,6 +51,8 @@ class EffectType(enum.IntEnum):
     CONT_USE = 36
     DEF_NEGATE = 37
     TARGET_SWAP = 38
+    STACK = 39
+    ISOLATE = 40
 
 
 class Effect:

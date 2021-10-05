@@ -1,3 +1,4 @@
+from operator import mod
 import sdl2
 import sdl2.ext
 import sdl2.surface
@@ -699,6 +700,7 @@ class BattleScene(engine.Scene):
                     self.acting_character.add_current_target(manager)
                     manager.add_received_ability(self.selected_ability)
         self.reset_targeting()
+        self.acting_character.primary_target = primary_target
         self.selected_ability.user = self.acting_character
         self.acting_character.used_ability = self.selected_ability
         self.selected_ability = None
@@ -767,6 +769,7 @@ class CharacterManager():
     text_region: engine.Region
     scene: BattleScene
     current_targets: list["CharacterManager"]
+    primary_target: "CharacterManager"
     targeted: bool
     targeting: bool
     acted: bool
@@ -864,12 +867,23 @@ class CharacterManager():
             gen = (eff for eff in self.source.current_effects
                    if eff.eff_type == EffectType.COST_ADJUST)
             for eff in gen:
+                negative_cost = False
+                if eff.mag < 0:
+                    negative_cost = True
+                    eff.mag = eff.mag * -1
                 ability_to_modify = eff.mag // 100
                 cost_type = (eff.mag - (ability_to_modify * 100)) // 10
                 magnitude = eff.mag - (ability_to_modify * 100) - (cost_type * 10)
+                if negative_cost:
+                    magnitude = magnitude * -1
                 if ability_to_modify - 1 == i or ability_to_modify == 0:
                     ability.modify_ability_cost(Energy(cost_type - 1), magnitude)
-        
+    
+    def check_on_harm(self):
+        pass
+
+    def check_on_help(self):
+        pass
 
     def check_on_use(self):
         if self.has_effect(EffectType.MARK, "Mug"):
@@ -886,23 +900,40 @@ class CharacterManager():
         #TODO Stun receipt checks
         pass
 
-    def check_on_stun(self, target: "CharacterManager"):
+    def check_on_stun(self):
         #TODO stun checks
-        target.receive_stun()
+
         pass
 
     def check_countered(self) -> bool:
-        #self counter/reflect effects:
+        #self reflect effects:
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.REFLECT)
         for eff in gen:
-            if eff.name == "Taunt":
-                self.current_targets.clear()
-                self.current_targets.append(eff.user)
-
-        for target in self.current_targets:
-            #TODO check for individual counters on target
             pass
+        #self counter check
+        gen = (eff for eff in self.source.current_effects if eff.eff_type == EffectType.COUNTER)
+        for eff in gen:
+            pass
+        
+        #target counter check
+        for target in self.current_targets:
+            gen = (eff for eff in target.source.current_effects if eff.eff_type == EffectType.COUNTER)
+            for eff in gen:
+                if eff.name == "Casseur de Logistille":
+                    src = Ability("astolfo1")
+                    if self.used_ability._base_cost[Energy.SPECIAL] > 0 or self.used_ability._base_cost[Energy.MENTAL] > 0:
+                        self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Casseur de Logistille."))
+                        if not self.source.ignoring:
+                            self.add_effect(Effect(src, EffectType.ALL_STUN, eff.user, 3, lambda eff: "This character is stunned."))
+                            self.add_effect(Effect(src, EffectType.ISOLATE, eff.user, 3, lambda eff: "This character is isolated."))
+                        if self.has_effect(EffectType.COUNTER, "Third Dance - Shirafune"):
+                            #TODO Shirafune things
+                            pass
+                        return True
+                            
+
+
         return False
 
     def check_on_damage_dealt(self, target: "CharacterManager"):
@@ -913,12 +944,51 @@ class CharacterManager():
             target.get_ability("Sneak").cooldown_remaining = 3
             target.remove_effect(target.get_effect(EffectType.MARK, "Sneak"))
 
-    def check_for_boosts(self, damage: int) -> int:
+    def apply_stack_effect(self, eff: Effect):
+        if self.has_effect(eff.eff_type, eff.name):
+            self.get_effect(eff.eff_type, eff.name).mag += eff.mag
+        else:
+            self.add_effect(eff)
+
+    def get_boosts(self, damage: int) -> int:
+        mod_damage = damage
+        which = 0
+        for i, ability in enumerate(self.source.current_abilities):
+            if self.used_ability == ability:
+                which = i + 1
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.ALL_BOOST)
+        
         for eff in gen:
-            damage += eff.mag
-        return damage
+            negative = False
+            if eff.mag < 0:
+                negative = True
+                eff.mag = eff.mag * -1
+            ability_target = eff.mag // 100
+            boost_value = eff.mag - (ability_target * 100)
+            if negative:
+                boost_value = boost_value * - 1
+            if ability_target == which or ability_target == 0:
+                mod_damage = mod_damage + boost_value
+
+        if self.used_ability.name == "Trap of Argalia - Down With A Touch!":
+            if self.has_effect(EffectType.STACK, "Trap of Argalia - Down With A Touch!"):
+                mod_damage += (self.get_effect(EffectType.STACK, "Trap of Argalia - Down With A Touch!").mag * 5)
+
+
+        if self.has_effect(EffectType.MARK, "Trap of Argalia - Down With A Touch!") or self.has_effect(EffectType.MARK, "La Black Luna"):
+            mod_damage = damage
+
+        return mod_damage
+
+    def has_boosts(self) -> bool:
+        gen = (eff for eff in self.source.current_effects if eff.eff_type == EffectType.ALL_BOOST)
+        for eff in gen:
+            if eff.mag > 0:
+                return True
+        if self.has_effect(EffectType.STACK, "Trap of Argalia - Down With A Touch!"):
+            return True
+        return False
 
     def check_for_dmg_reduction(self) -> int:
         dr = 0
@@ -1005,7 +1075,7 @@ class CharacterManager():
     def receive_aff_dmg(self, damage: int):
         #TODO add affliction damage received boosts
         self.source.hp -= damage
-        if self.source.hp < 0:
+        if self.source.hp <= 0:
             self.source.hp = 0
             self.source.dead = True
 
@@ -1017,12 +1087,12 @@ class CharacterManager():
     def receive_eff_aff_damage(self, damage: int):
         #TODO add affliction damage received boosts
         self.source.hp -= damage
-        if self.source.hp < 0:
+        if self.source.hp <= 0:
             self.source.hp = 0
             self.source.dead = True
 
     def deal_damage(self, damage: int, target: "CharacterManager"):
-        damage = self.check_for_boosts(damage)
+        damage = self.get_boosts(damage)
         target.receive_damage(damage)
         self.check_on_damage_dealt(target)
 
@@ -1030,24 +1100,24 @@ class CharacterManager():
         mod_damage = damage - self.check_for_dmg_reduction()
         mod_damage = self.pass_through_dest_def(mod_damage)
         self.source.hp -= mod_damage
-        if self.source.hp < 0:
+        if self.source.hp <= 0:
             self.source.hp = 0
             self.source.dead = True
 
     def deal_pierce_damage(self, damage: int, target: "CharacterManager"):
-        damage = self.check_for_boosts(damage)
+        damage = self.get_boosts(damage)
         target.receive_pierce_damage(damage)
         self.check_on_damage_dealt(target)
 
     def receive_pierce_damage(self, damage: int):
         mod_damage = self.pass_through_dest_def(damage)
         self.source.hp -= mod_damage
-        if self.source.hp < 0:
+        if self.source.hp <= 0:
             self.source.hp = 0
             self.source.dead = True
 
     def deal_eff_damage(self, damage: int, target: "CharacterManager"):
-        damage = self.check_for_boosts(damage)
+        damage = self.get_boosts(damage)
         target.receive_eff_damage(damage)
         self.check_on_damage_dealt(target)
 
@@ -1055,18 +1125,18 @@ class CharacterManager():
         mod_damage = damage - self.check_for_dmg_reduction()
         mod_damage = self.pass_through_dest_def(mod_damage)
         self.source.hp -= mod_damage
-        if self.source.hp < 0:
+        if self.source.hp <= 0:
             self.source.hp = 0
             self.source.dead = True
 
     def deal_eff_pierce_damage(self, damage: int, target: "CharacterManager"):
-        damage = self.check_for_boosts(damage)
+        damage = self.get_boosts(damage)
         target.receive_eff_pierce_damage(damage)
         self.check_on_damage_dealt(target)
 
     def receive_eff_pierce_damage(self, damage: int):
         self.source.hp -= damage
-        if self.source.hp < 0:
+        if self.source.hp <= 0:
             self.source.hp = 0
             self.source.dead = True
 
@@ -1109,9 +1179,17 @@ class CharacterManager():
 
     def hostile_target(self, def_type = "NORMAL") -> bool:
         if def_type == "NORMAL":
-            return not (self.source.invulnerable or self.source.dead or self.source.untargetable)
+            return not ((self.source.invulnerable and not self.check_invuln()) or self.source.dead or self.source.untargetable)
         elif def_type == "BYPASS":
             return not (self.source.dead or self.source.untargetable)
+
+    def final_can_effect(self, def_type = "NORMAL") -> bool:
+        if def_type == "NORMAL":
+            return not ((self.source.invulnerable and not self.check_invuln()) or self.source.dead or self.source.ignoring)
+        elif def_type == "BYPASS":
+            return not (self.source.dead or self.source.ignoring)
+        elif def_type == "FULLBYPASS":
+            return not (self.source.dead)
 
     def helpful_target(self, def_type = "NORMAL") -> bool:
         if def_type == "NORMAL":
@@ -1180,10 +1258,10 @@ class CharacterManager():
             base_height = 50
             additional_height = 0
             for effect in self.scene.current_button.effects:
-                additional_height += len(textwrap.wrap(effect.get_desc(), 26))
+                additional_height += len(textwrap.wrap(effect.get_desc(), 35))
             hover_panel_sprite = self.scene.sprite_factory.from_color(WHITE,
                                                                       size=(max_line_width,
-                                                                            base_height + 19 + (additional_height * 23)))
+                                                                            base_height + (additional_height * 18) + (len(self.scene.current_button.effects) * 20)))
             mouse_x, mouse_y = engine.get_mouse_position()
             self.scene.hover_effect_region.x = mouse_x - hover_panel_sprite.size[
                 0] if self.scene.current_button.is_enemy else mouse_x
@@ -1202,7 +1280,7 @@ class CharacterManager():
                 else:
                     effect_x = 0
                 self.scene.hover_effect_region.add_sprite(effect, effect_x, effect_y)
-                effect_y += effect.size[1] - 26
+                effect_y += effect.size[1] - 5
             
 
     def get_effect_lines(self, effect_list: list[Effect]) -> list[sdl2.ext.SoftwareSprite]:
@@ -1212,7 +1290,7 @@ class CharacterManager():
             self.scene.create_text_display(self.scene.font, effect_list[0].name, BLUE, WHITE, 0, 0,
                                            260))
 
-        for effect in effect_list:
+        for i, effect in enumerate(effect_list):
             output.append(
                 self.scene.create_text_display(self.scene.font,
                                                self.get_duration_string(effect.duration), RED,
@@ -1222,6 +1300,7 @@ class CharacterManager():
                 self.scene.create_text_display(self.scene.font, effect.get_desc(), BLACK, WHITE, 5,
                                                0, 270))
 
+        
         return output
 
     def get_duration_string(self, duration: int) -> str:
