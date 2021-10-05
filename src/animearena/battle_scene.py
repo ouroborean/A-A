@@ -347,7 +347,7 @@ class BattleScene(engine.Scene):
                    if eff.eff_type == EffectType.CONT_DMG)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied(eff):
-                    eff.user.deal_eff_damage(eff.mag, manager.source)
+                    eff.user.deal_eff_damage(eff.mag, manager)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_AFF_DMG)
             for eff in gen:
@@ -357,7 +357,7 @@ class BattleScene(engine.Scene):
                    if eff.eff_type == EffectType.CONT_HEAL)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied(eff):
-                    eff.user.give_eff_healing(eff.mag, manager.source)
+                    eff.user.give_eff_healing(eff.mag, manager)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_DEST_DEF)
             for eff in gen:
@@ -521,6 +521,11 @@ class BattleScene(engine.Scene):
                 eff.tick_duration()
                 if eff.duration == 0:
                     manager.remove_effect(eff)
+
+                    if eff.name == "Quickdraw - Rifle" and eff.eff_type == EffectType.CONT_USE:
+                        manager.full_remove_effect("Quickdraw - Rifle")
+                        manager.add_effect(Effect(Ability("cmaryalt2"), EffectType.ABILITY_SWAP, manager, 280000, lambda eff: "Quickdraw - Rifle has been replaced by Quickdraw - Sniper", mag=12))
+
         for manager in self.enemy_display.team.character_managers:
             for eff in manager.source.current_effects:
                 eff.tick_duration()
@@ -886,11 +891,10 @@ class CharacterManager():
         pass
 
     def check_on_use(self):
-        if self.has_effect(EffectType.MARK, "Mug"):
-            self.source.energy_contribution -= 1
-        if self.has_effect(EffectType.MARK, "Sneak"):
-            self.get_ability("Sneak").cooldown_remaining = 3
-            self.remove_effect(self.get_effect(EffectType.MARK, "Sneak"))
+        if self.has_effect(EffectType.MARK, "Hidden Mine"):
+            if self.final_can_effect():
+                self.receive_eff_pierce_damage(20)
+            self.full_remove_effect("Hidden Mine")
 
     def check_bypass_effects(self) -> str:
 
@@ -900,10 +904,21 @@ class CharacterManager():
         #TODO Stun receipt checks
         pass
 
-    def check_on_stun(self):
+    def check_on_stun(self, target: "CharacterManager"):
         #TODO stun checks
 
-        pass
+        if target.is_stunned():
+            target.cancel_control_effects()
+
+
+    def cancel_control_effects(self):
+        i = 0
+        for _ in range(len(self.source.current_effects)):
+            if self.source.current_effects[i].eff_type == EffectType.CONT_USE:
+                self.full_remove_effect(self.source.current_effects[i].name)
+            else:
+                i = i + 1
+
 
     def check_countered(self) -> bool:
         #self reflect effects:
@@ -927,6 +942,7 @@ class CharacterManager():
                         if not self.source.ignoring:
                             self.add_effect(Effect(src, EffectType.ALL_STUN, eff.user, 3, lambda eff: "This character is stunned."))
                             self.add_effect(Effect(src, EffectType.ISOLATE, eff.user, 3, lambda eff: "This character is isolated."))
+                            eff.user.check_on_stun(self)
                         if self.has_effect(EffectType.COUNTER, "Third Dance - Shirafune"):
                             #TODO Shirafune things
                             pass
@@ -1162,6 +1178,9 @@ class CharacterManager():
         if self.source.hp > 100:
             self.source.hp = 100
 
+    def check_isolated(self) -> bool:
+        return any(eff.eff_type == EffectType.ISOLATE for eff in self.source.current_effects)
+
     def check_invuln(self) -> bool:
         output = False
         gen = (eff for eff in self.source.current_effects
@@ -1179,21 +1198,23 @@ class CharacterManager():
 
     def hostile_target(self, def_type = "NORMAL") -> bool:
         if def_type == "NORMAL":
-            return not ((self.source.invulnerable and not self.check_invuln()) or self.source.dead or self.source.untargetable)
+            return not (self.check_invuln() or self.source.dead or self.source.untargetable)
         elif def_type == "BYPASS":
             return not (self.source.dead or self.source.untargetable)
 
     def final_can_effect(self, def_type = "NORMAL") -> bool:
         if def_type == "NORMAL":
-            return not ((self.source.invulnerable and not self.check_invuln()) or self.source.dead or self.source.ignoring)
+            return not (self.check_invuln() or self.source.dead or self.source.ignoring)
         elif def_type == "BYPASS":
             return not (self.source.dead or self.source.ignoring)
         elif def_type == "FULLBYPASS":
             return not (self.source.dead)
 
+    
+
     def helpful_target(self, def_type = "NORMAL") -> bool:
         if def_type == "NORMAL":
-            return not (self.source.isolated or self.source.dead)
+            return not (self.check_isolated() or self.source.dead)
         elif def_type == "BYPASS":
             return not (self.source.dead)
 
@@ -1204,9 +1225,12 @@ class CharacterManager():
         self.source.current_effects.remove(effect)
 
     def full_remove_effect(self, eff_name: str):
-        gen = (eff for eff in self.source.current_effects if eff.name == eff_name)
-        for eff in gen:
-            self.source.current_effects.remove(eff)
+        i = 0
+        for _ in range(len(self.source.current_effects)):
+            if self.source.current_effects[i].name == eff_name:
+                self.source.current_effects.remove(self.source.current_effects[i])
+            else:
+                i = i + 1
 
     def is_enemy(self) -> bool:
         return self.character_region.x > 400
@@ -1265,7 +1289,10 @@ class CharacterManager():
             mouse_x, mouse_y = engine.get_mouse_position()
             self.scene.hover_effect_region.x = mouse_x - hover_panel_sprite.size[
                 0] if self.scene.current_button.is_enemy else mouse_x
-            self.scene.hover_effect_region.y = mouse_y
+            if self.scene.current_button.y > 600:
+                self.scene.hover_effect_region.y = mouse_y - (base_height + (additional_height * 18) + (len(self.scene.current_button.effects) * 20))
+            else:
+                self.scene.hover_effect_region.y = mouse_y
             self.scene.add_bordered_sprite(self.scene.hover_effect_region, hover_panel_sprite, BLACK, 0, 0)
             effect_lines = self.get_effect_lines(self.scene.current_button.effects)
             self.scene.hover_effect_region.add_sprite(effect_lines[0], 5, 5)

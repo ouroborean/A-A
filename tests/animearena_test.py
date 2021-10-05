@@ -49,6 +49,13 @@ def astolfo_test_scene(test_scene: BattleScene) -> engine.Scene:
     test_scene.setup_scene(ally_team, enemy_team)
     return test_scene
 
+@pytest.fixture
+def cmary_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("cmary"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("ruler"), Character("naruto"), Character("mirio")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
 def test_detail_unpack():
     details_package = ["Justice Kick", "Shiro deals 20 damage to target enemy. If they damaged one of Shiro's allies the previous turn, this ability deals double damage.", [1,0,0,0,0,1], Target.SINGLE]
 
@@ -448,13 +455,12 @@ def test_trap_boost_halt(astolfo_test_scene: BattleScene):
     trap.execute(astolfo, pteam, eteam)
     naruto = CharacterManager(Character("naruto"), astolfo_test_scene)
     naruto.id = 69
-    naruto.current_targets.append(naruto)
-    naruto.source.alt_abilities[0].execute(naruto, pteam, eteam)
-    naruto.current_targets.clear()
-
     astolfo.current_targets.clear()
     astolfo.current_targets.append(naruto)
     trap.execute(astolfo, pteam, eteam)
+    naruto.current_targets.append(naruto)
+    naruto.source.alt_abilities[0].execute(naruto, pteam, eteam)
+    naruto.current_targets.clear()
 
     naruto.current_targets.append(fucking_ruler)
     naruto.used_ability = naruto.source.main_abilities[1]
@@ -496,4 +502,190 @@ def test_casseur(astolfo_test_scene: BattleScene):
     assert astolfo.source.hp == 100
     assert naruto.has_effect(EffectType.ALL_STUN, "Casseur de Logistille")
     assert naruto.has_effect(EffectType.ISOLATE, "Casseur de Logistille")
+
+def test_effect_removal(naruto_test_scene: BattleScene):
+    naruto = naruto_test_scene.player_display.team.character_managers[0]
+    e_team = naruto_test_scene.enemy_display.team.character_managers
+    p_team = naruto_test_scene.player_display.team.character_managers
+    shadow_clones = naruto.source.current_abilities[0]
+    
+    shadow_clones.execute(naruto, e_team, p_team)
+    naruto.full_remove_effect("Shadow Clones")
+    assert len(naruto.source.current_effects) == 0
+
+def test_luna_cleanse(astolfo_test_scene: BattleScene):
+    astolfo = astolfo_test_scene.player_display.team.character_managers[0]
+    eteam = astolfo_test_scene.enemy_display.team.character_managers
+    pteam = astolfo_test_scene.player_display.team.character_managers
+    luna = astolfo.source.current_abilities[2]
+    naruto = eteam[1]
+    for p in pteam:
+        astolfo.current_targets.append(p)
+    astolfo.used_ability = luna
+    rasengan = naruto.source.current_abilities[1]
+    naruto.used_ability = rasengan
+    naruto.current_targets.append(pteam[1])
+
+    rasengan.execute(naruto, pteam, eteam)
+
+    assert len(pteam[1].source.current_effects) == 1
+
+    luna.execute(astolfo, pteam, eteam)
+
+    assert len(pteam[1].source.current_effects) == 0
+
+    assert astolfo.has_effect(EffectType.STACK, "Trap of Argalia - Down With A Touch!")
+
+def test_luna_boost_halt(astolfo_test_scene: BattleScene):
+    astolfo = astolfo_test_scene.player_display.team.character_managers[0]
+    eteam = astolfo_test_scene.enemy_display.team.character_managers
+    pteam = astolfo_test_scene.player_display.team.character_managers
+    luna = astolfo.source.current_abilities[2]
+    fucking_ruler = eteam[0]
+    astolfo.used_ability = luna
+    naruto = CharacterManager(Character("naruto"), astolfo_test_scene)
+    astolfo.current_targets.append(naruto)
+    
+    naruto.id = 69
+    luna.execute(astolfo, pteam, eteam)
+
+    
+    naruto.current_targets.append(naruto)
+    naruto.source.alt_abilities[0].execute(naruto, pteam, eteam)
+    naruto.current_targets.clear()
+    
+    
+
+    naruto.current_targets.append(fucking_ruler)
+    naruto.used_ability = naruto.source.main_abilities[1]
+    naruto.used_ability.execute(naruto, pteam, eteam)
+
+    assert fucking_ruler.source.hp == 75
+
+def test_cmary_pistol(cmary_test_scene: BattleScene):
+    cmary = cmary_test_scene.player_display.team.character_managers[0]
+    eteam = cmary_test_scene.enemy_display.team.character_managers
+    pteam = cmary_test_scene.player_display.team.character_managers
+
+    pistol = cmary.source.current_abilities[0]
+    fucking_ruler = eteam[0]
+    cmary.used_ability = pistol
+    cmary.current_targets.append(fucking_ruler)
+
+    pistol.execute(cmary, pteam, eteam)
+
+    cmary.update_ability()
+    
+    assert fucking_ruler.source.hp == 85
+    assert cmary.source.current_abilities[0].name == "Quickdraw - Rifle"
+
+def test_cmary_rifle(cmary_test_scene: BattleScene):
+    cmary = cmary_test_scene.player_display.team.character_managers[0]
+    eteam = cmary_test_scene.enemy_display.team.character_managers
+    pteam = cmary_test_scene.player_display.team.character_managers
+
+    rifle = cmary.source.alt_abilities[0]
+    fucking_ruler = eteam[0]
+    cmary.used_ability = rifle
+    cmary.current_targets.append(fucking_ruler)
+
+    rifle.execute(cmary, pteam, eteam)
+
+    assert fucking_ruler.source.hp == 85
+    assert fucking_ruler.has_effect(EffectType.CONT_DMG, "Quickdraw - Rifle")
+
+    cmary_test_scene.resolve_ticking_ability()
+    cmary_test_scene.tick_effect_duration()
+    cmary_test_scene.tick_effect_duration()
+    cmary_test_scene.resolve_ticking_ability()
+    cmary_test_scene.tick_effect_duration()
+
+    cmary.update_ability()
+
+    assert fucking_ruler.source.hp == 70
+    assert len(cmary.source.current_effects) == 1
+    assert cmary.source.current_abilities[0].name == "Quickdraw - Sniper"
+
+def test_hidden_mine(cmary_test_scene: BattleScene):
+    cmary = cmary_test_scene.player_display.team.character_managers[0]
+    eteam = cmary_test_scene.enemy_display.team.character_managers
+    pteam = cmary_test_scene.player_display.team.character_managers
+
+    mine = cmary.source.main_abilities[1]
+    naruto = eteam[1]
+    cmary.used_ability = mine
+    cmary.current_targets.append(naruto)
+
+    mine.execute(cmary, pteam, eteam)
+
+    assert naruto.has_effect(EffectType.MARK, "Hidden Mine")
+    
+    smack = naruto.source.main_abilities[2]
+    naruto.used_ability = smack
+    naruto.current_targets.append(cmary)
+
+    smack.execute(naruto, eteam, pteam)
+
+    assert cmary.source.hp == 70
+    assert naruto.source.hp == 80
+
+def test_hidden_mine_on_invuln(cmary_test_scene: BattleScene):
+    cmary = cmary_test_scene.player_display.team.character_managers[0]
+    eteam = cmary_test_scene.enemy_display.team.character_managers
+    pteam = cmary_test_scene.player_display.team.character_managers
+
+    mine = cmary.source.main_abilities[1]
+    naruto = eteam[1]
+    cmary.used_ability = mine
+    cmary.current_targets.append(naruto)
+
+    mine.execute(cmary, pteam, eteam)
+
+    assert naruto.has_effect(EffectType.MARK, "Hidden Mine")
+    
+    sub = naruto.source.main_abilities[3]
+    naruto.used_ability = sub
+    naruto.current_targets.append(cmary)
+
+    sub.execute(naruto, eteam, pteam)
+
+    assert naruto.source.hp == 100
+
+def test_grenade_toss(cmary_test_scene: BattleScene):
+    cmary = cmary_test_scene.player_display.team.character_managers[0]
+    eteam = cmary_test_scene.enemy_display.team.character_managers
+    pteam = cmary_test_scene.player_display.team.character_managers
+    grenade_toss = cmary.source.main_abilities[2]
+    mine = cmary.source.main_abilities[1]
+    naruto = eteam[1]
+    cmary.used_ability = mine
+    cmary.current_targets.append(naruto)
+    
+    mine.execute(cmary, pteam, eteam)
+    cmary.current_targets.clear()
+    for enemy in eteam:
+        cmary.current_targets.append(enemy)
+
+    cmary.used_ability = grenade_toss
+    grenade_toss.execute(cmary, pteam, eteam)
+
+    assert eteam[0].source.hp == 80
+    assert eteam[1].source.hp == 60
+    assert eteam[2].source.hp == 80
+
+def test_sniper_rifle(cmary_test_scene: BattleScene):
+    cmary = cmary_test_scene.player_display.team.character_managers[0]
+    eteam = cmary_test_scene.enemy_display.team.character_managers
+    pteam = cmary_test_scene.player_display.team.character_managers
+
+    sniper = cmary.source.alt_abilities[1]
+    naruto = eteam[1]
+    cmary.used_ability = sniper
+    cmary.current_targets.append(naruto)
+
+    sniper.execute(cmary, pteam, eteam)
+
+    assert cmary.check_invuln()
+    assert naruto.source.hp == 45
+
 

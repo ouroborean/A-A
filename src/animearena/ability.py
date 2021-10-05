@@ -656,7 +656,7 @@ def exe_rasengan(user: "CharacterManager", playerTeam: list["CharacterManager"],
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(base_damage, target)
                 target.add_effect(Effect(Ability("naruto2"), EffectType.ALL_STUN, user, stun_duration, lambda eff: "This character is stunned."))
-        user.check_on_stun()
+                user.check_on_stun(target)
         user.check_on_use()
         user.check_on_harm()
 
@@ -697,10 +697,9 @@ def exe_uzumaki_barrage(user: "CharacterManager", playerTeam: list["CharacterMan
                 user.deal_damage(base_damage, target)
                 if user.has_effect(EffectType.MARK, "Uzumaki Barrage"):
                     target.add_effect(Effect(Ability("narutoalt2"), EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                    stunned = True
+                    user.check_on_stun(target)
             user.add_effect(Effect(Ability("narutoalt2"), EffectType.MARK, user, 3, lambda eff: "Uzumaki Barrage will stun its target for one turn."))
-        if stunned:
-            user.check_on_stun()
+        
         user.check_on_use()
         user.check_on_harm()
 
@@ -763,10 +762,10 @@ def exe_black_coffin(user: "CharacterManager", playerTeam: list["CharacterManage
                 target.add_effect(Effect(Ability("aizen3"), EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
                 target.add_effect(Effect(Ability("aizen3"), EffectType.MARK, user, 3, lambda eff: "If Shatter, Kyoka Suigetsu is used on this character, all of their active cooldowns will be increased by 2."))
                 target.add_effect(Effect(Ability("aizen3"), EffectType.MARK, user, 3, lambda eff: "If Overwhelming Power is used on this character, they will be unable to reduce damage or become invulnerable for 2 turns."))
+                user.check_on_stun(target)
                 if target.has_effect(EffectType.MARK, "Overwhelming Power"):
                     base_damage = 20
                     user.deal_damage(base_damage, target)
-        user.check_on_stun()
         user.check_on_use()
         user.check_on_harm()
 
@@ -811,7 +810,7 @@ def exe_trap(user: "CharacterManager", playerTeam: list["CharacterManager"], ene
         for target in user.current_targets:
             base_damage = 20
             if target.final_can_effect(user.check_bypass_effects()):
-                user.deal_damage(base_damage, target)
+                user.deal_pierce_damage(base_damage, target)
                 target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 2, lambda eff: "This character cannot have their damage boosted over its base value."))
                 if target.has_boosts():
                     user.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff: f"Astolfo will deal {eff.mag * 5} additional damage with Trap of Argalia - Down With A Touch!", mag=1))
@@ -827,7 +826,7 @@ def exe_luna(user: "CharacterManager", playerTeam: list["CharacterManager"], ene
                 hostile_effects = [eff for eff in target.source.current_effects if eff.user.is_enemy()]
                 if hostile_effects:
                     target.full_remove_effect(hostile_effects[randint(0, len(hostile_effects) - 1)].name)
-                    user.apply_stack_effect(Effect(Ability("astolfo1"), EffectType.STACK, user, 280000, lambda eff: f"Astolfo will deal {eff.mag * 5} additional damage with Trap of Argalia - Down With A Touch!", mag=1))
+                    user.apply_stack_effect(Effect(Ability("astolfo2"), EffectType.STACK, user, 280000, lambda eff: f"Astolfo will deal {eff.mag * 5} additional damage with Trap of Argalia - Down With A Touch!", mag=1))
             if target.id > 2:
                 if target.final_can_effect(user.check_bypass_effects()):
                     target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 4, lambda eff: "This character cannot have their damage boosted over its base value."))
@@ -843,7 +842,69 @@ def exe_kosmos(user: "CharacterManager", playerTeam: list["CharacterManager"], e
     user.check_on_use()
 
 #endregion
+#region Calamity Mary Execution
+def exe_pistol(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
 
+        for target in user.current_targets:
+            base_damage = 15
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(base_damage, target)
+            user.add_effect(Effect(Ability("cmaryalt1"), EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Quickdraw - Pistol has been replaced by Quickdraw - Rifle.", mag=11))
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_mine(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 4, lambda eff: "If this character uses a new ability, they will take 20 piercing damage and this effect will end."))
+                target.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 4, lambda eff: "Grenade Toss will deal 20 additional damage to this character."))
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_grenade_toss(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+
+        for target in user.current_targets:
+            base_damage = 20
+            if target.final_can_effect(user.check_bypass_effects()):
+                if target.has_effect(EffectType.UNIQUE, "Hidden Mine"):
+                    base_damage += 20
+                user.deal_damage(base_damage, target)
+
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_rifle_guard(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Calamity Mary is invulnerable."))
+    user.check_on_use()
+
+def exe_rifle(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+
+        for target in user.current_targets:
+            base_damage = 15
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(base_damage, target)
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 3, lambda eff: "This character will take 15 damage.", mag=15))
+            user.add_effect(Effect(user.used_ability, EffectType.CONT_USE, user, 3, lambda eff: "Calamity Mary is using Quickdraw - Rifle. This effect will end if she is stunned. If this effect expires normally, Quickdraw - Rifle will be replaced by Quickdraw - Sniper."))
+
+
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_sniper(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+
+        for target in user.current_targets:
+            base_damage = 55
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_pierce_damage(base_damage, target)
+            user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Calamity Mary is invulnerable."))
+        user.check_on_use()
+        user.check_on_harm()
+#endregion
 ability_info_db = {
     "naruto1": [
         "Shadow Clones",
@@ -971,36 +1032,36 @@ ability_info_db = {
         "Quickdraw - Pistol",
         "Calamity Mary deals 15 damage to target enemy. This ability will become Quickdraw - Rifle after being used.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_pistol
     ],
     "cmary2": [
         "Hidden Mine",
         "Traps one enemy for two turns. During this time, if that enemy used a new ability, they will take 20 piercing damage and this effect will end.",
         [0, 0, 0, 1, 0, 3], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_mine
     ],
     "cmary3": [
         "Grenade Toss",
         "Calamity Mary deals 20 damage to all enemy targets. This ability deals 20 more damage to enemies affected by Hidden Mine.",
         [0, 0, 0, 1, 1, 2], Target.MULTI_ENEMY,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_grenade_toss
     ],
     "cmary4": [
         "Rifle Guard", "Calamity Mary becomes invulnerable for 1 turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_rifle_guard
     ],
     "cmaryalt1": [
         "Quickdraw - Rifle",
         "Calamity Mary deals 15 damage to target enemy for 2 turns. This ability will become Quickdraw - Sniper after it ends.",
         [0, 0, 0, 1, 1, 1], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_rifle
     ],
     "cmaryalt2": [
         "Quickdraw - Sniper",
         "Calamity Mary deals 55 piercing damage to one enemy and becomes invulnerable for one turn.",
         [0, 0, 0, 2, 1, 3], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_sniper
     ],
     "chachamaru1": [
         "Target Lock",
