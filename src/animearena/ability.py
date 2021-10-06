@@ -848,7 +848,7 @@ def exe_pistol(user: "CharacterManager", playerTeam: list["CharacterManager"], e
 
         for target in user.current_targets:
             base_damage = 15
-            if target.final_can_effect(user.check_bypass_effects()):
+            if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                 user.deal_damage(base_damage, target)
             user.add_effect(Effect(Ability("cmaryalt1"), EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Quickdraw - Pistol has been replaced by Quickdraw - Rifle.", mag=11))
         user.check_on_use()
@@ -885,7 +885,7 @@ def exe_rifle(user: "CharacterManager", playerTeam: list["CharacterManager"], en
 
         for target in user.current_targets:
             base_damage = 15
-            if target.final_can_effect(user.check_bypass_effects()):
+            if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                 user.deal_damage(base_damage, target)
                 target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 3, lambda eff: "This character will take 15 damage.", mag=15))
             user.add_effect(Effect(user.used_ability, EffectType.CONT_USE, user, 3, lambda eff: "Calamity Mary is using Quickdraw - Rifle. This effect will end if she is stunned. If this effect expires normally, Quickdraw - Rifle will be replaced by Quickdraw - Sniper."))
@@ -905,6 +905,115 @@ def exe_sniper(user: "CharacterManager", playerTeam: list["CharacterManager"], e
         user.check_on_use()
         user.check_on_harm()
 #endregion
+#region Chachamaru Execution
+def exe_target_lock(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    for target in user.current_targets:
+        if target.final_can_effect(user.check_bypass_effects()):
+            target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "This character can be targeted with Orbital Satellite Cannon."))
+    user.check_on_use()
+
+def exe_satellite_cannon(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            base_damage = 35
+            if target.final_can_effect("BYPASS"):
+                user.deal_pierce_damage(base_damage, target)
+        user.check_on_harm()
+        user.check_on_use()
+
+def exe_active_combat_mode(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            base_damage = 10
+            if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+                user.deal_damage(base_damage, target)
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 5, lambda eff: "This character will take 10 damage.", mag=10))
+            user.add_effect(Effect(user.used_ability, EffectType.CONT_DEST_DEF, user, 5, lambda eff: "This character will gain 15 points of destructible defense.", mag=15))
+            user.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 280000, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag=15))
+            user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 5, lambda eff: "Chachamaru cannot use Orbital Satellite Cannon."))
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_take_flight(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Chachamaru is invulnerable."))
+    user.check_on_use()
+#endregion
+#region Chrome Execution
+
+def exe_you_are_needed(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "Chrome can use her abilities. If she is brought below 30 health, she will switch out with Rokudou Mukuro, and her abilities will be replaced by their alternate forms."))
+    user.check_on_use()
+
+def exe_illusory_breakdown(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "If Chrome's destructible defense is not broken, this character will receive 25 damage and be stunned for one turn."))
+                user.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 3, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag=20))
+        user.check_on_use()
+        user.check_on_harm()
+
+
+def exe_mental_immolation(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "If Chrome's destructible defense is not broken, this character will receive 20 damage and Chrome will remove one random energy from them."))
+                user.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 3, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag=15))
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_mental_substitution(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Chrome is invulnerable."))
+    user.check_on_use()
+
+def exe_trident_combat(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            base_damage = 25
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(base_damage, target)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_illusory_world_destruction(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 3, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag=30))
+    user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 3, lambda eff: "If this destructible defense is not destroyed, Mukuro will deal 25 damage to all enemies and stun them for one turn."))
+    user.check_on_use()
+
+def exe_mental_annihilation(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "If Mukuro's destructible defense is not broken, this character will receive 35 damage that ignores invulnerability."))
+                user.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 3, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag=30))
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_trident_deflection(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Mukuro is invulnerable."))
+    user.check_on_use()
+
+#endregion
+#region Chu Execution
+
+
+def exe_relentless_assault(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_flashing_deflection(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_gae_bolg(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_chu_block(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+
+#endregion
+
+
 ability_info_db = {
     "naruto1": [
         "Shadow Clones",
@@ -1055,7 +1164,7 @@ ability_info_db = {
         "Quickdraw - Rifle",
         "Calamity Mary deals 15 damage to target enemy for 2 turns. This ability will become Quickdraw - Sniper after it ends.",
         [0, 0, 0, 1, 1, 1], Target.SINGLE,
-        default_target("HOSTILE"), exe_rifle
+        default_target("HOSTILE", lockout=(EffectType.CONT_USE, "Quickdraw - Rifle")), exe_rifle
     ],
     "cmaryalt2": [
         "Quickdraw - Sniper",
@@ -1067,7 +1176,7 @@ ability_info_db = {
         "Target Lock",
         "Chachamaru marks a single target for Orbital Satellite Cannon.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HOSTILE", protection=(EffectType.MARK, "Target Lock"))
+        default_target("HOSTILE", protection=(EffectType.MARK, "Target Lock")), exe_target_lock
     ],
     "chachamaru2": [
         "Orbital Satellite Cannon",
@@ -1076,24 +1185,24 @@ ability_info_db = {
         default_target("HOSTILE",
                        def_type="BYPASS",
                        mark_req="Target Lock",
-                       lockout=(EffectType.MARK, "Active Combat Mode"))
+                       lockout=(EffectType.MARK, "Active Combat Mode")), exe_satellite_cannon
     ],
     "chachamaru3": [
         "Active Combat Mode",
         "Chachamaru gains 15 points of destructible defense each turn and deals 10 damage to one enemy for 3 turns. During this time, she cannot use"
         + " Orbital Satellite Cannon.", [0, 0, 0, 0, 2, 3], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_active_combat_mode
     ],
     "chachamaru4": [
         "Take Flight", "Chachamaru becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_take_flight
     ],
     "chrome1": [
         "You Are Needed",
         "Chrome accepts Mukuro's offer to bond their souls, enabling the user of her abilities. If Chrome ends a turn below 40 health, she transforms into Rokudou Mukuro.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("SELF", protection=(EffectType.MARK, "You Are Needed"))
+        default_target("SELF", protection=(EffectType.MARK, "You Are Needed")), exe_you_are_needed
     ],
     "chrome2": [
         "Illusory Breakdown",
@@ -1101,7 +1210,7 @@ ability_info_db = {
         +
         "she will deal 25 damage to the targeted enemy and stun them for one turn.",
         [0, 0, 1, 0, 1, 1], Target.SINGLE,
-        default_target("HOSTILE", prep_req="You Are Needed")
+        default_target("HOSTILE", prep_req="You Are Needed"), exe_illusory_breakdown
     ],
     "chrome3": [
         "Mental Immolation",
@@ -1109,26 +1218,26 @@ ability_info_db = {
         +
         "she will deal 20 damage to the targeted enemy and remove one random energy from them.",
         [0, 0, 1, 0, 0, 1], Target.SINGLE,
-        default_target("HOSTILE", prep_req="You Are Needed")
+        default_target("HOSTILE", prep_req="You Are Needed"), exe_mental_immolation
     ],
     "chrome4": [
         "Mental Substitution",
         "Mental Substitution: Chrome becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_mental_substitution
     ],
     "chromealt1": [
         "Trident Combat",
         "Trident Combat: Mukuro deals 25 damage to one enemy.",
         [1, 0, 0, 0, 0, 0], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_trident_combat
     ],
     "chromealt2": [
         "Illusory World Destruction",
         "Illusory World Destruction: Mukuro gains 30 points of destructible defense. If he still has any of this destructible defense on his next turn, "
         + "he will deal 25 damage to all enemies and stun them for one turn.",
         [0, 0, 1, 0, 2, 2], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_illusory_world_destruction
     ],
     "chromealt3": [
         "Mental Annihilation",
@@ -1136,12 +1245,12 @@ ability_info_db = {
         +
         "he will deal 35 piercing damage to the targeted enemy. This damage ignores invulnerability.",
         [0, 0, 1, 0, 1, 1], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_mental_annihilation
     ],
     "chromealt4": [
         "Trident Deflection", "Mukuro becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_trident_deflection
     ],
     "chu1": [
         "Relentless Assault",

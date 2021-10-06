@@ -19,6 +19,9 @@ class Character:
     main_abilities: list[Ability]
     alt_abilities: list[Ability]
     current_abilities: list[Ability] = []
+    altprof1: Image
+    altprof2: Image
+    main_prof: Image
     desc: str = ""
     selected: bool = False
     energy_contribution: int
@@ -52,6 +55,12 @@ class Character:
         self.damage_reduction = 0
         self.current_effects = []
         self.profile_image = Image.open(RESOURCES / (name + "prof.png"))
+        self.main_prof = Image.open(RESOURCES / (name + "prof.png"))
+        try:
+            self.altprof1 = Image.open(RESOURCES / (name + "altprof1.png"))
+            self.altprof2 = Image.open(RESOURCES / (name + "altprof2.png"))
+        except:
+            pass
 
         self.main_abilities = [Ability(f"{name}{i + 1}") for i in range(4)]
         self.current_abilities = self.main_abilities

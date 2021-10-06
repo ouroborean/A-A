@@ -53,6 +53,7 @@ class EffectType(enum.IntEnum):
     TARGET_SWAP = 38
     STACK = 39
     ISOLATE = 40
+    PROF_SWAP = 41
 
 
 class Effect:

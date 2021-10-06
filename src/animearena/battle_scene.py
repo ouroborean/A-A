@@ -525,14 +525,37 @@ class BattleScene(engine.Scene):
                     if eff.name == "Quickdraw - Rifle" and eff.eff_type == EffectType.CONT_USE:
                         manager.full_remove_effect("Quickdraw - Rifle")
                         manager.add_effect(Effect(Ability("cmaryalt2"), EffectType.ABILITY_SWAP, manager, 280000, lambda eff: "Quickdraw - Rifle has been replaced by Quickdraw - Sniper", mag=12))
+                    if eff.name == "Illusory Breakdown" and eff.mag > 0: 
+                        for emanager in self.enemy_display.team.character_managers:
+                            if emanager.has_effect(EffectType.MARK, "Illusory Breakdown") and emanager.get_effect(EffectType.MARK, "Illusory Breakdown").user == manager:
+                                if emanager.final_can_effect(manager.check_bypass_effects()):
+                                    manager.deal_eff_damage(25, emanager)
+                                    emanager.add_effect(Effect(Ability("chrome1"), EffectType.ALL_STUN, manager, 2, lambda eff: "This character is stunned."))
+                                    manager.check_on_stun(emanager)
+                    if eff.name == "Mental Immolation" and eff.mag > 0: 
+                        for emanager in self.enemy_display.team.character_managers:
+                            if emanager.has_effect(EffectType.MARK, "Mental Immolation") and emanager.get_effect(EffectType.MARK, "Mental Immolation").user == manager:
+                                if emanager.final_can_effect(manager.check_bypass_effects()):
+                                    manager.deal_eff_damage(20, emanager)
+                                    emanager.source.energy_contribution -= 1
+                                    manager.check_on_drain(emanager)
+                    if eff.name == "Mental Annihilation" and eff.mag > 0:
+                        for emanager in self.enemy_display.team.character_managers:
+                            if emanager.has_effect(EffectType.MARK, "Mental Annihilation") and emanager.get_effect(EffectType.MARK, "Mental Annihilation").user == manager:
+                                if emanager.final_can_effect("BYPASS"):
+                                    manager.deal_eff_damage(35, emanager)
+                    if eff.name == "Illusory World Destruction" and eff.mag > 0:
+                        for emanager in self.enemy_display.team.character_managers:
+                            if emanager.final_can_effect(manager.check_bypass_effects()):
+                                manager.deal_eff_damage(25, emanager)
+                                emanager.add_effect(Effect(Ability("chromealt2"), EffectType.ALL_STUN, manager, 2, lambda eff: "This character is stunned."))
+                                manager.check_on_stun(emanager)
 
         for manager in self.enemy_display.team.character_managers:
             for eff in manager.source.current_effects:
                 eff.tick_duration()
                 if eff.duration == 0:
                     manager.remove_effect(eff)
-
-    
 
     def turn_start(self):
         self.waiting_for_turn = False
@@ -919,6 +942,8 @@ class CharacterManager():
             else:
                 i = i + 1
 
+    def check_on_drain(self, target):
+        pass
 
     def check_countered(self) -> bool:
         #self reflect effects:
@@ -1090,7 +1115,13 @@ class CharacterManager():
 
     def receive_aff_dmg(self, damage: int):
         #TODO add affliction damage received boosts
-        self.source.hp -= damage
+        mod_damage = damage
+
+        self.source.hp -= mod_damage
+
+        if mod_damage > 0:
+            self.damage_taken_check()
+
         if self.source.hp <= 0:
             self.source.hp = 0
             self.source.dead = True
@@ -1102,7 +1133,13 @@ class CharacterManager():
 
     def receive_eff_aff_damage(self, damage: int):
         #TODO add affliction damage received boosts
-        self.source.hp -= damage
+        mod_damage = damage
+
+        self.source.hp -= mod_damage
+
+        if mod_damage > 0:
+            self.damage_taken_check()
+
         if self.source.hp <= 0:
             self.source.hp = 0
             self.source.dead = True
@@ -1112,10 +1149,40 @@ class CharacterManager():
         target.receive_damage(damage)
         self.check_on_damage_dealt(target)
 
+    def damage_taken_check(self):
+        
+        if self.has_effect(EffectType.MARK, "You Are Needed") and self.source.hp < 30:
+            self.full_remove_effect("You Are Needed")
+            src = Ability("chrome1")
+            self.add_effect(Effect(src, EffectType.PROF_SWAP, self, 280000, lambda eff: "Rokudou Mukuro has intervened, replacing Chrome for the rest of the match.", mag=1))
+            self.add_effect(Effect(src, EffectType.ABILITY_SWAP, self, 280000, lambda eff: "You Are Needed has been replaced by Trident Combat.", mag=11))
+            self.add_effect(Effect(src, EffectType.ABILITY_SWAP, self, 280000, lambda eff: "Illusory Breakdown has been replaced by Illusory World Destruction.", mag=22))
+            self.add_effect(Effect(src, EffectType.ABILITY_SWAP, self, 280000, lambda eff: "Mental Immolation has been replaced by Mental Annihilation.", mag=33))
+            self.add_effect(Effect(src, EffectType.ABILITY_SWAP, self, 280000, lambda eff: "Mental Substitution has been replaced by Trident Deflection.", mag=44))
+            if self.has_effect(EffectType.DEST_DEF, "Illusory Breakdown"):
+                self.remove_effect(self.get_effect(EffectType.DEST_DEF, "Illusory Breakdown"))
+            if self.has_effect(EffectType.DEST_DEF, "Mental Immolation"):
+                self.remove_effect(self.get_effect(EffectType.DEST_DEF, "Mental Immolation"))
+            for manager in self.scene.enemy_display.team.character_managers:
+                if manager.has_effect(EffectType.MARK, "Illusory Breakdown") and manager.get_effect(EffectType.MARK, "Illusory Breakdown").user == self:
+                    manager.remove_effect(manager.get_effect(EffectType.MARK, "Illusory Breakdown"))
+                if manager.has_effect(EffectType.MARK, "Mental Immolation") and manager.get_effect(EffectType.MARK, "Mental Immolation").user == self:
+                    manager.remove_effect(manager.get_effect(EffectType.MARK, "Mental Immolation"))
+
+
+    def deflecting(self) -> bool:
+        return self.has_effect(EffectType.MARK, "Flashing Deflection")
+
     def receive_damage(self, damage: int):
         mod_damage = damage - self.check_for_dmg_reduction()
         mod_damage = self.pass_through_dest_def(mod_damage)
+        
+        
         self.source.hp -= mod_damage
+        
+        if mod_damage > 0:
+            self.damage_taken_check()
+
         if self.source.hp <= 0:
             self.source.hp = 0
             self.source.dead = True
@@ -1128,6 +1195,8 @@ class CharacterManager():
     def receive_pierce_damage(self, damage: int):
         mod_damage = self.pass_through_dest_def(damage)
         self.source.hp -= mod_damage
+        if mod_damage > 0:
+            self.damage_taken_check()
         if self.source.hp <= 0:
             self.source.hp = 0
             self.source.dead = True
@@ -1141,6 +1210,8 @@ class CharacterManager():
         mod_damage = damage - self.check_for_dmg_reduction()
         mod_damage = self.pass_through_dest_def(mod_damage)
         self.source.hp -= mod_damage
+        if mod_damage > 0:
+            self.damage_taken_check()
         if self.source.hp <= 0:
             self.source.hp = 0
             self.source.dead = True
@@ -1151,7 +1222,11 @@ class CharacterManager():
         self.check_on_damage_dealt(target)
 
     def receive_eff_pierce_damage(self, damage: int):
-        self.source.hp -= damage
+        mod_damage = damage
+        mod_damage = self.pass_through_dest_def(mod_damage)
+        self.source.hp -= mod_damage
+        if mod_damage > 0:
+            self.damage_taken_check()
         if self.source.hp <= 0:
             self.source.hp = 0
             self.source.dead = True
@@ -1341,6 +1416,10 @@ class CharacterManager():
     def make_effect_clusters(self) -> dict[str, list[Effect]]:
         output: dict[str, list[Effect]] = {}
         for effect in self.source.current_effects:
+            if effect.eff_type == EffectType.DEST_DEF and effect.mag == 0:
+                continue
+            if effect.invisible == True and effect.user.is_enemy():
+                continue
             if effect.name in output.keys():
                 output[effect.name].append(effect)
             else:
@@ -1423,7 +1502,21 @@ class CharacterManager():
         self.update_effect_region()
         self.draw_hp_bar()
 
+
+    def check_profile_swaps(self):
+        gen = (eff for eff in self.source.current_effects
+               if eff.eff_type == EffectType.PROF_SWAP)
+        for eff in gen:
+            if eff.mag == 1:
+                self.source.profile_image = self.source.altprof1
+            elif eff.mag == 2:
+                self.source.profile_image = self.source.altprof2
+
     def update_profile(self):
+
+        self.source.profile_image = self.source.main_prof
+        self.check_profile_swaps()
+
         if self.targeted:
             profile_sprite = self.scene.create_selected_version(self.scene.get_scaled_surface(self.source.profile_image),
                                                                 engine.FilterType.SELECTED)
@@ -1434,6 +1527,10 @@ class CharacterManager():
         self.scene.add_bordered_sprite(self.character_region, profile_sprite, BLACK, 0, 0)
 
     def update_enemy_profile(self):
+
+        self.source.profile_image = self.source.main_prof
+        self.check_profile_swaps()
+
         if self.targeted:
             profile_sprite = self.scene.create_selected_version(self.scene.get_scaled_surface(self.source.profile_image, flipped = True),
                                                                 engine.FilterType.SELECTED)

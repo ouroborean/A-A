@@ -1,3 +1,4 @@
+from pickle import PUT
 from animearena import battle_scene
 from animearena.ability import Ability, ability_info_db, Target, exe_effortless_guard
 from animearena.energy import Energy
@@ -55,6 +56,20 @@ def cmary_test_scene(test_scene: BattleScene) -> engine.Scene:
     enemy_team = [Character("ruler"), Character("naruto"), Character("mirio")]
     test_scene.setup_scene(ally_team, enemy_team)
     return test_scene
+
+@pytest.fixture
+def chachamaru_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("chachamaru"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("ruler"), Character("naruto"), Character("mirio")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene    
+
+@pytest.fixture
+def chrome_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("chrome"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("ruler"), Character("naruto"), Character("mirio")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene   
 
 def test_detail_unpack():
     details_package = ["Justice Kick", "Shiro deals 20 damage to target enemy. If they damaged one of Shiro's allies the previous turn, this ability deals double damage.", [1,0,0,0,0,1], Target.SINGLE]
@@ -688,4 +703,286 @@ def test_sniper_rifle(cmary_test_scene: BattleScene):
     assert cmary.check_invuln()
     assert naruto.source.hp == 45
 
+def test_target_lock(chachamaru_test_scene: BattleScene):
+    chacha = chachamaru_test_scene.player_display.team.character_managers[0]
+    eteam = chachamaru_test_scene.enemy_display.team.character_managers
+    pteam = chachamaru_test_scene.player_display.team.character_managers
+    lock = chacha.source.current_abilities[0]
+    cannon = chacha.source.current_abilities[1]
+    combat_mode = chacha.source.current_abilities[2]
+    chacha.used_ability = lock
+    ruler = eteam[0]
+    chacha.current_targets.append(ruler)
+    lock.execute(chacha, pteam, eteam)
+    chacha.current_targets.clear()
+
+    assert cannon.target(chacha, pteam, eteam, True) == 1
+
+def test_satellite_cannon(chachamaru_test_scene: BattleScene):
+    chacha = chachamaru_test_scene.player_display.team.character_managers[0]
+    eteam = chachamaru_test_scene.enemy_display.team.character_managers
+    pteam = chachamaru_test_scene.player_display.team.character_managers
+    ruler = eteam[0]
+    lock = chacha.source.current_abilities[0]
+    cannon = chacha.source.current_abilities[1]
+    combat_mode = chacha.source.current_abilities[2]
+    chacha.current_targets.append(ruler)
+    chacha.used_ability = cannon
+    cannon.execute(chacha, pteam, eteam)
+
+    assert ruler.source.hp == 65
+
+def test_combat_mode(chachamaru_test_scene: BattleScene):
+    chacha = chachamaru_test_scene.player_display.team.character_managers[0]
+    eteam = chachamaru_test_scene.enemy_display.team.character_managers
+    pteam = chachamaru_test_scene.player_display.team.character_managers
+    ruler = eteam[0]
+    naruto = eteam[1]
+    lock = chacha.source.current_abilities[0]
+    cannon = chacha.source.current_abilities[1]
+    combat_mode = chacha.source.current_abilities[2]
+    chacha.current_targets.append(ruler)
+    chacha.used_ability = combat_mode
+    combat_mode.execute(chacha, pteam, eteam)
+    naruto.current_targets.append(chacha)
+    naruto.used_ability = naruto.source.current_abilities[2]
+
+    naruto.used_ability.execute(naruto, eteam, pteam)
+
+    assert ruler.source.hp == 90
+    assert chacha.source.hp == 85
+
+    chachamaru_test_scene.resolve_ticking_ability()
+    chachamaru_test_scene.resolve_ticking_ability()
+    chachamaru_test_scene.resolve_ticking_ability()
+
+    assert ruler.source.hp == 70
+    
+    naruto.used_ability.execute(naruto, eteam, pteam)
+
+    assert chacha.source.hp == 85
+
+def test_you_are_needed(chrome_test_scene: BattleScene):
+    chrome = chrome_test_scene.player_display.team.character_managers[0]
+    eteam = chrome_test_scene.enemy_display.team.character_managers
+    pteam = chrome_test_scene.player_display.team.character_managers
+    needed = chrome.source.main_abilities[0]
+    breakdown = chrome.source.main_abilities[1]
+    immolation = chrome.source.main_abilities[2]
+    trident = chrome.source.alt_abilities[0]
+    world_destruction = chrome.source.alt_abilities[1]
+    annihilation = chrome.source.alt_abilities[2]
+    ruler = eteam[0]
+
+    assert breakdown.target(chrome, pteam, eteam, True) == 0
+    assert immolation.target(chrome, pteam, eteam, True) == 0
+    chrome.current_targets.append(chrome)
+
+    chrome.used_ability = needed
+    needed.execute(chrome, pteam, eteam)
+
+    assert chrome.has_effect(EffectType.MARK, "You Are Needed")
+
+def test_breakdown(chrome_test_scene: BattleScene):
+    chrome = chrome_test_scene.player_display.team.character_managers[0]
+    eteam = chrome_test_scene.enemy_display.team.character_managers
+    pteam = chrome_test_scene.player_display.team.character_managers
+    needed = chrome.source.main_abilities[0]
+    breakdown = chrome.source.main_abilities[1]
+    immolation = chrome.source.main_abilities[2]
+    trident = chrome.source.alt_abilities[0]
+    world_destruction = chrome.source.alt_abilities[1]
+    annihilation = chrome.source.alt_abilities[2]
+    naruto = eteam[1]
+    
+    naruto.current_targets.append(chrome)
+    naruto.used_ability = naruto.source.main_abilities[1]
+
+    chrome.used_ability = breakdown
+
+    chrome.current_targets.append(naruto)
+
+    chrome.used_ability.execute(chrome, pteam, eteam)
+
+    chrome_test_scene.tick_effect_duration()
+    chrome_test_scene.tick_effect_duration()
+    chrome_test_scene.tick_effect_duration()
+
+    assert naruto.source.hp == 75
+    assert naruto.is_stunned()
+
+    assert len(chrome.source.current_effects) == 0
+
+    chrome.used_ability.execute(chrome, pteam, eteam)
+    naruto.used_ability.execute(naruto, pteam, eteam)
+
+    assert chrome.source.hp == 95
+    chrome_test_scene.tick_effect_duration()
+    chrome_test_scene.tick_effect_duration()
+    chrome_test_scene.tick_effect_duration()
+
+    assert naruto.source.hp == 75
+
+def test_immolation(chrome_test_scene: BattleScene):
+    chrome = chrome_test_scene.player_display.team.character_managers[0]
+    eteam = chrome_test_scene.enemy_display.team.character_managers
+    pteam = chrome_test_scene.player_display.team.character_managers
+    needed = chrome.source.main_abilities[0]
+    breakdown = chrome.source.main_abilities[1]
+    immolation = chrome.source.main_abilities[2]
+    trident = chrome.source.alt_abilities[0]
+    world_destruction = chrome.source.alt_abilities[1]
+    annihilation = chrome.source.alt_abilities[2]
+    naruto = eteam[1]
+    
+    naruto.current_targets.append(chrome)
+    naruto.used_ability = naruto.source.main_abilities[1]
+
+    chrome.used_ability = immolation
+
+    chrome.current_targets.append(naruto)
+
+    chrome.used_ability.execute(chrome, pteam, eteam)
+
+    chrome_test_scene.tick_effect_duration()
+    chrome_test_scene.tick_effect_duration()
+    chrome_test_scene.tick_effect_duration()
+
+    assert naruto.source.hp == 80
+    assert naruto.source.energy_contribution == 0
+
+    assert len(chrome.source.current_effects) == 0
+
+    chrome.used_ability.execute(chrome, pteam, eteam)
+    naruto.used_ability.execute(naruto, pteam, eteam)
+
+    assert chrome.source.hp == 90
+    chrome_test_scene.tick_effect_duration()
+    chrome_test_scene.tick_effect_duration()
+    chrome_test_scene.tick_effect_duration()
+
+    assert naruto.source.hp == 80
+
+def test_you_are_needed_swap(chrome_test_scene: BattleScene):
+    chrome = chrome_test_scene.player_display.team.character_managers[0]
+    eteam = chrome_test_scene.enemy_display.team.character_managers
+    pteam = chrome_test_scene.player_display.team.character_managers
+    needed = chrome.source.main_abilities[0]
+    breakdown = chrome.source.main_abilities[1]
+    immolation = chrome.source.main_abilities[2]
+    trident = chrome.source.alt_abilities[0]
+    world_destruction = chrome.source.alt_abilities[1]
+    annihilation = chrome.source.alt_abilities[2]
+    naruto = eteam[1]
+
+    chrome.used_ability = needed
+    needed.execute(chrome, pteam, eteam)
+
+    chrome.source.hp = 50
+    
+    naruto.used_ability = naruto.source.current_abilities[2]
+    naruto.current_targets.append(chrome)
+    naruto.used_ability.execute(naruto, eteam, pteam)
+
+    chrome.check_profile_swaps()
+    chrome.update_ability()
+
+    assert chrome.source.current_abilities[0].name == "Trident Combat"
+    assert chrome.source.current_abilities[1].name == "Illusory World Destruction"
+    assert chrome.source.current_abilities[2].name == "Mental Annihilation"
+    assert chrome.source.current_abilities[3].name == "Trident Deflection"
+    assert chrome.source.profile_image == chrome.source.altprof1
+
+def test_world_destruction(chrome_test_scene: BattleScene):
+    chrome = chrome_test_scene.player_display.team.character_managers[0]
+    eteam = chrome_test_scene.enemy_display.team.character_managers
+    pteam = chrome_test_scene.player_display.team.character_managers
+    needed = chrome.source.main_abilities[0]
+    breakdown = chrome.source.main_abilities[1]
+    immolation = chrome.source.main_abilities[2]
+    trident = chrome.source.alt_abilities[0]
+    world_destruction = chrome.source.alt_abilities[1]
+    annihilation = chrome.source.alt_abilities[2]
+    naruto = eteam[1]
+
+    chrome.used_ability = world_destruction
+
+    chrome.used_ability.execute(chrome, pteam, eteam)
+
+    chrome_test_scene.tick_effect_duration()
+    chrome_test_scene.tick_effect_duration()
+    chrome_test_scene.tick_effect_duration()
+
+    for enemy in eteam:
+        assert enemy.source.hp == 75
+        assert enemy.is_stunned()
+
+def test_world_destruction_fail(chrome_test_scene: BattleScene):
+    chrome = chrome_test_scene.player_display.team.character_managers[0]
+    eteam = chrome_test_scene.enemy_display.team.character_managers
+    pteam = chrome_test_scene.player_display.team.character_managers
+    needed = chrome.source.main_abilities[0]
+    breakdown = chrome.source.main_abilities[1]
+    immolation = chrome.source.main_abilities[2]
+    trident = chrome.source.alt_abilities[0]
+    world_destruction = chrome.source.alt_abilities[1]
+    annihilation = chrome.source.alt_abilities[2]
+    naruto = eteam[1]
+
+    chrome.used_ability = world_destruction
+
+    chrome.used_ability.execute(chrome, pteam, eteam)
+
+    naruto.used_ability = naruto.source.current_abilities[2]
+    naruto.current_targets.append(chrome)
+    naruto.used_ability.execute(naruto, pteam, eteam)
+
+
+    chrome_test_scene.tick_effect_duration()
+    chrome_test_scene.tick_effect_duration()
+    chrome_test_scene.tick_effect_duration()
+
+    for enemy in eteam:
+        assert enemy.source.hp == 100
+        assert not enemy.is_stunned()
+
+
+def test_annihilation(chrome_test_scene: BattleScene):
+    chrome = chrome_test_scene.player_display.team.character_managers[0]
+    eteam = chrome_test_scene.enemy_display.team.character_managers
+    pteam = chrome_test_scene.player_display.team.character_managers
+    needed = chrome.source.main_abilities[0]
+    breakdown = chrome.source.main_abilities[1]
+    immolation = chrome.source.main_abilities[2]
+    trident = chrome.source.alt_abilities[0]
+    world_destruction = chrome.source.alt_abilities[1]
+    annihilation = chrome.source.alt_abilities[2]
+    naruto = eteam[1]
+    
+    naruto.current_targets.append(chrome)
+    naruto.used_ability = naruto.source.main_abilities[2]
+
+    chrome.used_ability = annihilation
+
+    chrome.current_targets.append(naruto)
+
+    chrome.used_ability.execute(chrome, pteam, eteam)
+
+    chrome_test_scene.tick_effect_duration()
+    chrome_test_scene.tick_effect_duration()
+    chrome_test_scene.tick_effect_duration()
+
+    assert naruto.source.hp == 65
+
+    assert len(chrome.source.current_effects) == 0
+
+    chrome.used_ability.execute(chrome, pteam, eteam)
+    naruto.used_ability.execute(naruto, pteam, eteam)
+
+    assert chrome.source.hp == 100
+    chrome_test_scene.tick_effect_duration()
+    chrome_test_scene.tick_effect_duration()
+    chrome_test_scene.tick_effect_duration()
+
+    assert naruto.source.hp == 65
 
