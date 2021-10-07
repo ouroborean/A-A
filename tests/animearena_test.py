@@ -87,6 +87,13 @@ def cranberry_test_scene(test_scene: BattleScene) -> engine.Scene:
     test_scene.setup_scene(ally_team, enemy_team)
     return test_scene
 
+@pytest.fixture
+def erza_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("erza"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("astolfo"), Character("naruto"), Character("chu")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
 
 
 def test_detail_unpack():
@@ -1246,5 +1253,154 @@ def test_fortissimo_double(cranberry_test_scene: BattleScene):
     cranberry.used_ability.execute(cranberry, pteam, eteam)
 
     assert astolfo.source.hp == 50
+
+def test_requip(erza_test_scene: BattleScene):
+    erza = erza_test_scene.player_display.team.character_managers[0]
+    eteam = erza_test_scene.enemy_display.team.character_managers
+    pteam = erza_test_scene.player_display.team.character_managers
+    clearheart = erza.source.main_abilities[0]
+    heavenswheel = erza.source.main_abilities[1]
+    nakagami = erza.source.main_abilities[2]
+    adamantine = erza.source.main_abilities[3]
+    rampage = erza.source.alt_abilities[0]
+    circleblade = erza.source.alt_abilities[1]
+    starlight = erza.source.alt_abilities[2]
+    barrier = erza.source.alt_abilities[3]
+    astolfo = eteam[0]
+    naruto = eteam[1]
+    erza.used_ability = clearheart
+    clearheart.execute(erza, pteam, eteam)
+    erza.check_ability_swaps()
+    assert erza.source.current_abilities[0].name == "Titania's Rampage"
+    
+    erza.used_ability = heavenswheel
+    erza.used_ability.execute(erza, pteam, eteam)
+    erza.check_ability_swaps()
+    assert erza.source.current_abilities[1].name == "Circle Blade"
+    assert erza.source.current_abilities[0].name == "Clear Heart Clothing"
+
+def test_clearheart_stun_immunity(erza_test_scene: BattleScene):
+    erza = erza_test_scene.player_display.team.character_managers[0]
+    eteam = erza_test_scene.enemy_display.team.character_managers
+    pteam = erza_test_scene.player_display.team.character_managers
+    clearheart = erza.source.main_abilities[0]
+    heavenswheel = erza.source.main_abilities[1]
+    nakagami = erza.source.main_abilities[2]
+    adamantine = erza.source.main_abilities[3]
+    rampage = erza.source.alt_abilities[0]
+    circleblade = erza.source.alt_abilities[1]
+    starlight = erza.source.alt_abilities[2]
+    barrier = erza.source.alt_abilities[3]
+    astolfo = eteam[0]
+    naruto = eteam[1]
+    erza.used_ability = clearheart
+    erza.used_ability.execute(erza, pteam, eteam)
+
+    naruto.used_ability = naruto.source.current_abilities[1]
+    naruto.current_targets.append(erza)
+    naruto.used_ability.execute(naruto, eteam, pteam)
+
+    assert not erza.is_stunned()
+
+def test_rampage(erza_test_scene: BattleScene):
+    erza = erza_test_scene.player_display.team.character_managers[0]
+    eteam = erza_test_scene.enemy_display.team.character_managers
+    pteam = erza_test_scene.player_display.team.character_managers
+    clearheart = erza.source.main_abilities[0]
+    heavenswheel = erza.source.main_abilities[1]
+    nakagami = erza.source.main_abilities[2]
+    adamantine = erza.source.main_abilities[3]
+    rampage = erza.source.alt_abilities[0]
+    circleblade = erza.source.alt_abilities[1]
+    starlight = erza.source.alt_abilities[2]
+    barrier = erza.source.alt_abilities[3]
+    astolfo = eteam[0]
+    naruto = eteam[1]
+
+    erza.used_ability = rampage
+    erza.used_ability.execute(erza, pteam, eteam)
+
+    erza_test_scene.resolve_ticking_ability()
+    erza_test_scene.resolve_ticking_ability()
+    erza_test_scene.resolve_ticking_ability()
+
+    total_damage = 0
+    for enemy in eteam:
+        total_damage = total_damage + (100 - enemy.source.hp)
+
+    assert total_damage == 60
+    
+def test_circle_blade(erza_test_scene: BattleScene):
+    erza = erza_test_scene.player_display.team.character_managers[0]
+    eteam = erza_test_scene.enemy_display.team.character_managers
+    pteam = erza_test_scene.player_display.team.character_managers
+    clearheart = erza.source.main_abilities[0]
+    heavenswheel = erza.source.main_abilities[1]
+    nakagami = erza.source.main_abilities[2]
+    adamantine = erza.source.main_abilities[3]
+    rampage = erza.source.alt_abilities[0]
+    circleblade = erza.source.alt_abilities[1]
+    starlight = erza.source.alt_abilities[2]
+    barrier = erza.source.alt_abilities[3]
+    astolfo = eteam[0]
+    naruto = eteam[1]
+
+    erza.used_ability = circleblade
+    erza.current_targets.append(astolfo)
+    erza.used_ability.execute(erza, pteam, eteam)
+
+    assert astolfo.source.hp == 80
+
+    erza_test_scene.resolve_ticking_ability()
+    erza_test_scene.resolve_ticking_ability()
+
+    assert astolfo.source.hp == 65
+    assert naruto.source.hp == 85
+
+def test_nakagamis_starlight(erza_test_scene: BattleScene):
+    erza = erza_test_scene.player_display.team.character_managers[0]
+    eteam = erza_test_scene.enemy_display.team.character_managers
+    pteam = erza_test_scene.player_display.team.character_managers
+    clearheart = erza.source.main_abilities[0]
+    heavenswheel = erza.source.main_abilities[1]
+    nakagami = erza.source.main_abilities[2]
+    adamantine = erza.source.main_abilities[3]
+    rampage = erza.source.alt_abilities[0]
+    circleblade = erza.source.alt_abilities[1]
+    starlight = erza.source.alt_abilities[2]
+    barrier = erza.source.alt_abilities[3]
+    astolfo = eteam[0]
+    naruto = eteam[1]
+
+    erza.used_ability = starlight
+    erza.current_targets.append(naruto)
+    erza.used_ability.execute(erza, pteam, eteam)
+
+    assert naruto.source.hp == 65
+    assert naruto.source.energy_contribution == 0
+
+def test_adamantine_barrier(erza_test_scene: BattleScene):
+    erza = erza_test_scene.player_display.team.character_managers[0]
+    eteam = erza_test_scene.enemy_display.team.character_managers
+    pteam = erza_test_scene.player_display.team.character_managers
+    clearheart = erza.source.main_abilities[0]
+    heavenswheel = erza.source.main_abilities[1]
+    nakagami = erza.source.main_abilities[2]
+    adamantine = erza.source.main_abilities[3]
+    rampage = erza.source.alt_abilities[0]
+    circleblade = erza.source.alt_abilities[1]
+    starlight = erza.source.alt_abilities[2]
+    barrier = erza.source.alt_abilities[3]
+    astolfo = eteam[0]
+    naruto = eteam[1]
+
+    erza.used_ability = barrier
+    erza.current_targets.append(pteam[1])
+    erza.current_targets.append(pteam[2])
+
+    erza.used_ability.execute(erza, pteam, eteam)
+
+    assert pteam[1].check_invuln()
+    assert pteam[2].check_invuln()
 
 

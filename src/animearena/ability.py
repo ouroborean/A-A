@@ -151,6 +151,8 @@ class Ability():
             return False
         if self.cooldown_remaining > 0:
             return False
+        if character.source.dead:
+            return False
         return True
 
     def modify_ability_cost(self, energy_type: Energy, mod: int):
@@ -637,6 +639,17 @@ def target_transform(user: "CharacterManager",
                 if not fake_targeting:
                     enemy.set_targeted()
                 total_targets += 1
+    return total_targets
+
+def target_titanias_rampage(user: "CharacterManager",
+              playerTeam: list["CharacterManager"],
+              enemyTeam: list["CharacterManager"],
+              fake_targeting: bool = False) -> int:
+    total_targets = 0
+    if not user.has_effect(EffectType.CONT_UNIQUE, "Titania's Rampage"):
+        if not fake_targeting:
+            user.set_targeted()
+        total_targets += 1
     return total_targets
 #endregion
 #endregion
@@ -1155,7 +1168,20 @@ def exe_adamantine_barrier(user: "CharacterManager", playerTeam: list["Character
     user.check_on_help()
 #endregion
 #region Esdeath Execution
+def exe_demons_extract(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
 
+def exe_frozen_castle(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_weiss_schnabel(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_esdeath_guard(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_mahapadma(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
 #endregion
 
 
@@ -1485,7 +1511,7 @@ ability_info_db = {
         +
         " remains active, it deals 5 more damage. This ability cannot be countered.",
         [1, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("SELF"), exe_titanias_rampage
+        target_titanias_rampage, exe_titanias_rampage
     ],
     "erzaalt2": [
         "Circle Blade",

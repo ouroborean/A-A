@@ -7,6 +7,7 @@ import sdl2.sdlttf
 import dill as pickle
 import itertools
 import textwrap
+import copy
 from animearena import character_select_scene, engine
 from animearena import character
 from animearena import energy
@@ -475,6 +476,7 @@ class BattleScene(engine.Scene):
                 effect_pouch.append(effect.db_name)
                 effect_pouch.append(effect.user_id)
                 effect_pouch.append(effect.invisible)
+                effect_pouch.append(effect.waiting)
                 effects_pouch.append(effect_pouch)
             character_pouch.append(effects_pouch)
             team1_pouch.append(character_pouch)
@@ -493,6 +495,7 @@ class BattleScene(engine.Scene):
                 effect_pouch.append(effect.db_name)
                 effect_pouch.append(effect.user_id)
                 effect_pouch.append(effect.invisible)
+                effect_pouch.append(effect.waiting)
                 effects_pouch.append(effect_pouch)
             character_pouch.append(effects_pouch)
             team2_pouch.append(character_pouch)
@@ -514,6 +517,7 @@ class BattleScene(engine.Scene):
                     user = self.enemy_display.team.character_managers[effect_pouch[5]]
                 
                 effect = Effect(Ability(effect_pouch[4]), EffectType(effect_pouch[0]), user, effect_pouch[2], effect_pouch[3], effect_pouch[1], effect_pouch[6])
+                effect.waiting = effect_pouch[7]
                 self.player_display.team.character_managers[i].source.current_effects.append(effect)
         for i, character_pouch in enumerate(team2pouch):
             self.enemy_display.team.character_managers[i].source.hp = character_pouch[0]
@@ -526,6 +530,7 @@ class BattleScene(engine.Scene):
                     user = self.enemy_display.team.character_managers[effect_pouch[5]]
                 
                 effect = Effect(Ability(effect_pouch[4]), EffectType(effect_pouch[0]), user, effect_pouch[2], effect_pouch[3], effect_pouch[1], effect_pouch[6])
+                effect.waiting = effect_pouch[7]
                 self.enemy_display.team.character_managers[i].source.current_effects.append(effect)
         self.turn_start()
         
@@ -986,6 +991,7 @@ class CharacterManager():
             if valid_targets:
                 damage = 15 + (eff.mag * 5)
                 target = randint(0, len(valid_targets) - 1)
+                print(f"Dealing {damage} damage to {valid_targets[target].source.name}")
                 self.deal_eff_pierce_damage(damage, valid_targets[target])
                 eff.alter_mag(1)
         if eff.name == "Circle Blade":
@@ -1300,17 +1306,16 @@ class CharacterManager():
 
     def check_energy_contribution(self) -> list[int]:
         output = [0, 0, 0, 0, 0]
-        print(f"Added {self.source.name}'s {self.source.energy_contribution} energy contribution")
         output[4] += self.source.energy_contribution
         gen = [eff for eff in self.source.current_effects if eff.eff_type == EffectType.ENERGY_GAIN]
         for eff in gen:
             negative = False
             if eff.mag < 0:
                 negative = True
-            energy_type = math.trunc(eff.mag / 10)
+            energy_type = math.trunc(eff.mag / 10) - 1
             if negative:
                 energy_type = energy_type * -1
-            mod_value = eff.mag - energy_type
+            mod_value = eff.mag - (energy_type * 10)
             output[energy_type] += mod_value
         return output
 
@@ -1615,7 +1620,7 @@ class CharacterManager():
             self.full_remove_effect("Nakagami's Armor", self)
         if self.has_effect(EffectType.MARK, "Adamantine Armor"):
             self.full_remove_effect("Adamantine Armor", self)
-            
+        self.check_ability_swaps()
 
     def check_profile_swaps(self):
         gen = (eff for eff in self.source.current_effects
@@ -1692,16 +1697,17 @@ class CharacterManager():
 
 
     def check_ability_swaps(self):
+        self.source.current_abilities = copy.copy(self.source.main_abilities)
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.ABILITY_SWAP)
         for eff in gen:
             swap_from = eff.mag // 10
             swap_to = eff.mag - (swap_from * 10)
-            self.source.current_abilities[swap_from - 1] = self.source.alt_abilities[swap_to - 1]
+            self.source.current_abilities[swap_from - 1] = copy.copy(self.source.alt_abilities[swap_to - 1])
 
     def update_ability(self):
 
-        self.source.current_abilities = self.source.main_abilities
+        
 
         self.check_ability_swaps()
         self.adjust_targeting_types()
