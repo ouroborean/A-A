@@ -1090,16 +1090,28 @@ def exe_merciless_finish(user: "CharacterManager", playerTeam: list["CharacterMa
 def exe_clear_heart_clothing(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.erza_requip()
     user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "Erza has equipped Clear Heart Clothing."))
-    user.add_effect()
+    user.add_effect(Effect(user.used_ability, EffectType.STUN_IMMUNE, user, 280000, lambda eff: "Erza cannot be stunned."))
+    user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Clear Heart Clothing has been replaced by Titania's Rampage.", mag=11))
+    user.check_on_use()
 
 def exe_heavens_wheel_armor(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.erza_requip()
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "Erza has equipped Heaven's Wheel Armor."))
+    user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 280000, lambda eff: "Erza will ignore affliction damage."))
+    user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Heaven's Wheel Armor has been replaced by Circle Blade.", mag = 22))
+    user.check_on_use()
 
 def exe_nakagamis_armor(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.erza_requip()
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "Erza has equipped Nakagami's Armor."))
+    user.add_effect(Effect(user.used_ability, EffectType.ENERGY_GAIN, user, 280000, lambda eff: "Erza will gain one random energy.", mag=51))
+    user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Nakagami's Armor has been replaced by Nakagami's Starlight.", mag = 33))
+    user.check_on_use()
+
 
 def exe_adamantine_armor(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.erza_requip()
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "Erza has equipped Adamantine Armor."))
 
 def exe_titanias_rampage(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     pass

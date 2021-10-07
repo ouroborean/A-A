@@ -156,11 +156,11 @@ class BattleScene(engine.Scene):
     offered_pool: dict[Energy, int]
     current_button: Optional[sdl2.ext.SoftwareSprite]
     round_any_cost: int
-    waiting_for_turn: bool = False
+    waiting_for_turn: bool
 
     def __init__(self, scene_manager, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
+        self.waiting_for_turn = False
         self.scene_manager = scene_manager
         self.ally_managers = []
         self.enemy_managers = []
@@ -572,10 +572,12 @@ class BattleScene(engine.Scene):
     
 
     def generate_energy(self):
-        total_energy = 0
-
+        
         for manager in self.player_display.team.character_managers:
-            total_energy = total_energy + manager.source.energy_contribution
+            pool = manager.check_energy_contribution()
+            total_energy = pool[Energy.RANDOM.value]
+            for i in range(4):
+                self.player_display.team.energy_pool[i] += pool[i]
         for _ in range(total_energy):
             self.player_display.team.energy_pool[randint(0, 3)] += 1
             self.player_display.team.energy_pool[4] += 1
@@ -898,12 +900,15 @@ class CharacterManager():
                 negative_cost = False
                 if eff.mag < 0:
                     negative_cost = True
-                    eff.mag = eff.mag * -1
-                ability_to_modify = eff.mag // 100
+                print(eff.mag)
+                ability_to_modify = round(eff.mag // 100)
+                print(ability_to_modify)
                 cost_type = (eff.mag - (ability_to_modify * 100)) // 10
+                print(cost_type)
                 magnitude = eff.mag - (ability_to_modify * 100) - (cost_type * 10)
                 if negative_cost:
-                    magnitude = magnitude * -1
+                    ability_to_modify = ability_to_modify * -1
+                    cost_type = cost_type * -1
                 if ability_to_modify - 1 == i or ability_to_modify == 0:
                     ability.modify_ability_cost(Energy(cost_type - 1), magnitude)
     
@@ -1017,11 +1022,10 @@ class CharacterManager():
             negative = False
             if eff.mag < 0:
                 negative = True
-                eff.mag = eff.mag * -1
             ability_target = eff.mag // 100
             boost_value = eff.mag - (ability_target * 100)
             if negative:
-                boost_value = boost_value * - 1
+                ability_target = ability_target * -1
             if ability_target == which or ability_target == 0:
                 mod_damage = mod_damage + boost_value
 
@@ -1261,6 +1265,20 @@ class CharacterManager():
         damage = self.get_boosts(damage)
         target.receive_eff_pierce_damage(damage)
         self.check_on_damage_dealt(target)
+
+    def check_energy_contribution(self) -> list[int]:
+        output = [0, 0, 0, 0, 1]
+        gen = [eff for eff in self.source.current_effects if eff.eff_type == EffectType.ENERGY_GAIN]
+        for eff in gen:
+            negative = False
+            if eff.mag < 0:
+                negative = True
+            energy_type = eff.mag // 10
+            if negative:
+                energy_type = energy_type * -1
+            mod_value = eff.mag - energy_type
+            output[energy_type] += mod_value
+        return output
 
     def receive_eff_pierce_damage(self, damage: int):
         mod_damage = damage

@@ -23,7 +23,7 @@ class Character:
     altprof2: Image
     main_prof: Image
     desc: str = ""
-    selected: bool = False
+    selected: bool
     energy_contribution: int
     targeted: bool
     invulnerable: bool
@@ -33,16 +33,17 @@ class Character:
     untargetable: bool
     acted: bool
     stunned: bool
-    ignoring: bool = False
+    ignoring: bool
     hp: int
     damage_reduction: int
-    sistema_CAI_stage: int = 1
+    sistema_CAI_stage: int
     current_effects: list["Effect"]
 
     def __init__(self, name:str, desc:str = None):
         self.name = name
         if desc:
             self.desc = desc
+        self.sistema_CAI_stage = 1
         self.energy_contribution = 1
         self.hp = 100
         self.full_dr = 0
@@ -52,6 +53,8 @@ class Character:
         self.untargetable = False
         self.acted = False
         self.stunned = False
+        self.ignoring = False
+        self.selected = False
         self.damage_reduction = 0
         self.current_effects = []
         self.profile_image = Image.open(RESOURCES / (name + "prof.png"))
