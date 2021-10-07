@@ -39,7 +39,7 @@ class DamageType(enum.IntEnum):
 class Ability():
 
     image: Image
-    name: str = ""
+    name: str
     db_name: str = ""
     desc: str = ""
     target_type: Target
@@ -54,15 +54,13 @@ class Ability():
     target: Callable
     execute: Callable
 
-    def __init__(self, name: str = None):
+    def __init__(self, name: str = ""):
         if name:
             self.db_name = name
-            self.image = Image.open(RESOURCES / (name + ".png"))
-        try:
-            details_package = ability_info_db[name]
+            self.image = Image.open((RESOURCES / name).with_suffix(".png"))
+        if details_package := ability_info_db.get(name):
             self.unpack_details(details_package)
-        except KeyError:
-            pass
+
 
     def resources_available(self, energy: list[int]) -> bool:
         for k, v in self.cost.items():
