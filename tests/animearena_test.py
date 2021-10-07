@@ -94,7 +94,12 @@ def erza_test_scene(test_scene: BattleScene) -> engine.Scene:
     test_scene.setup_scene(ally_team, enemy_team)
     return test_scene
 
-
+@pytest.fixture
+def esdeath_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("esdeath"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("astolfo"), Character("naruto"), Character("chu")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
 
 def test_detail_unpack():
     details_package = ["Justice Kick", "Shiro deals 20 damage to target enemy. If they damaged one of Shiro's allies the previous turn, this ability deals double damage.", [1,0,0,0,0,1], Target.SINGLE]
@@ -1402,5 +1407,112 @@ def test_adamantine_barrier(erza_test_scene: BattleScene):
 
     assert pteam[1].check_invuln()
     assert pteam[2].check_invuln()
+
+def test_demons_extract(esdeath_test_scene: BattleScene):
+    esdeath = esdeath_test_scene.player_display.team.character_managers[0]
+    eteam = esdeath_test_scene.enemy_display.team.character_managers
+    pteam = esdeath_test_scene.player_display.team.character_managers
+    extract = esdeath.source.main_abilities[0]
+    castle = esdeath.source.main_abilities[1]
+    schnabel = esdeath.source.main_abilities[2]
+    mahapadma = esdeath.source.alt_abilities[0]
+    astolfo = eteam[0]
+    naruto = eteam[1]
+
+    assert schnabel.target(esdeath, pteam, eteam, True) == 0
+
+    esdeath.used_ability = extract
+    extract.execute(esdeath, pteam, eteam)
+
+    assert schnabel.target(esdeath, pteam, eteam, True) == 3
+    esdeath.check_ability_swaps()
+    assert esdeath.source.current_abilities[0].name == "Mahapadma"
+
+def test_frozen_castle(esdeath_test_scene: BattleScene):
+    esdeath = esdeath_test_scene.player_display.team.character_managers[0]
+    eteam = esdeath_test_scene.enemy_display.team.character_managers
+    pteam = esdeath_test_scene.player_display.team.character_managers
+    extract = esdeath.source.main_abilities[0]
+    castle = esdeath.source.main_abilities[1]
+    schnabel = esdeath.source.main_abilities[2]
+    mahapadma = esdeath.source.alt_abilities[0]
+    astolfo = eteam[0]
+    naruto = eteam[1]
+
+    for e in eteam:
+        esdeath.current_targets.append(e)
+    
+    esdeath.used_ability = castle
+    esdeath.used_ability.execute(esdeath, pteam, eteam)
+
+    for e in eteam:
+        assert len(e.source.current_effects) == 1
+
+    assert not esdeath.has_effect(EffectType.MARK, "Frozen Castle")
+    assert esdeath.has_effect(EffectType.UNIQUE, "Frozen Castle")
+
+    naruto.used_ability = naruto.source.current_abilities[1]
+    assert naruto.used_ability.target(naruto, eteam, pteam, True) == 1
+
+def test_weiss_schnabel_reuse(esdeath_test_scene: BattleScene):
+    esdeath = esdeath_test_scene.player_display.team.character_managers[0]
+    eteam = esdeath_test_scene.enemy_display.team.character_managers
+    pteam = esdeath_test_scene.player_display.team.character_managers
+    extract = esdeath.source.main_abilities[0]
+    castle = esdeath.source.main_abilities[1]
+    schnabel = esdeath.source.main_abilities[2]
+    mahapadma = esdeath.source.alt_abilities[0]
+    astolfo = eteam[0]
+    naruto = eteam[1]
+    esdeath.used_ability = schnabel
+    esdeath.current_targets.append(astolfo)
+
+    esdeath.used_ability.execute(esdeath, pteam, eteam)
+
+    assert astolfo.source.hp == 90
+
+    esdeath_test_scene.resolve_ticking_ability()
+    esdeath_test_scene.resolve_ticking_ability()
+
+    esdeath.adjust_ability_costs()
+
+    assert esdeath.used_ability.total_cost == 1
+
+    esdeath.used_ability.execute(esdeath, pteam, eteam)
+
+    assert astolfo.source.hp == 65
+
+def test_frozen_castle_schnabel(esdeath_test_scene: BattleScene):
+    esdeath = esdeath_test_scene.player_display.team.character_managers[0]
+    eteam = esdeath_test_scene.enemy_display.team.character_managers
+    pteam = esdeath_test_scene.player_display.team.character_managers
+    extract = esdeath.source.main_abilities[0]
+    castle = esdeath.source.main_abilities[1]
+    schnabel = esdeath.source.main_abilities[2]
+    mahapadma = esdeath.source.alt_abilities[0]
+    astolfo = eteam[0]
+    naruto = eteam[1]
+
+    for e in eteam:
+        esdeath.current_targets.append(e)
+    
+    esdeath.used_ability = castle
+    esdeath.used_ability.execute(esdeath, pteam, eteam)
+
+    esdeath.used_ability = schnabel
+    esdeath.used_ability.execute(esdeath, pteam, eteam)
+
+    esdeath_test_scene.resolve_ticking_ability()
+
+    esdeath.used_ability.execute(esdeath, pteam, eteam)
+
+    esdeath_test_scene.resolve_ticking_ability()
+
+    esdeath.used_ability.execute(esdeath, pteam, eteam)
+
+    esdeath_test_scene.resolve_ticking_ability()
+    
+    for e in eteam:
+        assert e.source.hp == 40
 
 

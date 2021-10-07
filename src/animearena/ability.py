@@ -6,6 +6,7 @@ from pathlib import Path
 import sdl2
 import sdl2.ext
 import enum
+import copy
 
 from animearena.effects import EffectType, Effect
 
@@ -159,8 +160,7 @@ class Ability():
         self.cost[energy_type] = max(self.cost[energy_type] + mod, 0)
         
     def reset_costs(self):
-        for k in self.cost.keys():
-            self.cost[k] = self._base_cost[k]
+        self.cost = copy.copy(self._base_cost)
 
     def get_desc(self) -> str:
         return self.desc
@@ -211,7 +211,7 @@ def default_target(target_type,
 
         if target_type == "HOSTILE" or target_type == "ALL":
             for enemy in enemyTeam:
-                if enemy.hostile_target(def_type) and (
+                if enemy.hostile_target(user, def_type) and (
                         prep_req == "NONE"
                         or user.has_effect(EffectType.MARK, prep_req)) and (
                             mark_req == "NONE"
@@ -225,7 +225,7 @@ def default_target(target_type,
                     total_targets += 1
         if target_type == "HELPFUL" or target_type == "ALL":
             for ally in playerTeam:
-                if ally.helpful_target(def_type) and (
+                if ally.helpful_target(user, def_type) and (
                         prep_req == "NONE"
                         or user.has_effect(EffectType.MARK, prep_req)) and (
                             mark_req == "NONE"
@@ -239,7 +239,7 @@ def default_target(target_type,
                     total_targets += 1
         if target_type == "SELFLESS":
             for ally in playerTeam:
-                if ally != user and ally.helpful_target(def_type) and (
+                if ally != user and ally.helpful_target(user, def_type) and (
                         prep_req == "NONE"
                         or user.has_effect(EffectType.MARK, prep_req)) and (
                             mark_req == "NONE"
@@ -292,7 +292,7 @@ def target_one_cut_killing(user: "CharacterManager",
             total_targets += 1
     else:
         for enemy in enemyTeam:
-            if enemy.hostile_target(targeting) and enemy.has_effect(EffectType.MARK, "Red-Eyed Killer"):
+            if enemy.hostile_target(user, targeting) and enemy.has_effect(EffectType.MARK, "Red-Eyed Killer"):
                 if not fake_targeting:
                     enemy.set_targeted()
                 total_targets += 1
@@ -305,12 +305,12 @@ def target_detonate(user: "CharacterManager",
     total_targets = 0
     targeting = user.check_bypass_effects()
     for ally in playerTeam:
-        if ally.hostile_target(targeting) and ((ally.has_effect(EffectType.MARK, "Doll Trap") and ally.get_effect(EffectType.MARK, "Doll Trap").user == user) or ((ally.has_effect(EffectType.MARK, "Close Combat Bombs")) and (ally.get_effect(EffectType.MARK, "Close Combat Bombs").user == user))):
+        if ally.hostile_target(user, targeting) and ((ally.has_effect(EffectType.MARK, "Doll Trap") and ally.get_effect(EffectType.MARK, "Doll Trap").user == user) or ((ally.has_effect(EffectType.MARK, "Close Combat Bombs")) and (ally.get_effect(EffectType.MARK, "Close Combat Bombs").user == user))):
             if not fake_targeting:
                 ally.set_targeted()
             total_targets += 1
     for enemy in enemyTeam:
-        if enemy.hostile_target(targeting) and ((enemy.has_effect(EffectType.MARK, "Doll Trap") and enemy.get_effect(EffectType.MARK, "Doll Trap").user == user) or ((enemy.has_effect(EffectType.MARK, "Close Combat Bombs")) and (enemy.get_effect(EffectType.MARK, "Close Combat Bombs").user == user))):
+        if enemy.hostile_target(user, targeting) and ((enemy.has_effect(EffectType.MARK, "Doll Trap") and enemy.get_effect(EffectType.MARK, "Doll Trap").user == user) or ((enemy.has_effect(EffectType.MARK, "Close Combat Bombs")) and (enemy.get_effect(EffectType.MARK, "Close Combat Bombs").user == user))):
             if not fake_targeting:
                 enemy.set_targeted()
             total_targets += 1
@@ -324,12 +324,12 @@ def target_sistema_CAI(user: "CharacterManager",
     targeting = user.check_bypass_effects()
     if user.source.sistema_CAI_stage == 4:
         for ally in playerTeam:
-            if ally.helpful_target(targeting):
+            if ally.helpful_target(user, targeting):
                 if not fake_targeting:
                     ally.set_targeted()
                 total_targets += 1
     for enemy in enemyTeam:
-        if enemy.hostile_target(targeting):
+        if enemy.hostile_target(user, targeting):
             if not fake_targeting:
                 enemy.set_targeted()
             total_targets += 1
@@ -342,13 +342,13 @@ def target_eight_trigrams(user: "CharacterManager",
     total_targets = 0
     targeting = user.check_bypass_effects()
     for ally in playerTeam:
-        if ally.helpful_target(targeting):
+        if ally.helpful_target(user, targeting):
             if not fake_targeting:
                 ally.set_targeted()
             total_targets += 1
     if user.has_effect(EffectType.MARK, "Eight Trigrams - 64 Palms"):
         for enemy in enemyTeam:
-            if enemy.hostile_target(targeting):
+            if enemy.hostile_target(user, targeting):
                 if not fake_targeting:
                     enemy.set_targeted()
                 total_targets += 1
@@ -366,7 +366,7 @@ def target_getsuga_tenshou(user: "CharacterManager",
         targeting = "BYPASS"
     
     for enemy in enemyTeam:
-        if enemy.hostile_target(targeting):
+        if enemy.hostile_target(user, targeting):
             if not fake_targeting:
                 enemy.set_targeted()
             total_targets += 1
@@ -379,7 +379,7 @@ def target_maria_the_ripper(user: "CharacterManager",
     total_targets = 0
     targeting = user.check_bypass_effects()
     for enemy in enemyTeam:
-        if enemy.hostile_target(targeting) and ((enemy.has_effect(EffectType.MARK, "Fog of London") or enemy.has_effect(EffectType.MARK, "Streets of the Lost"))):
+        if enemy.hostile_target(user, targeting) and ((enemy.has_effect(EffectType.MARK, "Fog of London") or enemy.has_effect(EffectType.MARK, "Streets of the Lost"))):
             if not fake_targeting:
                 enemy.set_targeted()
             total_targets += 1
@@ -398,7 +398,7 @@ def target_heartbeat_distortion(user: "CharacterManager",
         for enemy in enemyTeam:
             if enemy.has_effect(EffectType.MARK, "Heartbeat Surround"):
                 targeting = "BYPASS"
-            if enemy.hostile_target(targeting):
+            if enemy.hostile_target(user, targeting):
                 if not fake_targeting:
                     enemy.set_targeted()
                 total_targets += 1
@@ -418,7 +418,7 @@ def target_heartbeat_surround(user: "CharacterManager",
         for enemy in enemyTeam:
             if enemy.has_effect(EffectType.MARK, "Heartbeat Distortion"):
                 targeting = "BYPASS"
-            if enemy.hostile_target(targeting):
+            if enemy.hostile_target(user, targeting):
                 if not fake_targeting:
                     enemy.set_targeted()
                 total_targets += 1
@@ -432,7 +432,7 @@ def target_kamui(user: "CharacterManager",
     total_targets = 0
     
     for enemy in enemyTeam:
-        if enemy.hostile_target("BYPASS"):
+        if enemy.hostile_target(user, "BYPASS"):
             if not fake_targeting:
                 enemy.set_targeted()
             total_targets += 1
@@ -453,7 +453,7 @@ def target_needle_pin(user: "CharacterManager",
         targeting = "BYPASS"
 
     for enemy in enemyTeam:
-        if enemy.hostile_target(targeting):
+        if enemy.hostile_target(user, targeting):
             if not fake_targeting:
                 enemy.set_targeted()
             total_targets += 1
@@ -466,7 +466,7 @@ def target_ideal_strike(user: "CharacterManager",
     total_targets = 0
     if user.source.hp <= 50:
         for enemy in enemyTeam:
-            if enemy.hostile_target("BYPASS"):
+            if enemy.hostile_target(user, "BYPASS"):
                 if not fake_targeting:
                     enemy.set_targeted()
                 total_targets += 1
@@ -480,7 +480,7 @@ def target_beast_instinct(user: "CharacterManager",
     targeting = user.check_bypass_effects()
     if user.has_effect(EffectType.MARK, "King of Beasts Transformation - Lionel"):
         for enemy in enemyTeam:
-            if enemy.hostile_target(targeting):
+            if enemy.hostile_target(user, targeting):
                 if not fake_targeting:
                     enemy.set_targeted()
                 total_targets += 1
@@ -501,7 +501,7 @@ def target_pumpkin(user: "CharacterManager",
         targeting = "BYPASS"
     
     for enemy in enemyTeam:
-        if enemy.hostile_target(targeting):
+        if enemy.hostile_target(user, targeting):
             if not fake_targeting:
                 enemy.set_targeted()
             total_targets += 1
@@ -519,7 +519,7 @@ def target_cutdown_shot(user: "CharacterManager",
         targeting = "BYPASS"
     
     for enemy in enemyTeam:
-        if enemy.hostile_target(targeting):
+        if enemy.hostile_target(user, targeting):
             if not fake_targeting:
                 enemy.set_targeted()
             total_targets += 1
@@ -544,24 +544,24 @@ def target_shun_shun_rikka(user: "CharacterManager",
     
     if one() and two() and three():
         for enemy in enemyTeam:
-            if enemy.hostile_target(targeting):
+            if enemy.hostile_target(user, targeting):
                 if not fake_targeting:
                     enemy.set_targeted()
                 total_targets += 1
         for ally in playerTeam:
-            if ally.helpful_target(targeting):
+            if ally.helpful_target(user, targeting):
                 if not fake_targeting:
                     ally.set_targeted()
                 total_targets += 1
     elif (one() and three()) or (one() and two()) or (two() and three()) or (two()) or (three()):
         for ally in playerTeam:
-            if ally.helpful_target(targeting):
+            if ally.helpful_target(user, targeting):
                 if not fake_targeting:
                     ally.set_targeted()
                 total_targets += 1
     elif one():
         for enemy in enemyTeam:
-            if enemy.hostile_target(targeting):
+            if enemy.hostile_target(user, targeting):
                 if not fake_targeting:
                     enemy.set_targeted()
                 total_targets += 1
@@ -578,7 +578,7 @@ def target_minion_minael_yunael(user: "CharacterManager",
     targeting = user.check_bypass_effects()
 
     for enemy in enemyTeam:
-        if enemy.hostile_target(targeting):
+        if enemy.hostile_target(user, targeting):
             if not fake_targeting:
                 enemy.set_targeted()
             total_targets += 1
@@ -593,7 +593,7 @@ def target_insatiable_justice(user: "CharacterManager",
               fake_targeting: bool = False) -> int:
     total_targets = 0
     for enemy in enemyTeam:
-        if enemy.hostile_target("BYPASS") and enemy.source.hp < 30:
+        if enemy.hostile_target(user, "BYPASS") and enemy.source.hp < 30:
             if not fake_targeting:
                 enemy.set_targeted()
             total_targets += 1
@@ -622,7 +622,7 @@ def target_ruler(user: "CharacterManager",
     if user.has_effect(EffectType.MARK, "Dive"):
         targeting = "BYPASS"
     for enemy in enemyTeam:
-        if enemy.hostile_target(targeting):
+        if enemy.hostile_target(user, targeting):
             if not fake_targeting:
                 enemy.set_targeted()
             total_targets += 1
@@ -635,7 +635,7 @@ def target_transform(user: "CharacterManager",
     total_targets = 0
     for enemy in enemyTeam:
         if (enemy.has_effect(EffectType.MARK, "Thirsting Knife") and enemy.get_effect(EffectType.MARK, "Thirsting Knife").user == user) or (enemy.has_effect(EffectType.MARK, "Vacuum Syringe") and enemy.get_effect(EffectType.MARK, "Vacuum Syringe").user == user):
-            if enemy.hostile_target("BYPASS"):
+            if enemy.hostile_target(user, "BYPASS"):
                 if not fake_targeting:
                     enemy.set_targeted()
                 total_targets += 1
@@ -767,7 +767,7 @@ def exe_black_coffin(user: "CharacterManager", playerTeam: list["CharacterManage
         if user.primary_target.final_can_effect(user.check_bypass_effects()):
             if user.primary_target.has_effect(EffectType.MARK, "Shatter, Kyoka Suigetsu"):
                 for enemy in enemyTeam:
-                    if enemy != user.primary_target and enemy.hostile_target(user.check_bypass_effects()):
+                    if enemy != user.primary_target and enemy.hostile_target(user, user.check_bypass_effects()):
                         user.current_targets.append(enemy)
 
         for target in user.current_targets:
@@ -1078,7 +1078,7 @@ def exe_fortissimo(user: "CharacterManager", playerTeam: list["CharacterManager"
 
 def exe_mental_radar(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     for target in user.current_targets:
-        if target.helpful_target():
+        if target.helpful_target(user, ):
             target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "This character will ignore counter effects."))
     user.check_on_use()
     user.check_on_help()
@@ -1162,26 +1162,57 @@ def exe_nakagamis_starlight(user: "CharacterManager", playerTeam: list["Characte
 
 def exe_adamantine_barrier(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     for target in user.current_targets:
-        if target.helpful_target():
+        if target.helpful_target(user, ):
             target.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "This character is invulnerable."))
     user.check_on_use()
     user.check_on_help()
 #endregion
 #region Esdeath Execution
 def exe_demons_extract(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 9, lambda eff: "Esdeath has activated her Teigu, and can use her abilities."))
+    user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 9, lambda eff: "Demon's Extract has been replaced by Mahapadma.", mag = 11))
+    user.check_on_use()
 
 def exe_frozen_castle(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    for target in user.current_targets:
+        if target.final_can_effect(user.check_bypass_effects()):
+            target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 6, lambda eff: "This character cannot target Esdeath's allies."))
+    user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 5, lambda eff: "Esdeath is using Frozen Castle. This effect will end if she dies."))
+    user.add_effect(Effect(user.used_ability, EffectType.TARGET_SWAP, user, 5, lambda eff: "Weiss Schnabel will target all enemies.", mag=41))
+    user.check_on_use()
+    user.check_on_harm()
 
 def exe_weiss_schnabel(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.has_effect(EffectType.COST_ADJUST, "Weiss Schnabel"):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()) :
+                user.deal_damage(10, target)
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 5, lambda eff: "This character will receive 10 damage.", mag=10))
+        if user.current_targets:
+            user.add_effect(Effect(user.used_ability, EffectType.COST_ADJUST, user, 5, lambda eff: "Weiss Schnabel will cost one fewer special energy and deal 15 piercing damage to its target.", mag = -321))
+    else:
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_pierce_damage(15, target)
+    user.check_on_use()
+    user.check_on_harm()            
 
 def exe_esdeath_guard(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Esdeath is invulnerable."))
+    user.check_on_use()
 
 def exe_mahapadma(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    for target in user.current_targets:
+        if target != user:
+            if target.id < 3:
+                duration = 5
+            else:
+                duration = 4
+            target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, duration, lambda eff: "This character is stunned."))
+            user.check_on_stun(target)
+        else:
+            target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 5, lambda eff: "When Mahapadma ends, Esdeath will be stunned for two turns."))
+    user.check_on_use()
 #endregion
 
 
@@ -1536,32 +1567,32 @@ ability_info_db = {
         "Esdeath calls forth the power of her Teigu, enabling the user of her abilities for 5 turns. During this time, this ability changes to Mahapadma, "
         + "and Esdeath cannot be countered.", [0, 1, 0, 0, 0,
                                                4], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_demons_extract
     ],
     "esdeath2": [
         "Frozen Castle",
         "For the next two turns, no enemy can target any of Esdeath's allies. Esdeath's allies cannot target enemies affected by Frozen Castle. During this time, "
         + "Weiss Schnabel will affect all enemies.", [0, 2, 0, 0, 0,
-                                                      7], Target.ALL_TARGET,
-        default_target("ALL")
+                                                      7], Target.MULTI_ENEMY,
+        default_target("HOSTILE"), exe_frozen_castle
     ],
     "esdeath3": [
         "Weiss Schnabel",
         "Deals 10 damage to target enemy for 3 turns. While active, Weiss Schnabel costs one fewer special energy and deals 15 piercing damage to target enemy.",
         [0, 1, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HOSTILE", prep_req="Demon's Extract")
+        default_target("HOSTILE", prep_req="Demon's Extract"), exe_weiss_schnabel
     ],
     "esdeath4": [
         "Esdeath Guard",
         "Esdeath Guard: Esdeath becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_esdeath_guard
     ],
     "esdeathalt1": [
         "Mahapadma",
         "Mahapadma: Esdeath stuns every living character except for her for 2 turns. At the end of those turns, Esdeath is stunned for 2 turns.",
         [0, 2, 0, 0, 1, 8], Target.ALL_TARGET,
-        default_target("ALL")
+        default_target("ALL"), exe_mahapadma
     ],
     "frenda1": [
         "Close Combat Bombs",

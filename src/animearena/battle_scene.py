@@ -541,7 +541,8 @@ class BattleScene(engine.Scene):
             for eff in manager.source.current_effects:
                 eff.tick_duration()
                 if eff.duration == 0:
-                    manager.remove_effect(eff)
+                    if eff.name == "Mahapadma" and eff.eff_type == EffectType.MARK:
+                        manager.add_effect(Effect(Ability("esdeathalt1"), EffectType.ALL_STUN, manager, 5, lambda eff: "Esdeath is stunned."))
                     if eff.name == "Quickdraw - Rifle" and eff.eff_type == EffectType.CONT_USE:
                         manager.full_remove_effect("Quickdraw - Rifle", manager)
                         manager.add_effect(Effect(Ability("cmaryalt2"), EffectType.ABILITY_SWAP, manager, 280000, lambda eff: "Quickdraw - Rifle has been replaced by Quickdraw - Sniper", mag=12))
@@ -570,12 +571,17 @@ class BattleScene(engine.Scene):
                                 manager.deal_eff_damage(25, emanager)
                                 emanager.add_effect(Effect(Ability("chromealt2"), EffectType.ALL_STUN, manager, 2, lambda eff: "This character is stunned."))
                                 manager.check_on_stun(emanager)
+            new_list = [eff for eff in manager.source.current_effects if eff.duration > 0]                
+            manager.source.current_effects = new_list
 
         for manager in self.enemy_display.team.character_managers:
             for eff in manager.source.current_effects:
                 eff.tick_duration()
                 if eff.duration == 0:
-                    manager.remove_effect(eff)
+                    pass
+            new_list = [eff for eff in manager.source.current_effects if eff.duration > 0]
+            manager.source.current_effects = new_list
+
 
     def turn_start(self):
         self.waiting_for_turn = False
@@ -922,11 +928,8 @@ class CharacterManager():
                 negative_cost = False
                 if eff.mag < 0:
                     negative_cost = True
-                print(eff.mag)
                 ability_to_modify = math.trunc(eff.mag / 100)
-                
                 cost_type = math.trunc((eff.mag - (ability_to_modify * 100)) / 10)
-
                 magnitude = eff.mag - (ability_to_modify * 100) - (cost_type * 10)
                 if negative_cost:
                     ability_to_modify = ability_to_modify * -1
@@ -1369,11 +1372,21 @@ class CharacterManager():
             break
         return output
 
-    def hostile_target(self, def_type = "NORMAL") -> bool:
+    def special_targeting_exemptions(self, targeter: "CharacterManager") -> bool:
+        target = self
+        if targeter.has_effect(EffectType.MARK, "Frozen Castle") and not target.has_effect(EffectType.UNIQUE, "Frozen Castle"):
+            return True
+        if not targeter.has_effect(EffectType.MARK, "Frozen Castle") and target.has_effect(EffectType.UNIQUE, "Frozen Castle"):
+            return True
+        if not targeter.has_effect(EffectType.UNIQUE, "Frozen Castle") and target.has_effect(EffectType.MARK, "Frozen Castle"):
+            return True
+        return False
+
+    def hostile_target(self, targeter: "CharacterManager", def_type = "NORMAL") -> bool:
         if def_type == "NORMAL":
-            return not (self.check_invuln() or self.source.dead or self.source.untargetable)
+            return not (self.check_invuln() or self.source.dead or self.source.untargetable or self.special_targeting_exemptions(targeter))
         elif def_type == "BYPASS":
-            return not (self.source.dead or self.source.untargetable)
+            return not (self.source.dead or self.source.untargetable or self.special_targeting_exemptions(targeter))
 
     def final_can_effect(self, def_type = "NORMAL") -> bool:
         if def_type == "NORMAL":
@@ -1389,11 +1402,11 @@ class CharacterManager():
                 return True
         return False
 
-    def helpful_target(self, def_type = "NORMAL") -> bool:
+    def helpful_target(self, targeter: "CharacterManager", def_type = "NORMAL") -> bool:
         if def_type == "NORMAL":
-            return not (self.check_isolated() or self.source.dead)
+            return not (self.check_isolated() or self.source.dead or self.special_targeting_exemptions(targeter))
         elif def_type == "BYPASS":
-            return not (self.source.dead)
+            return not (self.source.dead or self.special_targeting_exemptions(targeter))
 
     def add_effect(self, effect: Effect):
         self.source.current_effects.append(effect)
