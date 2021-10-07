@@ -1,3 +1,4 @@
+import math
 from operator import mod
 import sdl2
 import sdl2.ext
@@ -6,7 +7,7 @@ import sdl2.sdlttf
 import dill as pickle
 import itertools
 import textwrap
-from animearena import engine
+from animearena import character_select_scene, engine
 from animearena import character
 from animearena import energy
 from animearena.character import Character, character_db
@@ -312,12 +313,17 @@ class BattleScene(engine.Scene):
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_DMG)
             for eff in gen:
-                if eff.check_waiting() and self.is_allied(eff):
+                if eff.check_waiting() and self.is_allied(eff) and (eff.mag > 15 or not manager.deflecting()):
                     eff.user.deal_eff_damage(eff.mag, manager)
+            gen = (eff for eff in manager.source.current_effects
+                   if eff.eff_type == EffectType.CONT_PIERCE_DMG)
+            for eff in gen:
+                if eff.check_waiting() and self.is_allied(eff) and (eff.mag > 15 or not manager.deflecting()):
+                    eff.user.deal_eff_pierce_damage(eff.mag, manager)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_AFF_DMG)
             for eff in gen:
-                if eff.check_waiting() and self.is_allied(eff):
+                if eff.check_waiting() and self.is_allied(eff) and (eff.mag > 15 or not manager.deflecting()):
                     eff.user.deal_eff_aff_damage(eff.mag, manager)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_HEAL)
@@ -347,12 +353,17 @@ class BattleScene(engine.Scene):
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_DMG)
             for eff in gen:
-                if eff.check_waiting() and self.is_allied(eff):
+                if eff.check_waiting() and self.is_allied(eff) and (eff.mag > 15 or not manager.deflecting()):
                     eff.user.deal_eff_damage(eff.mag, manager)
+            gen = (eff for eff in manager.source.current_effects
+                   if eff.eff_type == EffectType.CONT_PIERCE_DMG)
+            for eff in gen:
+                if eff.check_waiting() and self.is_allied(eff) and (eff.mag > 15 or not manager.deflecting()):
+                    eff.user.deal_eff_pierce_damage(eff.mag, manager)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_AFF_DMG)
             for eff in gen:
-                if eff.check_waiting() and self.is_allied(eff):
+                if eff.check_waiting() and self.is_allied(eff) and (eff.mag > 15 or not manager.deflecting()):
                     eff.user.deal_eff_aff_damage(eff.mag, manager)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_HEAL)
@@ -454,6 +465,7 @@ class BattleScene(engine.Scene):
             effects_pouch = []
             character_pouch = []
             character_pouch.append(manager.source.hp)
+            character_pouch.append(manager.source.energy_contribution)
             for effect in manager.source.current_effects:
                 effect_pouch = []
                 effect_pouch.append(effect.eff_type.value)
@@ -471,6 +483,7 @@ class BattleScene(engine.Scene):
             effects_pouch = []
             character_pouch = []
             character_pouch.append(manager.source.hp)
+            character_pouch.append(manager.source.energy_contribution)
             for effect in manager.source.current_effects:
                 effect_pouch = []
                 effect_pouch.append(effect.eff_type.value)
@@ -492,8 +505,9 @@ class BattleScene(engine.Scene):
         team2pouch = match.team1_pouch
         for i, character_pouch in enumerate(team1pouch):
             self.player_display.team.character_managers[i].source.hp = character_pouch[0]
+            self.player_display.team.character_managers[i].source.energy_contribution = character_pouch[1]
             self.player_display.team.character_managers[i].source.current_effects.clear()
-            for j, effect_pouch in enumerate(character_pouch[1]):
+            for j, effect_pouch in enumerate(character_pouch[2]):
                 if effect_pouch[5] > 2:
                     user = self.player_display.team.character_managers[effect_pouch[5] - 3]
                 else:
@@ -503,8 +517,9 @@ class BattleScene(engine.Scene):
                 self.player_display.team.character_managers[i].source.current_effects.append(effect)
         for i, character_pouch in enumerate(team2pouch):
             self.enemy_display.team.character_managers[i].source.hp = character_pouch[0]
+            self.enemy_display.team.character_managers[i].source.energy_contribution = character_pouch[1]
             self.enemy_display.team.character_managers[i].source.current_effects.clear()
-            for j, effect_pouch in enumerate(character_pouch[1]):
+            for j, effect_pouch in enumerate(character_pouch[2]):
                 if effect_pouch[5] > 2:
                     user = self.player_display.team.character_managers[effect_pouch[5] - 3]
                 else:
@@ -572,15 +587,17 @@ class BattleScene(engine.Scene):
     
 
     def generate_energy(self):
-        
+        total_energy = 0
         for manager in self.player_display.team.character_managers:
             pool = manager.check_energy_contribution()
-            total_energy = pool[Energy.RANDOM.value]
+            total_energy += pool[Energy.RANDOM.value]
             for i in range(4):
                 self.player_display.team.energy_pool[i] += pool[i]
+            manager.source.energy_contribution = 1
         for _ in range(total_energy):
             self.player_display.team.energy_pool[randint(0, 3)] += 1
             self.player_display.team.energy_pool[4] += 1
+        
         self.update_energy_region()
 
     def update_energy_region(self):
@@ -901,10 +918,10 @@ class CharacterManager():
                 if eff.mag < 0:
                     negative_cost = True
                 print(eff.mag)
-                ability_to_modify = round(eff.mag // 100)
-                print(ability_to_modify)
-                cost_type = (eff.mag - (ability_to_modify * 100)) // 10
-                print(cost_type)
+                ability_to_modify = math.trunc(eff.mag / 100)
+                
+                cost_type = math.trunc((eff.mag - (ability_to_modify * 100)) / 10)
+
                 magnitude = eff.mag - (ability_to_modify * 100) - (cost_type * 10)
                 if negative_cost:
                     ability_to_modify = ability_to_modify * -1
@@ -956,11 +973,25 @@ class CharacterManager():
 
     def check_unique_cont(self, eff: Effect):
         if eff.name == "Relentless Assault":
-            if self.final_can_effect(eff.user.check_bypass_effects()):
+            if self.final_can_effect(eff.user.check_bypass_effects()) and not self.deflecting():
                 if self.check_for_dmg_reduction() < 15:
-                    eff.user.deal_pierce_damage(15, self)
+                    eff.user.deal_eff_pierce_damage(15, self)
                 else:
-                    eff.user.deal_damage(15, self)
+                    eff.user.deal_eff_damage(15, self)
+        if eff.name == "Titania's Rampage":
+            valid_targets: list["CharacterManager"] = []
+            for enemy in self.scene.enemy_display.team.character_managers:
+                if enemy.final_can_effect(self.check_bypass_effects()) and not enemy.deflecting():
+                    valid_targets.append(enemy)
+            if valid_targets:
+                damage = 15 + (eff.mag * 5)
+                target = randint(0, len(valid_targets) - 1)
+                self.deal_eff_pierce_damage(damage, valid_targets[target])
+                eff.alter_mag(1)
+        if eff.name == "Circle Blade":
+            for enemy in self.scene.enemy_display.team.character_managers:
+                if enemy.final_can_effect(self.check_bypass_effects()) and not enemy.deflecting():
+                    self.deal_eff_damage(15, enemy)
 
     def check_countered(self) -> bool:
         if not self.has_effect(EffectType.MARK, "Mental Radar"):
@@ -1022,7 +1053,8 @@ class CharacterManager():
             negative = False
             if eff.mag < 0:
                 negative = True
-            ability_target = eff.mag // 100
+            ability_target = math.trunc(eff.mag / 100)
+            
             boost_value = eff.mag - (ability_target * 100)
             if negative:
                 ability_target = ability_target * -1
@@ -1267,13 +1299,15 @@ class CharacterManager():
         self.check_on_damage_dealt(target)
 
     def check_energy_contribution(self) -> list[int]:
-        output = [0, 0, 0, 0, 1]
+        output = [0, 0, 0, 0, 0]
+        print(f"Added {self.source.name}'s {self.source.energy_contribution} energy contribution")
+        output[4] += self.source.energy_contribution
         gen = [eff for eff in self.source.current_effects if eff.eff_type == EffectType.ENERGY_GAIN]
         for eff in gen:
             negative = False
             if eff.mag < 0:
                 negative = True
-            energy_type = eff.mag // 10
+            energy_type = math.trunc(eff.mag / 10)
             if negative:
                 energy_type = energy_type * -1
             mod_value = eff.mag - energy_type
@@ -1536,7 +1570,6 @@ class CharacterManager():
         self.used_ability = None
         self.targeted = False
         self.targeting = False
-        self.source.energy_contribution = 1
         for ability in self.source.current_abilities:
             ability.reset_cooldown()
         if enemy:

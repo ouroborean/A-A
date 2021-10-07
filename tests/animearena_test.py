@@ -1246,3 +1246,5 @@ def test_fortissimo_double(cranberry_test_scene: BattleScene):
     cranberry.used_ability.execute(cranberry, pteam, eteam)
 
     assert astolfo.source.hp == 50
+
+

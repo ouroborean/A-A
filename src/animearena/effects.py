@@ -55,6 +55,7 @@ class EffectType(enum.IntEnum):
     ISOLATE = 40
     PROF_SWAP = 41
     IGNORE = 42
+    CONT_PIERCE_DMG = 43
 
 
 class Effect:

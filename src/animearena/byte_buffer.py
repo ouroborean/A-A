@@ -3,9 +3,14 @@
 
 class ByteBuffer():
 
-    buff: list[bytes] = []
-    read_pos: int = 0
-    buff_updated = False
+    buff: list[bytes]
+    read_pos: int
+    buff_updated: bool
+
+    def __init__(self):
+        self.buff = [] 
+        self.read_pos = 0
+        self.buff_updated = False
 
     def get_read_pos(self) -> int:
         return self.read_pos

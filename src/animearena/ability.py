@@ -50,7 +50,7 @@ class Ability():
     _base_cooldown: int = 0
     cooldown: int = 0
     cooldown_remaining: int = 0
-    types = list[str]
+    types: list[str]
     target: Callable
     execute: Callable
 
@@ -1112,19 +1112,52 @@ def exe_nakagamis_armor(user: "CharacterManager", playerTeam: list["CharacterMan
 def exe_adamantine_armor(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.erza_requip()
     user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "Erza has equipped Adamantine Armor."))
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 280000, lambda eff: "Erza has 15 points of damage reduction.", mag=15))
+    user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Adamantine Armor has been replaced by Adamantine Barrier.", mag = 44))
 
 def exe_titanias_rampage(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.CONT_UNIQUE, user, 280000, lambda eff: f"Erza will deal {(eff.mag * 5) + 15} piercing damage to a random enemy.", mag = 1))
+    valid_targets: list["CharacterManager"] = []
+    for enemy in enemyTeam:
+        if enemy.final_can_effect(user.check_bypass_effects()) and not enemy.deflecting():
+            valid_targets.append(enemy)
+    if valid_targets:
+        target = randint(0, len(valid_targets) - 1)
+        user.deal_pierce_damage(15, valid_targets[target])
+    user.check_on_use()
+    if valid_targets:
+        user.check_on_harm()
+
 
 def exe_circle_blade(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(20, target)
+        user.add_effect(Effect(user.used_ability, EffectType.CONT_UNIQUE, user, 3, lambda eff: "Erza will deal 15 damage to all enemies.", mag=15))
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_nakagamis_starlight(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(35, target)
+                target.source.energy_contribution -= 1
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_adamantine_barrier(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    for target in user.current_targets:
+        if target.helpful_target():
+            target.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "This character is invulnerable."))
+    user.check_on_use()
+    user.check_on_help()
 #endregion
+#region Esdeath Execution
+
+#endregion
+
 
 
 ability_info_db = {
@@ -1426,25 +1459,25 @@ ability_info_db = {
         "Clear Heart Clothing",
         "Until Erza requips another armor set, she cannot be stunned and Clear Heart Clothing is replaced by Titania's Rampage.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_clear_heart_clothing
     ],
     "erza2": [
         "Heaven's Wheel Armor",
         "Until Erza requips another armor set, she will ignore all affliction damage and Heaven's Wheel Armor is replaced by Circle Blade.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_heavens_wheel_armor
     ],
     "erza3": [
         "Nakagami's Armor",
         "Until Erza requips another armor set, she gains 1 additional random energy per turn and Nakagami's Armor is replaced by Nakagami's Starlight.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_nakagamis_armor
     ],
     "erza4": [
         "Adamantine Armor",
         "Until Erza requips another armor set, she gains 15 damage reduction and Adamantine Armor is replaced by Adamantine Barrier.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_adamantine_armor
     ],
     "erzaalt1": [
         "Titania's Rampage",
@@ -1452,25 +1485,25 @@ ability_info_db = {
         +
         " remains active, it deals 5 more damage. This ability cannot be countered.",
         [1, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_titanias_rampage
     ],
     "erzaalt2": [
         "Circle Blade",
         "Erza deals 20 damage to one enemy. On the following turn, all enemies take 15 damage, ignoring invulnerability.",
         [0, 0, 0, 1, 1, 1], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_circle_blade
     ],
     "erzaalt3": [
         "Nakagami's Starlight",
         "Erza deals 35 damage to one enemy and removes 1 random energy from them.",
         [0, 1, 0, 1, 0, 0], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_nakagamis_starlight
     ],
     "erzaalt4": [
         "Adamantine Barrier",
         "Both of Erza's allies become invulnerable for one turn.",
         [0, 0, 0, 1, 0, 3], Target.MULTI_ALLY,
-        default_target("SELFLESS")
+        default_target("SELFLESS"), exe_adamantine_barrier
     ],
     "esdeath1": [
         "Demon's Extract",
