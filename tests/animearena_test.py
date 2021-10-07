@@ -1,4 +1,6 @@
 from pickle import PUT
+
+from _pytest.config import create_terminal_writer
 from animearena import battle_scene
 from animearena.ability import Ability, ability_info_db, Target, exe_effortless_guard
 from animearena.energy import Energy
@@ -69,7 +71,23 @@ def chrome_test_scene(test_scene: BattleScene) -> engine.Scene:
     ally_team = [Character("chrome"), Character("toga"), Character("nemu")]
     enemy_team = [Character("ruler"), Character("naruto"), Character("mirio")]
     test_scene.setup_scene(ally_team, enemy_team)
-    return test_scene   
+    return test_scene
+
+@pytest.fixture
+def chu_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("chu"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("chrome"), Character("naruto"), Character("chu")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+@pytest.fixture
+def cranberry_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("cranberry"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("astolfo"), Character("naruto"), Character("chu")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+
 
 def test_detail_unpack():
     details_package = ["Justice Kick", "Shiro deals 20 damage to target enemy. If they damaged one of Shiro's allies the previous turn, this ability deals double damage.", [1,0,0,0,0,1], Target.SINGLE]
@@ -525,7 +543,7 @@ def test_effect_removal(naruto_test_scene: BattleScene):
     shadow_clones = naruto.source.current_abilities[0]
     
     shadow_clones.execute(naruto, e_team, p_team)
-    naruto.full_remove_effect("Shadow Clones")
+    naruto.full_remove_effect("Shadow Clones", naruto)
     assert len(naruto.source.current_effects) == 0
 
 def test_luna_cleanse(astolfo_test_scene: BattleScene):
@@ -946,7 +964,6 @@ def test_world_destruction_fail(chrome_test_scene: BattleScene):
         assert enemy.source.hp == 100
         assert not enemy.is_stunned()
 
-
 def test_annihilation(chrome_test_scene: BattleScene):
     chrome = chrome_test_scene.player_display.team.character_managers[0]
     eteam = chrome_test_scene.enemy_display.team.character_managers
@@ -986,3 +1003,246 @@ def test_annihilation(chrome_test_scene: BattleScene):
 
     assert naruto.source.hp == 65
 
+def test_relentless_assault(chu_test_scene: BattleScene):
+    chu = chu_test_scene.player_display.team.character_managers[0]
+    eteam = chu_test_scene.enemy_display.team.character_managers
+    pteam = chu_test_scene.player_display.team.character_managers
+    assault = chu.source.current_abilities[0]
+    deflect = chu.source.current_abilities[1]
+    gae_bolg = chu.source.current_abilities[2]
+    block = chu.source.current_abilities[3]
+    naruto = eteam[1]
+    chrome = eteam[0]
+    chu2 = eteam[2]
+
+    chu.current_targets.append(naruto)
+    chu.used_ability = assault
+
+    assault.execute(chu, pteam, eteam)
+
+    chu_test_scene.resolve_ticking_ability()
+    chu_test_scene.resolve_ticking_ability()
+    chu_test_scene.resolve_ticking_ability()
+    
+
+    assert naruto.source.hp == 55
+
+def test_relentless_assault_pierce(chu_test_scene: BattleScene):
+    chu = chu_test_scene.player_display.team.character_managers[0]
+    eteam = chu_test_scene.enemy_display.team.character_managers
+    pteam = chu_test_scene.player_display.team.character_managers
+    assault = chu.source.current_abilities[0]
+    deflect = chu.source.current_abilities[1]
+    gae_bolg = chu.source.current_abilities[2]
+    block = chu.source.current_abilities[3]
+    naruto = eteam[1]
+
+    chu.current_targets.append(naruto)
+    chu.used_ability = assault
+
+    naruto.add_effect(Effect(Ability("naruto1"), EffectType.ALL_DR, naruto, 10, lambda eff: "", mag=10))
+
+    assault.execute(chu, pteam, eteam)
+
+    chu_test_scene.resolve_ticking_ability()
+    chu_test_scene.resolve_ticking_ability()
+    chu_test_scene.resolve_ticking_ability()
+
+    assert naruto.source.hp == 55
+
+def test_relentless_assault_nonpierce(chu_test_scene: BattleScene):
+    chu = chu_test_scene.player_display.team.character_managers[0]
+    eteam = chu_test_scene.enemy_display.team.character_managers
+    pteam = chu_test_scene.player_display.team.character_managers
+    assault = chu.source.current_abilities[0]
+    deflect = chu.source.current_abilities[1]
+    gae_bolg = chu.source.current_abilities[2]
+    block = chu.source.current_abilities[3]
+    naruto = eteam[1]
+
+    chu.current_targets.append(naruto)
+    chu.used_ability = assault
+
+    naruto.add_effect(Effect(Ability("naruto1"), EffectType.ALL_DR, naruto, 10, lambda eff: "", mag=15))
+
+    assault.execute(chu, pteam, eteam)
+
+    chu_test_scene.resolve_ticking_ability()
+    chu_test_scene.resolve_ticking_ability()
+    chu_test_scene.resolve_ticking_ability()
+
+    assert naruto.source.hp == 100
+
+def test_deflect_negation(chu_test_scene: BattleScene):
+    chu = chu_test_scene.player_display.team.character_managers[0]
+    eteam = chu_test_scene.enemy_display.team.character_managers
+    pteam = chu_test_scene.player_display.team.character_managers
+    assault = chu.source.current_abilities[0]
+    deflect = chu.source.current_abilities[1]
+    gae_bolg = chu.source.current_abilities[2]
+    block = chu.source.current_abilities[3]
+    naruto = eteam[1]
+
+    chu.used_ability = deflect
+    deflect.execute(chu, pteam, eteam)
+
+    naruto.used_ability = naruto.source.alt_abilities[1]
+    naruto.current_targets.append(chu)
+
+    naruto.used_ability.execute(naruto, eteam, pteam)
+    naruto.used_ability.execute(naruto, eteam, pteam)
+
+    assert chu.source.hp == 100
+    assert chu.is_stunned() == False
+    assert naruto.has_effect(EffectType.MARK, "Uzumaki Barrage")
+
+def test_deflect_negation_failure(chu_test_scene: BattleScene):
+    chu = chu_test_scene.player_display.team.character_managers[0]
+    eteam = chu_test_scene.enemy_display.team.character_managers
+    pteam = chu_test_scene.player_display.team.character_managers
+    assault = chu.source.current_abilities[0]
+    deflect = chu.source.current_abilities[1]
+    gae_bolg = chu.source.current_abilities[2]
+    block = chu.source.current_abilities[3]
+    naruto = eteam[1]
+
+    chu.used_ability = deflect
+    deflect.execute(chu, pteam, eteam)
+
+    naruto.used_ability = naruto.source.main_abilities[1]
+    naruto.current_targets.append(chu)
+
+    naruto.used_ability.execute(naruto, eteam, pteam)
+
+    assert chu.source.hp == 90
+    assert chu.is_stunned() == True
+
+def test_gae_bolg_defense_shatter(chu_test_scene: BattleScene):
+    chu = chu_test_scene.player_display.team.character_managers[0]
+    eteam = chu_test_scene.enemy_display.team.character_managers
+    pteam = chu_test_scene.player_display.team.character_managers
+    assault = chu.source.current_abilities[0]
+    deflect = chu.source.current_abilities[1]
+    gae_bolg = chu.source.current_abilities[2]
+    block = chu.source.current_abilities[3]
+    chrome = eteam[0]
+    chrome.used_ability = chrome.source.main_abilities[1]
+    chrome.current_targets.append(chu)
+
+    chu.used_ability = gae_bolg
+    chu.current_targets.append(chrome)
+
+    chrome.used_ability.execute(chrome, eteam, pteam)
+
+    assert chrome.has_effect(EffectType.DEST_DEF, "Illusory Breakdown")
+
+    chu.used_ability.execute(chu, pteam, eteam)
+
+    assert chrome.source.hp == 60
+    assert len(chu.source.current_effects) == 0
+
+def test_illusory_disorientation_effect(cranberry_test_scene: BattleScene):
+    cranberry = cranberry_test_scene.player_display.team.character_managers[0]
+    eteam = cranberry_test_scene.enemy_display.team.character_managers
+    pteam = cranberry_test_scene.player_display.team.character_managers
+    disorient = cranberry.source.main_abilities[0]
+    fortissimo = cranberry.source.main_abilities[1]
+    radar = cranberry.source.main_abilities[2]
+    finish = cranberry.source.alt_abilities[0]
+    astolfo = eteam[0]
+    cranberry.current_targets.append(astolfo)
+    cranberry.used_ability = disorient
+    disorient.execute(cranberry, pteam, eteam)
+
+    astolfo.adjust_ability_costs()
+
+    assert astolfo.source.current_abilities[0].total_cost == 2
+
+    astolfo.current_targets.append(astolfo)
+    astolfo.used_ability = astolfo.source.current_abilities[0]
+    astolfo.used_ability.execute(astolfo, eteam, pteam)
+
+    astolfo.adjust_ability_costs()
+
+    assert astolfo.source.current_abilities[0].total_cost == 1
+
+def test_illusory_disorientation_swap(cranberry_test_scene: BattleScene):
+    cranberry = cranberry_test_scene.player_display.team.character_managers[0]
+    eteam = cranberry_test_scene.enemy_display.team.character_managers
+    pteam = cranberry_test_scene.player_display.team.character_managers
+    disorient = cranberry.source.main_abilities[0]
+    fortissimo = cranberry.source.main_abilities[1]
+    radar = cranberry.source.main_abilities[2]
+    finish = cranberry.source.alt_abilities[0]
+    astolfo = eteam[0]
+    cranberry.current_targets.append(astolfo)
+    cranberry.used_ability = disorient
+    disorient.execute(cranberry, pteam, eteam)
+
+    cranberry.update_ability()
+
+    assert cranberry.source.current_abilities[0].name == "Merciless Finish"
+
+def test_merciless_finish_targeting(cranberry_test_scene: BattleScene):
+    cranberry = cranberry_test_scene.player_display.team.character_managers[0]
+    eteam = cranberry_test_scene.enemy_display.team.character_managers
+    pteam = cranberry_test_scene.player_display.team.character_managers
+    disorient = cranberry.source.main_abilities[0]
+    fortissimo = cranberry.source.main_abilities[1]
+    radar = cranberry.source.main_abilities[2]
+    finish = cranberry.source.alt_abilities[0]
+    astolfo = eteam[0]
+    
+    assert finish.target(cranberry, pteam, eteam, True) == 0
+
+    cranberry.used_ability = disorient
+    cranberry.current_targets.append(astolfo)
+    cranberry.used_ability.execute(cranberry, pteam, eteam)
+
+    assert finish.target(cranberry, pteam, eteam, True) == 1
+
+def test_mental_radar(cranberry_test_scene: BattleScene):
+    cranberry = cranberry_test_scene.player_display.team.character_managers[0]
+    eteam = cranberry_test_scene.enemy_display.team.character_managers
+    pteam = cranberry_test_scene.player_display.team.character_managers
+    disorient = cranberry.source.main_abilities[0]
+    fortissimo = cranberry.source.main_abilities[1]
+    radar = cranberry.source.main_abilities[2]
+    finish = cranberry.source.alt_abilities[0]
+    astolfo = eteam[0]
+
+    cranberry.used_ability = radar
+    cranberry.current_targets.append(cranberry)
+    cranberry.used_ability.execute(cranberry, pteam, eteam)
+    cranberry.current_targets.clear()
+
+    astolfo.used_ability = astolfo.source.main_abilities[0]
+    astolfo.current_targets.append(astolfo)
+    cranberry.current_targets.append(astolfo)
+    cranberry.used_ability = fortissimo
+
+    astolfo.used_ability.execute(astolfo, eteam, pteam)
+
+    cranberry.used_ability.execute(cranberry, pteam, eteam)
+
+    assert astolfo.source.hp == 75
+
+def test_fortissimo_double(cranberry_test_scene: BattleScene):
+    cranberry = cranberry_test_scene.player_display.team.character_managers[0]
+    eteam = cranberry_test_scene.enemy_display.team.character_managers
+    pteam = cranberry_test_scene.player_display.team.character_managers
+    disorient = cranberry.source.main_abilities[0]
+    fortissimo = cranberry.source.main_abilities[1]
+    radar = cranberry.source.main_abilities[2]
+    finish = cranberry.source.alt_abilities[0]
+    astolfo = eteam[0]
+
+    cranberry.used_ability = fortissimo
+    cranberry.current_targets.append(astolfo)
+
+    astolfo.used_ability = astolfo.source.main_abilities[3]
+    astolfo.source.main_abilities[3].execute(astolfo, eteam, pteam)
+
+    cranberry.used_ability.execute(cranberry, pteam, eteam)
+
+    assert astolfo.source.hp == 50

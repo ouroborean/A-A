@@ -340,7 +340,8 @@ class BattleScene(engine.Scene):
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_UNIQUE)
             for eff in gen:
-                self.check_unique_cont(eff)
+                if eff.check_waiting() and self.is_allied(eff):
+                    manager.check_unique_cont(eff)
 
         for manager in self.enemy_display.team.character_managers:
             gen = (eff for eff in manager.source.current_effects
@@ -374,10 +375,10 @@ class BattleScene(engine.Scene):
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_UNIQUE)
             for eff in gen:
-                self.check_unique_cont(eff)
+                if eff.check_waiting() and self.is_allied(eff):
+                    manager.check_unique_cont(eff)
 
-    def check_unique_cont(self, eff: Effect):
-        pass
+    
 
     def confirm_button_click(self, _button, _sender):
         self.execution_loop()
@@ -521,16 +522,15 @@ class BattleScene(engine.Scene):
                 eff.tick_duration()
                 if eff.duration == 0:
                     manager.remove_effect(eff)
-
                     if eff.name == "Quickdraw - Rifle" and eff.eff_type == EffectType.CONT_USE:
-                        manager.full_remove_effect("Quickdraw - Rifle")
+                        manager.full_remove_effect("Quickdraw - Rifle", manager)
                         manager.add_effect(Effect(Ability("cmaryalt2"), EffectType.ABILITY_SWAP, manager, 280000, lambda eff: "Quickdraw - Rifle has been replaced by Quickdraw - Sniper", mag=12))
                     if eff.name == "Illusory Breakdown" and eff.mag > 0: 
                         for emanager in self.enemy_display.team.character_managers:
                             if emanager.has_effect(EffectType.MARK, "Illusory Breakdown") and emanager.get_effect(EffectType.MARK, "Illusory Breakdown").user == manager:
                                 if emanager.final_can_effect(manager.check_bypass_effects()):
                                     manager.deal_eff_damage(25, emanager)
-                                    emanager.add_effect(Effect(Ability("chrome1"), EffectType.ALL_STUN, manager, 2, lambda eff: "This character is stunned."))
+                                    emanager.add_effect(Effect(Ability("chrome2"), EffectType.ALL_STUN, manager, 2, lambda eff: "This character is stunned."))
                                     manager.check_on_stun(emanager)
                     if eff.name == "Mental Immolation" and eff.mag > 0: 
                         for emanager in self.enemy_display.team.character_managers:
@@ -917,7 +917,9 @@ class CharacterManager():
         if self.has_effect(EffectType.MARK, "Hidden Mine"):
             if self.final_can_effect():
                 self.receive_eff_pierce_damage(20)
-            self.full_remove_effect("Hidden Mine")
+            self.full_remove_effect("Hidden Mine", self.get_effect(EffectType.MARK, "Hidden Mine").user)
+        if self.has_effect(EffectType.MARK, "Illusory Disorientation"):
+            self.full_remove_effect("Illusory Disorientation", self.get_effect(EffectType.MARK, "Illusory Disorientation").user)
 
     def check_bypass_effects(self) -> str:
 
@@ -935,44 +937,55 @@ class CharacterManager():
 
 
     def cancel_control_effects(self):
-        i = 0
-        for _ in range(len(self.source.current_effects)):
-            if self.source.current_effects[i].eff_type == EffectType.CONT_USE:
-                self.full_remove_effect(self.source.current_effects[i].name)
-            else:
-                i = i + 1
+        for eff in self.source.current_effects:
+            if eff.eff_type == EffectType.CONT_USE:
+                self.full_remove_effect(eff.name, self)
+                for manager in self.scene.player_display.team.character_managers:
+                    manager.full_remove_effect(eff.name, self)
+                for manager in self.scene.enemy_display.team.character_managers:
+                    manager.full_remove_effect(eff.name, self)
+                
 
     def check_on_drain(self, target):
         pass
 
+    def check_unique_cont(self, eff: Effect):
+        if eff.name == "Relentless Assault":
+            if self.final_can_effect(eff.user.check_bypass_effects()):
+                if self.check_for_dmg_reduction() < 15:
+                    eff.user.deal_pierce_damage(15, self)
+                else:
+                    eff.user.deal_damage(15, self)
+
     def check_countered(self) -> bool:
-        #self reflect effects:
-        gen = (eff for eff in self.source.current_effects
-               if eff.eff_type == EffectType.REFLECT)
-        for eff in gen:
-            pass
-        #self counter check
-        gen = (eff for eff in self.source.current_effects if eff.eff_type == EffectType.COUNTER)
-        for eff in gen:
-            pass
-        
-        #target counter check
-        for target in self.current_targets:
-            gen = (eff for eff in target.source.current_effects if eff.eff_type == EffectType.COUNTER)
+        if not self.has_effect(EffectType.MARK, "Mental Radar"):
+            #self reflect effects:
+            gen = (eff for eff in self.source.current_effects
+                if eff.eff_type == EffectType.REFLECT)
             for eff in gen:
-                if eff.name == "Casseur de Logistille":
-                    src = Ability("astolfo1")
-                    if self.used_ability._base_cost[Energy.SPECIAL] > 0 or self.used_ability._base_cost[Energy.MENTAL] > 0:
-                        self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Casseur de Logistille."))
-                        if not self.source.ignoring:
-                            self.add_effect(Effect(src, EffectType.ALL_STUN, eff.user, 3, lambda eff: "This character is stunned."))
-                            self.add_effect(Effect(src, EffectType.ISOLATE, eff.user, 3, lambda eff: "This character is isolated."))
-                            eff.user.check_on_stun(self)
-                        if self.has_effect(EffectType.COUNTER, "Third Dance - Shirafune"):
-                            #TODO Shirafune things
-                            pass
-                        return True
-                            
+                pass
+            #self counter check
+            gen = (eff for eff in self.source.current_effects if eff.eff_type == EffectType.COUNTER)
+            for eff in gen:
+                pass
+            
+            #target counter check
+            for target in self.current_targets:
+                gen = (eff for eff in target.source.current_effects if eff.eff_type == EffectType.COUNTER)
+                for eff in gen:
+                    if eff.name == "Casseur de Logistille":
+                        src = Ability("astolfo1")
+                        if self.used_ability._base_cost[Energy.SPECIAL] > 0 or self.used_ability._base_cost[Energy.MENTAL] > 0:
+                            self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Casseur de Logistille."))
+                            if not self.source.ignoring:
+                                self.add_effect(Effect(src, EffectType.ALL_STUN, eff.user, 3, lambda eff: "This character is stunned."))
+                                self.add_effect(Effect(src, EffectType.ISOLATE, eff.user, 3, lambda eff: "This character is isolated."))
+                                eff.user.check_on_stun(self)
+                            if self.has_effect(EffectType.COUNTER, "Third Dance - Shirafune"):
+                                #TODO Shirafune things
+                                pass
+                            return True
+                                
 
 
         return False
@@ -1012,7 +1025,7 @@ class CharacterManager():
             if ability_target == which or ability_target == 0:
                 mod_damage = mod_damage + boost_value
 
-        if self.used_ability.name == "Trap of Argalia - Down With A Touch!":
+        if self.used_ability != None and self.used_ability.name == "Trap of Argalia - Down With A Touch!":
             if self.has_effect(EffectType.STACK, "Trap of Argalia - Down With A Touch!"):
                 mod_damage += (self.get_effect(EffectType.STACK, "Trap of Argalia - Down With A Touch!").mag * 5)
 
@@ -1021,6 +1034,8 @@ class CharacterManager():
             mod_damage = damage
 
         return mod_damage
+
+
 
     def has_boosts(self) -> bool:
         gen = (eff for eff in self.source.current_effects if eff.eff_type == EffectType.ALL_BOOST)
@@ -1077,12 +1092,38 @@ class CharacterManager():
                 return True
         return False
 
+    def check_for_collapsing_dest_def(self, eff: Effect):
+        if eff.mag == 0:
+            if eff.name == "Illusory Breakdown":
+                self.full_remove_effect("Illusory Breakdown", self)
+                for manager in self.scene.enemy_display.team.character_managers:
+                    manager.full_remove_effect("Illusory Breakdown", self)
+                for manager in self.scene.player_display.team.character_managers:
+                    manager.full_remove_effect("Illusory Breakdown", self)
+                
+            if eff.name == "Illusory World Destruction":
+                self.full_remove_effect("Illusory World Destruction", self)
+            if eff.name == "Mental Immolation":
+                self.full_remove_effect("Mental Immolation", self)
+                for manager in self.scene.enemy_display.team.character_managers:
+                    manager.full_remove_effect("Mental Immolation", self)
+                for manager in self.scene.player_display.team.character_managers:
+                    manager.full_remove_effect("Mental Immolation", self)
+            if eff.name == "Mental Annihilation":
+                self.full_remove_effect("Mental Annihilation", self)
+                for manager in self.scene.enemy_display.team.character_managers:
+                    manager.full_remove_effect("Mental Annihilation", self)
+                for manager in self.scene.player_display.team.character_managers:
+                    manager.full_remove_effect("Mental Annihilation", self)
+
+
     def pass_through_dest_def(self, dmg: int) -> int:
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.DEST_DEF)
         for eff in gen:
             current_def = eff.mag
             eff.alter_dest_def(-dmg)
+            self.check_for_collapsing_dest_def(eff)
             dmg = engine.sat_subtract(current_def, dmg)
             if dmg == 0:
                 return dmg
@@ -1152,7 +1193,7 @@ class CharacterManager():
     def damage_taken_check(self):
         
         if self.has_effect(EffectType.MARK, "You Are Needed") and self.source.hp < 30:
-            self.full_remove_effect("You Are Needed")
+            self.full_remove_effect("You Are Needed", self)
             src = Ability("chrome1")
             self.add_effect(Effect(src, EffectType.PROF_SWAP, self, 280000, lambda eff: "Rokudou Mukuro has intervened, replacing Chrome for the rest of the match.", mag=1))
             self.add_effect(Effect(src, EffectType.ABILITY_SWAP, self, 280000, lambda eff: "You Are Needed has been replaced by Trident Combat.", mag=11))
@@ -1279,13 +1320,17 @@ class CharacterManager():
 
     def final_can_effect(self, def_type = "NORMAL") -> bool:
         if def_type == "NORMAL":
-            return not (self.check_invuln() or self.source.dead or self.source.ignoring)
+            return not (self.check_invuln() or self.source.dead or self.is_ignoring())
         elif def_type == "BYPASS":
-            return not (self.source.dead or self.source.ignoring)
+            return not (self.source.dead or self.is_ignoring())
         elif def_type == "FULLBYPASS":
             return not (self.source.dead)
 
-    
+    def is_ignoring(self) -> bool:
+        for effect in self.source.current_effects:
+            if effect.eff_type == EffectType.IGNORE:
+                return True
+        return False
 
     def helpful_target(self, def_type = "NORMAL") -> bool:
         if def_type == "NORMAL":
@@ -1299,13 +1344,13 @@ class CharacterManager():
     def remove_effect(self, effect: Effect):
         self.source.current_effects.remove(effect)
 
-    def full_remove_effect(self, eff_name: str):
-        i = 0
-        for _ in range(len(self.source.current_effects)):
-            if self.source.current_effects[i].name == eff_name:
-                self.source.current_effects.remove(self.source.current_effects[i])
-            else:
-                i = i + 1
+    def full_remove_effect(self, eff_name: str, user: "CharacterManager"):
+        new_current_effects: list[Effect] = []
+        for eff in self.source.current_effects:
+            if not (eff.name == eff_name and eff.user == user):
+                new_current_effects.append(eff)
+        self.source.current_effects = new_current_effects
+
 
     def is_enemy(self) -> bool:
         return self.character_region.x > 400
@@ -1502,6 +1547,24 @@ class CharacterManager():
         self.update_effect_region()
         self.draw_hp_bar()
 
+    def erza_requip(self):
+        if self.has_effect(EffectType.MARK, "Clear Heart Clothing"):
+            self.full_remove_effect("Clear Heart Clothing", self)
+            self.full_remove_effect("Titania's Rampage", self)
+            for manager in self.scene.player_display.team.character_managers:
+                manager.full_remove_effect("Clear Heart Clothing", self)
+                manager.full_remove_effect("Titania's Rampage", self)
+            for manager in self.scene.enemy_display.team.character_managers:
+                manager.full_remove_effect("Clear Heart Clothing", self)
+                manager.full_remove_effect("Titania's Rampage", self)
+        if self.has_effect(EffectType.MARK, "Heaven's Wheel Armor"):
+            self.full_remove_effect("Heaven's Wheel Armor", self)
+            self.full_remove_effect("Circle Blade", self)
+        if self.has_effect(EffectType.MARK, "Nakagami's Armor"):
+            self.full_remove_effect("Nakagami's Armor", self)
+        if self.has_effect(EffectType.MARK, "Adamantine Armor"):
+            self.full_remove_effect("Adamantine Armor", self)
+            
 
     def check_profile_swaps(self):
         gen = (eff for eff in self.source.current_effects

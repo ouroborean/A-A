@@ -681,7 +681,7 @@ def exe_substitution(user: "CharacterManager", playerTeam: list["CharacterManage
     user.check_on_use()
 
 def exe_sage_mode(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    user.full_remove_effect("Shadow Clones")
+    user.full_remove_effect("Shadow Clones", user)
     user.scene.player_display.team.energy_pool[Energy.SPECIAL] += 1
     user.add_effect(Effect(Ability("narutoalt1"), EffectType.ALL_INVULN, user, 3, lambda eff: "Naruto is invulnerable."))
     user.add_effect(Effect(Ability("narutoalt1"), EffectType.ABILITY_SWAP, user, 3, lambda eff: "Uzumaki Barrage has been replaced by Toad Taijutsu.", mag=33))
@@ -693,7 +693,7 @@ def exe_uzumaki_barrage(user: "CharacterManager", playerTeam: list["CharacterMan
         base_damage = 15
         stunned = False
         for target in user.current_targets:
-            if target.final_can_effect(user.check_bypass_effects()) and not target.has_effect(EffectType.MARK, "Rapid Deflection"):
+            if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                 user.deal_damage(base_damage, target)
                 if user.has_effect(EffectType.MARK, "Uzumaki Barrage"):
                     target.add_effect(Effect(Ability("narutoalt2"), EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
@@ -825,7 +825,9 @@ def exe_luna(user: "CharacterManager", playerTeam: list["CharacterManager"], ene
             if target.id < 3:
                 hostile_effects = [eff for eff in target.source.current_effects if eff.user.is_enemy()]
                 if hostile_effects:
-                    target.full_remove_effect(hostile_effects[randint(0, len(hostile_effects) - 1)].name)
+                    num = randint(0, len(hostile_effects) - 1)
+                    print(f"Removing effect at index {num}")
+                    target.full_remove_effect(hostile_effects[num].name, hostile_effects[num].user)
                     user.apply_stack_effect(Effect(Ability("astolfo2"), EffectType.STACK, user, 280000, lambda eff: f"Astolfo will deal {eff.mag * 5} additional damage with Trap of Argalia - Down With A Touch!", mag=1))
             if target.id > 2:
                 if target.final_can_effect(user.check_bypass_effects()):
@@ -999,18 +1001,117 @@ def exe_trident_deflection(user: "CharacterManager", playerTeam: list["Character
 
 
 def exe_relentless_assault(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered():
+        for target in user.current_targets:
+            base_damage = 15
+            if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+                if target.check_for_dmg_reduction() < 15:
+                    user.deal_pierce_damage(base_damage, target)
+                else:
+                    user.deal_damage(base_damage, target)
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_UNIQUE, user, 5, lambda eff: "This character will take 15 damage. If this character has less than 15 points of damage reduction, this damage will be piercing.", mag=15))
+                user.add_effect(Effect(user.used_ability, EffectType.CONT_USE, user, 5, lambda eff: "Chu is using Relentless Assault. This effect will end if he is stunned."))
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_flashing_deflection(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 6, lambda eff: "Chu has 15 points of damage reduction.", mag=15))
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 6, lambda eff: "Chu will ignore any hostile damaging ability that deals less than 15 original damage."))
+    user.check_on_use()
 
 def exe_gae_bolg(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered():
+        for target in user.current_targets:
+            base_damage = 40
+            if target.final_can_effect("BYPASS"):
+                for eff in target.source.current_effects:
+                    if eff.eff_type==EffectType.DEST_DEF:
+                        eff.mag = 0
+                        target.check_for_collapsing_dest_def(eff)
+                user.deal_pierce_damage(base_damage, target)
+        user.check_on_use()
+        user.check_on_harm()
+
+
 
 def exe_chu_block(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Chu is invulnerable."))
+    user.check_on_use()
+
+
+#endregion
+#region Cranberry Execution
+def exe_illusory_disorientation(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                target.add_effect(Effect(user.used_ability, EffectType.COST_ADJUST, user, 6, lambda eff: "This character's ability costs are increased by 1 random.", mag=51))
+                target.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 6, lambda eff: "This effect will end if this character uses a new ability."))
+                target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 5, lambda eff: "This character can be targeted by Merciless Finish."))
+            user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 5, lambda eff: "Illusory Disorientation has been replaced by Merciless Finish.", mag = 11))
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_fortissimo(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect("FULLBYPASS"):
+                base_damage = 25
+                if target.is_ignoring() or target.check_invuln():
+                    base_damage = 50
+                user.deal_damage(base_damage, target)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_mental_radar(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    for target in user.current_targets:
+        if target.helpful_target():
+            target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "This character will ignore counter effects."))
+    user.check_on_use()
+    user.check_on_help()
+
+def exe_cranberry_block(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Cranberry is invulnerable."))
+    user.check_on_use()
+
+def exe_merciless_finish(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting:
+                user.deal_aff_damage(15, target)
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 3, lambda eff: "This character will take 15 affliction damage.", mag=15))
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 4, lambda eff: "This character is stunned."))
+                user.add_effect(Effect(user.used_ability, EffectType.CONT_USE, user, 3, lambda eff: "Cranberry is using Merciless Finish. This effect will end if she is stunned."))
+                user.check_on_stun(target)
+        user.check_on_use()
+        user.check_on_harm()
+#endregion
+#region Erza Execution
+def exe_clear_heart_clothing(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.erza_requip()
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "Erza has equipped Clear Heart Clothing."))
+    user.add_effect()
+
+def exe_heavens_wheel_armor(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     pass
 
+def exe_nakagamis_armor(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
 
+def exe_adamantine_armor(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_titanias_rampage(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_circle_blade(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_nakagamis_starlight(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_adamantine_barrier(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
 #endregion
 
 
@@ -1258,7 +1359,7 @@ ability_info_db = {
         +
         " than 15 points of damage reduction, this damage is considered piercing.",
         [1, 0, 0, 0, 1, 3], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_relentless_assault
     ],
     "chu2": [
         "Flashing Deflection",
@@ -1266,48 +1367,48 @@ ability_info_db = {
         +
         " deals less than 15 points of damage, he will fully ignore that move instead.",
         [1, 0, 0, 0, 0, 2], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_flashing_deflection
     ],
     "chu3": [
         "Gae Bolg",
         "Chu removes all destructible defense from target enemy, then deals 40 piercing damage"
         + " to them. This ability ignores invulnerability.",
         [2, 0, 0, 0, 1, 1], Target.SINGLE,
-        default_target("HOSTILE", def_type="BYPASS")
+        default_target("HOSTILE", def_type="BYPASS"), exe_gae_bolg
     ],
     "chu4": [
         "Chu Block", "Chu becomes invulnerable for 1 turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_chu_block
     ],
     "cranberry1": [
         "Illusory Disorientation",
         "For 3 turns, one enemy has their ability costs increased by 1 random and this ability is replaced by Merciless Finish. This effect is removed on ability use.",
         [0, 1, 0, 0, 1, 3], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_illusory_disorientation
     ],
     "cranberry2": [
         "Fortissimo",
-        "Cranberry deals 25 damage to all enemies, ignoring invulnerability. This ability cannot be ignored and deals double damage to enemies that are invulnerable or ignoring.",
+        "Cranberry deals 25 damage to all enemies, ignoring invulnerability. This ability cannot be ignored and invulnerable or ignoring enemies take double damage from it.",
         [0, 2, 0, 0, 0, 2], Target.MULTI_ENEMY,
-        default_target("HOSTILE", def_type="BYPASS")
+        default_target("HOSTILE", def_type="BYPASS"), exe_fortissimo
     ],
     "cranberry3": [
         "Mental Radar",
         "For 2 turns, Cranberry's team will ignore counter effects.",
         [0, 0, 1, 0, 1, 4], Target.MULTI_ALLY,
-        default_target("HELPFUL")
+        default_target("HELPFUL"), exe_mental_radar
     ],
     "cranberry4": [
         "Cranberry Block", "Cranberry becomes invulnerable for 1 turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_cranberry_block
     ],
     "cranberryalt1": [
         "Merciless Finish",
         "Cranberry stuns target enemy for 2 turns, and deals 15 affliction damage to them each turn. Only usable on a target currently affected by Illusory Disorientation.",
         [1, 0, 0, 0, 0, 2], Target.SINGLE,
-        default_target("HOSTILE", mark_req="Illusory Disorientation")
+        default_target("HOSTILE", mark_req="Illusory Disorientation"), exe_merciless_finish
     ],
     "erza1": [
         "Clear Heart Clothing",

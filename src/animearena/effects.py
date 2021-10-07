@@ -54,6 +54,7 @@ class EffectType(enum.IntEnum):
     STACK = 39
     ISOLATE = 40
     PROF_SWAP = 41
+    IGNORE = 42
 
 
 class Effect:
