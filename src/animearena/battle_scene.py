@@ -685,6 +685,10 @@ class BattleScene(engine.Scene):
             height=4)
         self.energy_region.add_sprite(total_counter, x=102, y=13)
 
+    def handle_unique_startup(self, character: "CharacterManager"):
+        if character.source.name == "gokudera":
+            character.add_effect(Effect(Ability("gokudera1"), EffectType.STACK, character, 280000, lambda eff: f"The Sistema C.A.I. is at Stage {eff.mag}.", mag=1))
+
     def setup_scene(self, ally_team: list[Character],
                                   enemy_team: list[Character]):
         self.region.add_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.surfaces["background"])), 0, 0)
@@ -938,7 +942,13 @@ class CharacterManager():
                     ability.modify_ability_cost(Energy(cost_type - 1), magnitude)
     
     def check_on_harm(self):
-        pass
+        for character in self.current_targets:
+            if character.id > 2:
+                if character.has_effect(EffectType.UNIQUE, "Iron Shadow Dragon") and not character.is_ignoring():
+                    character.add_effect(Effect(Ability("gajeel3"), EffectType.IGNORE, character, 1, lambda eff: ""))
+                    
+
+
 
     def check_on_help(self):
         pass
@@ -1039,15 +1049,22 @@ class CharacterManager():
         #TODO check user effects
 
         #TODO check target effects
-        if target.has_effect(EffectType.MARK, "Sneak"):
-            target.get_ability("Sneak").cooldown_remaining = 3
-            target.remove_effect(target.get_effect(EffectType.MARK, "Sneak"))
+        if target.has_effect(EffectType.MARK, "Doll Trap"):
+            target_dolls = [eff for eff in target.source.current_effects if eff.eff_type == EffectType.STACK and eff.name == "Doll Trap"]
+            for eff in target_dolls:
+                if not self.has_effect_with_user(EffectType.MARK, "Doll Trap", eff.user):
+                    self.add_effect(Effect(Ability("frenda2"), EffectType.MARK, eff.user, 280000, lambda leff: f"If an enemy damages this character, all stacks of Doll Trap will be transferred to them.", invisible=True))
+                self.apply_stack_effect(Effect(Ability("frenda2"), EffectType.STACK, eff.user, 280000, lambda leff: f"Detonate will deal {20 * leff.mag} damage to this character.", mag=eff.mag, invisible=True), eff.user)
+                target.full_remove_effect("Doll Trap", eff.user)
 
-    def apply_stack_effect(self, eff: Effect):
-        if self.has_effect(eff.eff_type, eff.name):
-            self.get_effect(eff.eff_type, eff.name).mag += eff.mag
+    def apply_stack_effect(self, effect: Effect, user: "CharacterManager"):
+        gen = [eff for eff in self.source.current_effects if (eff.eff_type == effect.eff_type and eff.name == effect.name and eff.user == user)]
+        if gen:
+            for eff in gen:
+                eff.alter_mag(effect.mag)
         else:
-            self.add_effect(eff)
+            self.add_effect(effect)        
+
 
     def get_boosts(self, damage: int) -> int:
         mod_damage = damage
@@ -1124,6 +1141,19 @@ class CharacterManager():
         for eff in gen:
             if eff.name == eff_name:
                 return eff
+
+    def get_effect_with_user(self, eff_type: EffectType, eff_name: str, user: "CharacterManager"):
+        gen = (eff for eff in self.source.current_effects if eff.eff_type == eff_type and eff.user == user)
+        for eff in gen:
+            if eff.name == eff_name:
+                return eff
+
+    def has_effect_with_user(self, eff_type: EffectType, eff_name: str, user: "CharacterManager") -> bool:
+        gen = (eff for eff in self.source.current_effects if eff.eff_type == eff_type and eff.user == user)
+        for eff in gen:
+            if eff.name == eff_name:
+                return True
+        return False
 
     def get_ability(self, name: str):
         for ability in self.source.current_abilities:
@@ -1535,7 +1565,7 @@ class CharacterManager():
                 continue
             if effect.invisible == True and effect.user.is_enemy():
                 continue
-            if effect.name in output.keys():
+            if effect.name in output.keys() and effect.user == output[effect.name][0].user:
                 output[effect.name].append(effect)
             else:
                 output[effect.name] = []

@@ -1,7 +1,7 @@
 from pickle import PUT
 
 from _pytest.config import create_terminal_writer
-from animearena import battle_scene
+from animearena import battle_scene, character_select_scene
 from animearena.ability import Ability, ability_info_db, Target, exe_effortless_guard
 from animearena.energy import Energy
 from animearena.scene_manager import SceneManager
@@ -95,9 +95,23 @@ def erza_test_scene(test_scene: BattleScene) -> engine.Scene:
     return test_scene
 
 @pytest.fixture
+def frenda_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("frenda"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("astolfo"), Character("naruto"), Character("chu")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+@pytest.fixture
 def esdeath_test_scene(test_scene: BattleScene) -> engine.Scene:
     ally_team = [Character("esdeath"), Character("toga"), Character("nemu")]
     enemy_team = [Character("astolfo"), Character("naruto"), Character("chu")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+@pytest.fixture
+def gajeel_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("naruto"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("gajeel"), Character("naruto"), Character("chu")]
     test_scene.setup_scene(ally_team, enemy_team)
     return test_scene
 
@@ -522,7 +536,7 @@ def test_trap_stack_boost(astolfo_test_scene: BattleScene):
     fucking_ruler = eteam[0]
     astolfo.used_ability = trap
     astolfo.current_targets.append(fucking_ruler)
-    astolfo.apply_stack_effect(Effect(trap, EffectType.STACK, astolfo, 280000, lambda eff: f"Astolfo will deal {eff.mag * 5} additional damage with Trap of Argalia - Down With A Touch!", mag=5))
+    astolfo.apply_stack_effect(Effect(trap, EffectType.STACK, astolfo, 280000, lambda eff: f"Astolfo will deal {eff.mag * 5} additional damage with Trap of Argalia - Down With A Touch!", mag=5), astolfo)
 
     trap.execute(astolfo, pteam, eteam)
 
@@ -1515,4 +1529,141 @@ def test_frozen_castle_schnabel(esdeath_test_scene: BattleScene):
     for e in eteam:
         assert e.source.hp == 40
 
+def test_close_combat_bombs(frenda_test_scene: BattleScene):
+    frenda = frenda_test_scene.player_display.team.character_managers[0]
+    eteam = frenda_test_scene.enemy_display.team.character_managers
+    pteam = frenda_test_scene.player_display.team.character_managers
+    bombs = frenda.source.current_abilities[0]
+    dolltrap = frenda.source.current_abilities[1]
+    detonate = frenda.source.current_abilities[2]
+    astolfo = eteam[0]
+    naruto = eteam[1]
 
+    assert detonate.target(frenda, pteam, eteam, True) == 0
+
+    frenda.used_ability = bombs
+    frenda.current_targets.append(astolfo)
+
+    frenda.used_ability.execute(frenda, pteam, eteam)
+
+    assert detonate.target(frenda, pteam, eteam, True) == 1
+
+    frenda.used_ability = detonate
+    
+    frenda.used_ability.execute(frenda, pteam, eteam)
+
+    assert astolfo.source.hp == 85
+
+def test_doll_trap(frenda_test_scene: BattleScene):
+    frenda = frenda_test_scene.player_display.team.character_managers[0]
+    eteam = frenda_test_scene.enemy_display.team.character_managers
+    pteam = frenda_test_scene.player_display.team.character_managers
+    bombs = frenda.source.current_abilities[0]
+    dolltrap = frenda.source.current_abilities[1]
+    detonate = frenda.source.current_abilities[2]
+    astolfo = eteam[0]
+    naruto = eteam[1]
+
+    frenda.current_targets.append(astolfo)
+    frenda.used_ability = dolltrap
+    frenda.used_ability.execute(frenda, pteam, eteam)
+    frenda.used_ability.execute(frenda, pteam, eteam)
+    frenda.used_ability.execute(frenda, pteam, eteam)
+    frenda.used_ability.execute(frenda, pteam, eteam)
+
+    assert len(astolfo.source.current_effects) == 2
+
+    frenda.used_ability = detonate
+    frenda.used_ability.execute(frenda, pteam, eteam)
+
+    assert astolfo.source.hp == 20
+
+def test_doll_trap_transfer(frenda_test_scene: BattleScene):
+    frenda = frenda_test_scene.player_display.team.character_managers[0]
+    eteam = frenda_test_scene.enemy_display.team.character_managers
+    pteam = frenda_test_scene.player_display.team.character_managers
+    bombs = frenda.source.current_abilities[0]
+    dolltrap = frenda.source.current_abilities[1]
+    detonate = frenda.source.current_abilities[2]
+    astolfo = eteam[0]
+    naruto = eteam[1]
+    toga = pteam[1]
+    frenda.current_targets.append(toga)
+    frenda.used_ability = dolltrap
+    frenda.used_ability.execute(frenda, pteam, eteam)
+    frenda.used_ability.execute(frenda, pteam, eteam)
+    frenda.used_ability.execute(frenda, pteam, eteam)
+    frenda.used_ability.execute(frenda, pteam, eteam)
+
+    assert toga.get_effect(EffectType.STACK, "Doll Trap").mag == 4
+
+    naruto.used_ability = naruto.source.main_abilities[2]
+    naruto.current_targets.append(toga)
+    naruto.used_ability.execute(naruto, eteam, pteam)
+
+    assert len(toga.source.current_effects) == 0
+    frenda.current_targets.clear()
+    frenda.current_targets.append(naruto)
+    frenda.used_ability = detonate
+    frenda.used_ability.execute(frenda, pteam, eteam)
+
+    assert naruto.source.hp == 20
+
+def test_multi_explosive_detonation(frenda_test_scene: BattleScene):
+    frenda = frenda_test_scene.player_display.team.character_managers[0]
+    eteam = frenda_test_scene.enemy_display.team.character_managers
+    pteam = frenda_test_scene.player_display.team.character_managers
+    bombs = frenda.source.current_abilities[0]
+    dolltrap = frenda.source.current_abilities[1]
+    detonate = frenda.source.current_abilities[2]
+    astolfo = eteam[0]
+    naruto = eteam[1]
+    toga = pteam[1]
+    frenda.current_targets.append(astolfo)
+    frenda.used_ability = bombs
+    frenda.used_ability.execute(frenda, pteam, eteam)
+    frenda.used_ability = dolltrap
+    frenda.used_ability.execute(frenda, pteam, eteam)
+    
+    frenda.current_targets.append(toga)
+    frenda.used_ability.execute(frenda, pteam, eteam)
+
+    frenda.used_ability = detonate
+    frenda.used_ability.execute(frenda, pteam, eteam)
+
+    assert astolfo.source.hp == 45
+
+    assert toga.source.hp == 80
+
+def test_shadow_swap(gajeel_test_scene: BattleScene):
+    gajeel = gajeel_test_scene.enemy_display.team.character_managers[0]
+    pteam = gajeel_test_scene.player_display.team.character_managers
+    eteam = gajeel_test_scene.enemy_display.team.character_managers
+    astolfo = eteam[0]
+    naruto = eteam[1]
+    shadowdragon = gajeel.source.main_abilities[2]
+    blacksteel = gajeel.source.alt_abilities[2]
+    gajeel.used_ability = shadowdragon
+    gajeel.used_ability.execute(gajeel, pteam, eteam)
+
+    gajeel.check_ability_swaps()
+
+    assert gajeel.source.current_abilities[0].name == "Iron Shadow Dragon's Roar"
+
+def test_shadow_ignore(gajeel_test_scene: BattleScene):
+    pteam = gajeel_test_scene.player_display.team.character_managers
+    eteam = gajeel_test_scene.enemy_display.team.character_managers
+    gajeel = eteam[0]
+    naruto = pteam[0]
+    shadowdragon = gajeel.source.main_abilities[2]
+    blacksteel = gajeel.source.alt_abilities[2]
+    gajeel.used_ability = shadowdragon
+    gajeel.used_ability.execute(gajeel, pteam, eteam)
+
+    naruto.used_ability = naruto.source.current_abilities[2]
+    naruto.current_targets.append(gajeel)
+    naruto.used_ability.execute(naruto, eteam, pteam)
+    naruto.used_ability.execute(naruto, eteam, pteam)
+    naruto.used_ability.execute(naruto, eteam, pteam)
+
+    assert gajeel.source.hp == 70

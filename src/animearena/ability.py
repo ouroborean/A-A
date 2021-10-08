@@ -305,12 +305,12 @@ def target_detonate(user: "CharacterManager",
     total_targets = 0
     targeting = user.check_bypass_effects()
     for ally in playerTeam:
-        if ally.hostile_target(user, targeting) and ((ally.has_effect(EffectType.MARK, "Doll Trap") and ally.get_effect(EffectType.MARK, "Doll Trap").user == user) or ((ally.has_effect(EffectType.MARK, "Close Combat Bombs")) and (ally.get_effect(EffectType.MARK, "Close Combat Bombs").user == user))):
+        if ally.hostile_target(user, targeting) and ((ally.has_effect(EffectType.STACK, "Doll Trap") and ally.get_effect(EffectType.STACK, "Doll Trap").user == user) or ((ally.has_effect(EffectType.STACK, "Close Combat Bombs")) and (ally.get_effect(EffectType.STACK, "Close Combat Bombs").user == user))):
             if not fake_targeting:
                 ally.set_targeted()
             total_targets += 1
     for enemy in enemyTeam:
-        if enemy.hostile_target(user, targeting) and ((enemy.has_effect(EffectType.MARK, "Doll Trap") and enemy.get_effect(EffectType.MARK, "Doll Trap").user == user) or ((enemy.has_effect(EffectType.MARK, "Close Combat Bombs")) and (enemy.get_effect(EffectType.MARK, "Close Combat Bombs").user == user))):
+        if enemy.hostile_target(user, targeting) and ((enemy.has_effect(EffectType.STACK, "Doll Trap") and enemy.get_effect(EffectType.STACK, "Doll Trap").user == user) or ((enemy.has_effect(EffectType.STACK, "Close Combat Bombs")) and (enemy.get_effect(EffectType.STACK, "Close Combat Bombs").user == user))):
             if not fake_targeting:
                 enemy.set_targeted()
             total_targets += 1
@@ -826,7 +826,7 @@ def exe_trap(user: "CharacterManager", playerTeam: list["CharacterManager"], ene
                 user.deal_pierce_damage(base_damage, target)
                 target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 2, lambda eff: "This character cannot have their damage boosted over its base value."))
                 if target.has_boosts():
-                    user.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff: f"Astolfo will deal {eff.mag * 5} additional damage with Trap of Argalia - Down With A Touch!", mag=1))
+                    user.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff: f"Astolfo will deal {eff.mag * 5} additional damage with Trap of Argalia - Down With A Touch!", mag=1), user)
                 
         user.check_on_use()
         user.check_on_harm()
@@ -841,7 +841,7 @@ def exe_luna(user: "CharacterManager", playerTeam: list["CharacterManager"], ene
                     num = randint(0, len(hostile_effects) - 1)
                     print(f"Removing effect at index {num}")
                     target.full_remove_effect(hostile_effects[num].name, hostile_effects[num].user)
-                    user.apply_stack_effect(Effect(Ability("astolfo2"), EffectType.STACK, user, 280000, lambda eff: f"Astolfo will deal {eff.mag * 5} additional damage with Trap of Argalia - Down With A Touch!", mag=1))
+                    user.apply_stack_effect(Effect(Ability("astolfo2"), EffectType.STACK, user, 280000, lambda eff: f"Astolfo will deal {eff.mag * 5} additional damage with Trap of Argalia - Down With A Touch!", mag=1), user)
             if target.id > 2:
                 if target.final_can_effect(user.check_bypass_effects()):
                     target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 4, lambda eff: "This character cannot have their damage boosted over its base value."))
@@ -1185,14 +1185,14 @@ def exe_frozen_castle(user: "CharacterManager", playerTeam: list["CharacterManag
 def exe_weiss_schnabel(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if not user.has_effect(EffectType.COST_ADJUST, "Weiss Schnabel"):
         for target in user.current_targets:
-            if target.final_can_effect(user.check_bypass_effects()) :
+            if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                 user.deal_damage(10, target)
                 target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 5, lambda eff: "This character will receive 10 damage.", mag=10))
         if user.current_targets:
             user.add_effect(Effect(user.used_ability, EffectType.COST_ADJUST, user, 5, lambda eff: "Weiss Schnabel will cost one fewer special energy and deal 15 piercing damage to its target.", mag = -321))
     else:
         for target in user.current_targets:
-            if target.final_can_effect(user.check_bypass_effects()):
+            if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                 user.deal_pierce_damage(15, target)
     user.check_on_use()
     user.check_on_harm()            
@@ -1214,7 +1214,123 @@ def exe_mahapadma(user: "CharacterManager", playerTeam: list["CharacterManager"]
             target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 5, lambda eff: "When Mahapadma ends, Esdeath will be stunned for two turns."))
     user.check_on_use()
 #endregion
+#region Frenda Execution
+def exe_close_combat_bombs(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect():
+                target.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 5, lambda eff: f"Detonate will deal {15 * eff.mag} damage to this character.", mag=1), user)
+        user.check_on_use()
 
+def exe_doll_trap(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    for target in user.current_targets:
+        if not target.has_effect_with_user(EffectType.MARK, "Doll Trap", user):
+            target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "If an enemy damages this character, all stacks of Doll Trap will be transferred to them.", invisible=True))
+        target.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff: f"Detonate will deal {20 * eff.mag} damage to this character.", mag=1, invisible=True), user)
+    user.check_on_use()
+
+def exe_detonate(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect("BYPASS"):
+                base_damage = 0
+                if target.has_effect_with_user(EffectType.STACK, "Doll Trap", user):
+                    base_damage += 20 * target.get_effect_with_user(EffectType.STACK, "Doll Trap", user).mag
+                if target.has_effect_with_user(EffectType.STACK, "Close Combat Bombs", user):
+                    base_damage += 15 * target.get_effect_with_user(EffectType.STACK, "Close Combat Bombs", user).mag
+                target.full_remove_effect("Doll Trap", user)
+                target.full_remove_effect("Close Combat Bobms", user)
+                user.deal_damage(base_damage, target)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_frenda_dodge(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Frenda is invulnerable."))
+    user.check_on_use()
+#endregion
+#region Gajeel Execution
+def exe_iron_dragon_roar(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_pierce_damage(35, target)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_iron_dragon_club(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_pierce_damage(20, target)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_iron_shadow_dragon(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if user.has_effect(EffectType.ALL_DR, "Blacksteel Gajeel"):
+        user.full_remove_effect("Blacksteel Gajeel", user)
+    user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 280000, lambda eff: "The first time each turn that Gajeel receives a harmful ability, he will ignore all hostile effects for the rest of the turn."))
+    user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Iron Dragon's Roar has been replaced by Iron Shadow Dragon's Roar.", mag=11))
+    user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Iron Dragon's Club has been replaced by Iron Shadow Dragon's Club", mag=22))
+    user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Iron Shadow Dragon has been replaced by Blacksteel Gajeel.", mag=33))
+    user.check_on_use()
+
+def exe_gajeel_block(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Gajeel is invulnerable."))
+    user.check_on_use()
+
+def exe_iron_shadow_dragon_roar(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect("BYPASS"):
+                user.deal_damage(20, target)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_iron_shadow_dragon_club(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect("BYPASS"):
+                user.deal_damage(25, target)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_blacksteel_gajeel(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if user.has_effect(EffectType.UNIQUE, "Iron Shadow Dragon"):
+        user.full_remove_effect("Iron Shadow Dragon", user)
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 280000, lambda eff: "Gajeel has 15 points of damage reduction."))
+    user.check_on_use()
+
+
+
+#endregion
+#region Gokudera Execution
+def exe_sistema_cai(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    stage = user.get_effect(EffectType.STACK, "Sistema C.A.I.").mag
+    if not user.check_countered():
+        if stage == 1:
+            for target in user.current_targets:
+                if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+                    pass
+
+
+def exe_vongola_ring(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    stage = user.get_effect(EffectType.STACK, "Sistema C.A.I.")
+    if stage.mag == 4:
+        stage.alter_mag(-3)
+    else:
+        stage.alter_mag(1)
+    user.check_on_use()
+
+def exe_vongola_bow(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 5, lambda eff: "The Sistema C.A.I. stage will not advance when Sistema C.A.I. is used."))
+    user.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 5, lambda eff: f"Gokudera has {eff.mag} points of destructible defense.", mag=30))
+    user.check_on_use()
+
+def exe_gokudera_block(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Gokudera is invulnerable."))
+    user.check_on_use()
+
+#endregion
 
 
 ability_info_db = {
@@ -1600,7 +1716,7 @@ ability_info_db = {
         +
         "the marked enemy will take 15 damage per stack of Close Combat Bombs.",
         [0, 0, 0, 0, 0, 0], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_close_combat_bombs
     ],
     "frenda2": [
         "Doll Trap",
@@ -1608,56 +1724,56 @@ ability_info_db = {
         +
         " the damaging enemy. If Detonate is used, characters marked with Doll Trap receive 20 damage per stack of Doll Trap on them. Doll Trap is invisible until transferred.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HELPFUL")
+        default_target("HELPFUL"), exe_doll_trap
     ],
     "frenda3": [
         "Detonate",
         "Frenda consumes all her stacks of Close Combat Bombs and Doll Trap from all characters. This ability ignores invulnerability.",
-        [0, 0, 0, 0, 2, 0], Target.ALL_TARGET, target_detonate
+        [0, 0, 0, 0, 2, 0], Target.ALL_TARGET, target_detonate, exe_detonate
     ],
     "frenda4": [
         "Frenda Dodge", "Frenda becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_frenda_dodge
     ],
     "gajeel1": [
         "Iron Dragon's Roar", "Gajeel deals 35 piercing damage to one enemy.",
         [1, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_iron_dragon_roar
     ],
     "gajeel2": [
         "Iron Dragon's Club", "Gajeel deals 20 piercing damage to one enemy.",
         [1, 0, 0, 0, 0, 0], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_iron_dragon_club
     ],
     "gajeel3": [
         "Iron Shadow Dragon",
         "If Gajeel is targeted with a new harmful ability, he will ignore all further hostile effects that turn. This changes Gajeel's abilities to their special versions.",
         [0, 1, 0, 0, 0, 0], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_iron_shadow_dragon
     ],
     "gajeel4": [
         "Gajeel Block", "Gajeel becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_gajeel_block
     ],
     "gajeelalt1": [
         "Iron Shadow Dragon's Roar",
         "Gajeel deals 15 damage to all enemies, ignoring invulnerability.",
         [0, 1, 0, 0, 0, 0], Target.MULTI_ENEMY,
-        default_target("HOSTILE", def_type="BYPASS")
+        default_target("HOSTILE", def_type="BYPASS"), exe_iron_shadow_dragon_roar
     ],
     "gajeelalt2": [
         "Iron Shadow Dragon's Club",
         "Gajeel deals 20 damage to one enemy, ignoring invulnerability.",
         [0, 1, 0, 0, 0, 0], Target.SINGLE,
-        default_target("HOSTILE", def_type="BYPASS")
+        default_target("HOSTILE", def_type="BYPASS"), exe_iron_shadow_dragon_club
     ],
     "gajeelalt3": [
         "Blacksteel Gajeel",
         "Gajeel permanently gains 15 damage reduction. This changes Gajeel's abilities back to their physical versions.",
         [1, 0, 0, 0, 0, 0], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_blacksteel_gajeel
     ],
     "gokudera1": [
         "Sistema C.A.I.",
