@@ -651,6 +651,7 @@ def target_titanias_rampage(user: "CharacterManager",
             user.set_targeted()
         total_targets += 1
     return total_targets
+
 #endregion
 #endregion
 
@@ -824,7 +825,7 @@ def exe_trap(user: "CharacterManager", playerTeam: list["CharacterManager"], ene
             base_damage = 20
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_pierce_damage(base_damage, target)
-                target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 2, lambda eff: "This character cannot have their damage boosted over its base value."))
+                target.add_effect(Effect(user.used_ability, EffectType.BOOST_NEGATE, user, 2, lambda eff: "This character cannot have their damage boosted over its base value."))
                 if target.has_boosts():
                     user.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff: f"Astolfo will deal {eff.mag * 5} additional damage with Trap of Argalia - Down With A Touch!", mag=1), user)
                 
@@ -844,7 +845,7 @@ def exe_luna(user: "CharacterManager", playerTeam: list["CharacterManager"], ene
                     user.apply_stack_effect(Effect(Ability("astolfo2"), EffectType.STACK, user, 280000, lambda eff: f"Astolfo will deal {eff.mag * 5} additional damage with Trap of Argalia - Down With A Touch!", mag=1), user)
             if target.id > 2:
                 if target.final_can_effect(user.check_bypass_effects()):
-                    target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 4, lambda eff: "This character cannot have their damage boosted over its base value."))
+                    target.add_effect(Effect(user.used_ability, EffectType.BOOST_NEGATE, user, 4, lambda eff: "This character cannot have their damage boosted over its base value."))
         user.check_on_use()
         user.check_on_help()
         user.check_on_harm()
@@ -1304,26 +1305,76 @@ def exe_blacksteel_gajeel(user: "CharacterManager", playerTeam: list["CharacterM
 
 #endregion
 #region Gokudera Execution
+
+def advance_sistema_cai(sistema: Effect):
+    sistema.alter_mag(1)
+    if sistema.mag == 5:
+        sistema.mag = 1
+
 def exe_sistema_cai(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     stage = user.get_effect(EffectType.STACK, "Sistema C.A.I.").mag
+    
     if not user.check_countered():
         if stage == 1:
             for target in user.current_targets:
                 if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
-                    pass
+                    user.deal_damage(10, target)
+            user.check_on_use()
+            user.check_on_harm()
+            if not user.has_effect(EffectType.MARK, "Vongola Box Weapon - Vongola Bow"):
+                advance_sistema_cai(user.get_effect(EffectType.STACK, "Sistema C.A.I."))
+        elif stage == 2:
+            for target in user.current_targets:
+                if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+                    user.deal_damage(10, target)
+                    if target == user.primary_target:
+                        target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
+                        user.check_on_stun(target)
+            user.check_on_use()
+            user.check_on_harm()
+            if not user.has_effect(EffectType.MARK, "Vongola Box Weapon - Vongola Bow"):
+                advance_sistema_cai(user.get_effect(EffectType.STACK, "Sistema C.A.I."))
+        elif stage == 3:
+            for target in user.current_targets:
+                if target == user.primary_target:
+                    if target.final_can_effect(user.check_bypass_effects()):
+                        user.deal_damage(20, target)
+                        target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
+                        user.check_on_stun(target)
+                else:
+                    if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+                        user.deal_damage(10, target)
+            user.give_healing(15, user)
+            user.check_on_use()
+            user.check_on_harm()
+            if not user.has_effect(EffectType.MARK, "Vongola Box Weapon - Vongola Bow"):
+                advance_sistema_cai(user.get_effect(EffectType.STACK, "Sistema C.A.I."))
+        elif stage == 4:
+            for target in user.current_targets:
+                if target.id < 2:
+                    user.give_healing(25, target)
+                else:
+                    if target.final_can_effect(user.check_bypass_effects()):
+                        user.deal_damage(25, target)
+                        target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
+                        user.check_on_stun(target)
+            
+            user.check_on_use()
+            user.check_on_harm()
+            user.check_on_help()
+            if not user.has_effect(EffectType.MARK, "Vongola Box Weapon - Vongola Bow"):
+                advance_sistema_cai(user.get_effect(EffectType.STACK, "Sistema C.A.I."))
 
 
 def exe_vongola_ring(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    stage = user.get_effect(EffectType.STACK, "Sistema C.A.I.")
-    if stage.mag == 4:
-        stage.alter_mag(-3)
-    else:
-        stage.alter_mag(1)
+    
+    if not user.has_effect(EffectType.MARK, "Vongola Box Weapon - Vongola Bow"):
+        advance_sistema_cai(user.get_effect(EffectType.STACK, "Sistema C.A.I."))
     user.check_on_use()
 
 def exe_vongola_bow(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 5, lambda eff: "The Sistema C.A.I. stage will not advance when Sistema C.A.I. is used."))
-    user.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 5, lambda eff: f"Gokudera has {eff.mag} points of destructible defense.", mag=30))
+    user.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 5, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag=30))
     user.check_on_use()
 
 def exe_gokudera_block(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
@@ -1331,7 +1382,165 @@ def exe_gokudera_block(user: "CharacterManager", playerTeam: list["CharacterMana
     user.check_on_use()
 
 #endregion
+#region Hibari Execution (Need Tests)
+def exe_bite_you_to_death(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(20, target)
+        user.check_on_use()
+        user.check_on_harm()
 
+def exe_handcuffs(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(15, target)
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 4, lambda eff: "This character is stunned."))
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 3, lambda eff: "This character will take 15 damage.", mag=15))
+        user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Hibari cannot use Porcospino Nuvola."))
+        user.add_effect(Effect(user.used_ability, EffectType.CONT_USE, user, 3, lambda eff: "Hibari is using Alaudi's Handcuffs. This effect will end if Hibari is stunned."))
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_porcospino(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                target.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 4, lambda eff: "If this character uses a new harmful ability, they will take 10 damage."))
+        user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Hibari cannot use Alaudi's Handcuffs."))
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_tonfa_block(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Hibari is invulnerable."))
+    user.check_on_use()
+#endregion
+#region Gray Execution (Need Tests)
+def exe_ice_make(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Gray can use his abilities."))
+    user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 3, lambda eff: "Ice, Make... has been replaced by Ice, Make Unlimited.", mag=11))
+    user.check_on_use()
+
+def exe_freeze_lancer(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+                user.deal_damage(15, target)
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 3, lambda eff: "This character will take 15 damage.", mag=15))
+        user.check_on_use()
+        user.check_on_harm()        
+
+
+def exe_hammer(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(20, target)
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_shield(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Gray is invulnerable."))
+    user.check_on_use()
+
+def exe_unlimited(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    helped = False
+    harmed = False
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.id < 3:
+                target.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 280000, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag=5))
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_DEST_DEF, user, 280000, lambda eff: f"This character will gain 5 points of destructible defense.", mag=5))
+                helped = True
+            elif target.id > 2:
+                if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+                    user.deal_damage(5, target)
+                    target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 280000, lambda eff: f"This character will gain 5 points of destructible defense.", mag=5))
+                    harmed = True
+        user.check_on_use()
+        if helped:
+            user.check_on_help()
+        if harmed:
+            user.check_on_harm()
+#endregion
+#region Gunha Execution (Need Tests)
+
+def consume_guts(gunha :"CharacterManager", max: int) -> int:
+    if not gunha.has_effect(EffectType.STACK, "Guts"):
+        return 0
+    if gunha.get_effect(EffectType.STACK, "Guts").mag >= max:
+        gunha.get_effect(EffectType.STACK, "Guts").alter_mag(max * -1)
+        if gunha.get_effect(EffectType.STACK, "Guts").mag < 3:
+            gunha.source.main_abilities[2].target_type = Target.SINGLE
+        if gunha.get_effect(EffectType.STACK, "Guts").mag == 0:
+            gunha.remove_effect(gunha.get_effect(EffectType.STACK, "Guts"))
+        return max
+    else:
+        output = gunha.get_effect(EffectType.STACK, "Guts").mag
+        gunha.remove_effect(gunha.get_effect(EffectType.STACK, "Guts"))
+        gunha.source.main_abilities[2].target_type = Target.SINGLE
+        return output
+
+
+def exe_guts(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if user.has_effect(EffectType.MARK, "Guts"):
+        user.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff: f"Gunha has {eff.mag} Guts.", mag=2))
+        if user.get_effect(EffectType.STACK, "Guts").mag > 2:
+            user.source.main_abilities[2].target_type = Target.MULTI_ENEMY
+        user.give_healing(25, user)
+    else:
+        user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "Gunha can use his abilities."))
+        user.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff: f"Gunha has {eff.mag} Guts.", mag=5))
+        user.source.main_abilities[2].target_type = Target.MULTI_ENEMY
+    user.check_on_use()
+    
+def exe_super_awesome_punch(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        charges = consume_guts(user, 5)
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                base_damage = 35
+                if charges >= 2 and user.can_boost():
+                    base_damage = 45
+                user.deal_pierce_damage(base_damage, target)
+                if charges == 5:
+                    target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
+                    user.check_on_stun(target)
+        user.check_on_use()
+        user.check_on_harm()
+                
+def exe_overwhelming_suppression(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        charges = consume_guts(user, 3)
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                suppression = 5
+                if charges >= 2:
+                    suppression = 10
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_BOOST, user, 2, lambda eff: f"This character will deal {eff.mag} less damage.", mag=(suppression * -1)))
+                if charges == 3:
+                    target.add_effect(Effect(user.used_ability, EffectType.DEF_NEGATE, user, 3, lambda eff: "This character cannot reduce damage or become invulnerable."))
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_hyper_eccentric_punch(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        charges = consume_guts(user, 3)
+        base_damage = 20
+        if charges >= 2 and user.can_boost():
+            base_damage = 25
+        for target in user.current_targets:
+            if charges >= 2:
+                if target.final_can_effect("BYPASS"):
+                    user.deal_pierce_damage(base_damage, target)
+            else:
+                if target.final_can_effect(user.check_bypass_effects()):
+                    user.deal_damage(base_damage, target)
+        user.check_on_use()
+        user.check_on_harm()
+#endregion
 
 ability_info_db = {
     "naruto1": [
@@ -1780,76 +1989,76 @@ ability_info_db = {
         "Gokudera causes an effect based on the CAI stage, and moves the stage forward one. All effects are cumulative except for Stage 4."
         +
         " Stage 1: Deals 10 damage to all enemies.\nStage 2: Stuns target enemy for one turn.\nStage 3: Deals 10 damage to one enemy and heals Gokudera for 15 health.\nStage 4: Deals 25 damage to all enemies and stuns them for 1 turn. This heals Gokudera's entire team for 20 health. Resets the C.A.I. stage to 1.",
-        [0, 0, 0, 1, 1, 0], Target.ALL_TARGET, target_sistema_CAI
+        [0, 0, 0, 1, 1, 0], Target.ALL_TARGET, target_sistema_CAI, exe_sistema_cai
     ],
     "gokudera2": [
         "Vongola Skull Rings", "Moves the C.A.I. stage forward by one.",
         [0, 0, 0, 0, 0, 1], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_vongola_ring
     ],
     "gokudera3": [
-        "Vongola Box Weapon, Vongola Bow",
+        "Vongola Box Weapon - Vongola Bow",
         "Gokudera gains 30 points of destructible defense for 2 turns. During this time, the C.A.I. stage will not advance.",
         [0, 1, 0, 1, 0, 5], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_vongola_bow
     ],
     "gokudera4": [
         "Gokudera Block", "Gokudera becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_gokudera_block
     ],
     "hibari1": [
         "Bite You To Death", "Hibari deals 20 damage to target enemy.",
         [0, 0, 0, 0, 0, 1], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_bite_you_to_death
     ],
     "hibari2": [
         "Alaudi's Handcuffs",
         "Hibari stuns one enemy for 2 turns. During this time, they take 10 damage per turn and Hibari cannot use Porcospino Nuvola.",
         [0, 1, 0, 1, 0, 5], Target.SINGLE,
         default_target("HOSTILE",
-                       lockout=(EffectType.MARK, "Porcospino Nuvola"))
+                       lockout=(EffectType.MARK, "Porcospino Nuvola")), exe_handcuffs
     ],
     "hibari3": [
         "Porcospino Nuvola",
         "For 2 turns, any enemy that uses a new harmful ability will take 10 damage. During this time, Hibari cannot use Alaudi's Handcuffs.",
         [0, 0, 0, 1, 0, 3], Target.MULTI_ENEMY,
         default_target("HOSTILE",
-                       lockout=(EffectType.MARK, "Alaudi's Handcuffs"))
+                       lockout=(EffectType.MARK, "Alaudi's Handcuffs")), exe_porcospino
     ],
     "hibari4": [
         "Tonfa Block", "Hibari becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_tonfa_block
     ],
     "gray1": [
         "Ice, Make...",
         "Gray prepares to use his ice magic. On the following turn, all of his abilities are enabled and Ice, Make... becomes Ice, Make Unlimited.",
         [0, 0, 0, 0, 0, 0], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_ice_make
     ],
     "gray2": [
         "Ice, Make Freeze Lancer",
         "Gray deals 15 damage to all enemies for 2 turns.", [0, 1, 0, 0, 1, 2],
         Target.MULTI_ENEMY,
-        default_target("HOSTILE", prep_req="Ice, Make...")
+        default_target("HOSTILE", prep_req="Ice, Make..."), exe_freeze_lancer
     ],
     "gray3": [
         "Ice, Make Hammer",
         "Gray deals 20 damage to one enemy and stuns them for 1 turn.",
         [0, 1, 0, 0, 1, 1], Target.SINGLE,
-        default_target("HOSTILE", prep_req="Ice, Make...")
+        default_target("HOSTILE", prep_req="Ice, Make..."), exe_hammer
     ],
     "gray4": [
         "Ice, Make Shield", "Gray becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 2], Target.SINGLE,
-        default_target("SELF", prep_req="Ice, Make...")
+        default_target("SELF", prep_req="Ice, Make..."), exe_shield
     ],
     "grayalt1": [
         "Ice, Make Unlimited",
-        "Gray deals 5 damage to all enemies and grants all allies 5 destructible defense. This will continue to occur on any turn in which Gray is not under the effect of Ice, Make... and is not stunned.",
+        "Gray deals 5 damage to all enemies and grants all allies 5 destructible defense every turn.",
         [0, 1, 0, 0, 2, 0], Target.ALL_TARGET,
-        default_target("ALL", lockout=(EffectType.MARK, "Ice, Make Unlimited"))
+        default_target("ALL", lockout=(EffectType.MARK, "Ice, Make Unlimited")), exe_unlimited
     ],
     "sogiita1": [
         "Super Awesome Punch",
@@ -1857,25 +2066,25 @@ ability_info_db = {
         +
         "If Gunha consumes at least 2 stacks, Super Awesome Punch deals 10 additional damage. If Gunha consumes 5 stacks, Super Awesome Punch will "
         + "stun its target for 1 turn.", [1, 0, 1, 0, 0, 2], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE", prep_req="Guts"), exe_super_awesome_punch
     ],
     "sogiita2": [
         "Overwhelming Suppression",
         "Gunha reduces the damage dealt by all enemies by 5 for 1 turn. Using this ability consumes up to 3 stacks of Guts from Gunha. "
         +
         "If Gunha consumes at least 2 stacks, then the damage reduction is increased by 5. If Gunha consumes 3 stacks, then all affected enemies cannot reduce"
-        + " damage or become invulnerable for 1 turn.", [0, 0, 1, 0, 0, 0
+        + " damage or become invulnerable for 2 turns.", [0, 0, 1, 0, 0, 0
                                                          ], Target.MULTI_ENEMY,
-        default_target("HOSTILE")
+        default_target("HOSTILE", prep_req="Guts"), exe_overwhelming_suppression
     ],
     "sogiita3": [
         "Hyper Eccentric Ultra Great Giga Extreme Hyper Again Awesome Punch",
         "Gunha does 20 damage to target enemy. Using this ability consumes up to "
         +
-        "3 stacks of Guts from Gunha. If Gunha consumes at least 2 stacks, this ability deals 5 extra damage and becomes piercing. If Gunha consumes 3 stacks, this ability"
+        "3 stacks of Guts from Gunha. If Gunha consumes at least 2 stacks, this ability ignores invulnerability, deals 5 extra damage and becomes piercing. If Gunha consumes 3 stacks, this ability"
         +
-        " will deal 25 piercing damage to all other enemies, ignoring invulnerability.",
-        [1, 0, 0, 0, 0, 0], Target.SINGLE, default_target("HOSTILE")
+        " will target all enemies.",
+        [1, 0, 0, 0, 0, 0], Target.SINGLE, default_target("HOSTILE", prep_req="Guts"), exe_hyper_eccentric_punch
     ],
     "sogiita4": [
         "Guts",
@@ -1883,7 +2092,7 @@ ability_info_db = {
         +
         "Guts again to grant himself 2 stacks of Guts and heal for 25 health.",
         [0, 0, 0, 0, 1, 2], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_guts
     ],
     "hinata1": [
         "Gentle Step - Twin Lion Fists",

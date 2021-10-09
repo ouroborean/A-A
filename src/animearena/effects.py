@@ -56,6 +56,7 @@ class EffectType(enum.IntEnum):
     PROF_SWAP = 41
     IGNORE = 42
     CONT_PIERCE_DMG = 43
+    BOOST_NEGATE = 44
 
 
 class Effect:

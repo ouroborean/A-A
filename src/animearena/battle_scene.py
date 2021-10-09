@@ -698,11 +698,12 @@ class BattleScene(engine.Scene):
         for i, ally in enumerate(ally_team):
             char_manager = CharacterManager(ally, self)
             char_manager.id = i
+            self.handle_unique_startup(char_manager)
             ally_roster.append(char_manager)
-
         for i, enemy in enumerate(enemy_team):
             char_manager = CharacterManager(enemy, self)
             char_manager.id = i + 3
+            self.handle_unique_startup(char_manager)
             enemy_roster.append(char_manager)
 
         scene_ally_team = Team(ally_roster)
@@ -946,6 +947,8 @@ class CharacterManager():
             if character.id > 2:
                 if character.has_effect(EffectType.UNIQUE, "Iron Shadow Dragon") and not character.is_ignoring():
                     character.add_effect(Effect(Ability("gajeel3"), EffectType.IGNORE, character, 1, lambda eff: ""))
+        if self.has_effect(EffectType.UNIQUE, "Porcospino Nuvola"):
+            self.receive_eff_damage(10)
                     
 
 
@@ -978,7 +981,13 @@ class CharacterManager():
 
     def cancel_control_effects(self):
         for eff in self.source.current_effects:
-            if eff.eff_type == EffectType.CONT_USE:
+            if eff.eff_type == EffectType.CONT_USE and eff.name == "Quickdraw - Rifle":
+                self.remove_effect(self.get_effect(EffectType.CONT_USE, "Quickdraw - Rifle"))
+                for manager in self.scene.player_display.team.character_managers:
+                    manager.remove_effect(manager.get_effect(EffectType.CONT_DMG, "Quickdraw - Rifle"))
+                for manager in self.scene.enemy_display.team.character_managers:
+                    manager.remove_effect(manager.get_effect(EffectType.CONT_DMG, "Quickdraw - Rifle"))
+            elif eff.eff_type == EffectType.CONT_USE:
                 self.full_remove_effect(eff.name, self)
                 for manager in self.scene.player_display.team.character_managers:
                     manager.full_remove_effect(eff.name, self)
@@ -1068,15 +1077,25 @@ class CharacterManager():
 
     def get_boosts(self, damage: int) -> int:
         mod_damage = damage
+        no_boost = False
         which = 0
         for i, ability in enumerate(self.source.current_abilities):
             if self.used_ability == ability:
                 which = i + 1
+        
+        
+        gen = (eff for eff in self.source.current_effects
+               if eff.eff_type == EffectType.BOOST_NEGATE)
+        for eff in gen:
+            no_boost = True
+            break
+
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.ALL_BOOST)
-        
         for eff in gen:
             negative = False
+            if eff.mag > 0 and no_boost:
+                continue
             if eff.mag < 0:
                 negative = True
             ability_target = math.trunc(eff.mag / 100)
@@ -1088,22 +1107,25 @@ class CharacterManager():
                 mod_damage = mod_damage + boost_value
 
         if self.used_ability != None and self.used_ability.name == "Trap of Argalia - Down With A Touch!":
-            if self.has_effect(EffectType.STACK, "Trap of Argalia - Down With A Touch!"):
+            if self.has_effect(EffectType.STACK, "Trap of Argalia - Down With A Touch!") and not no_boost:
                 mod_damage += (self.get_effect(EffectType.STACK, "Trap of Argalia - Down With A Touch!").mag * 5)
 
 
-        if self.has_effect(EffectType.MARK, "Trap of Argalia - Down With A Touch!") or self.has_effect(EffectType.MARK, "La Black Luna"):
-            mod_damage = damage
-
         return mod_damage
 
-
+    def can_boost(self) -> bool:
+        gen = (eff for eff in self.source.current_effects
+               if eff.eff_type == EffectType.BOOST_NEGATE)
+        for eff in gen:
+            return False
+        return True
 
     def has_boosts(self) -> bool:
         gen = (eff for eff in self.source.current_effects if eff.eff_type == EffectType.ALL_BOOST)
         for eff in gen:
             if eff.mag > 0:
                 return True
+        
         if self.has_effect(EffectType.STACK, "Trap of Argalia - Down With A Touch!"):
             return True
         return False
@@ -1442,7 +1464,12 @@ class CharacterManager():
         self.source.current_effects.append(effect)
 
     def remove_effect(self, effect: Effect):
-        self.source.current_effects.remove(effect)
+        new_current_effects: list[Effect] = []
+        for eff in self.source.current_effects:
+            if not (eff == effect):
+                new_current_effects.append(eff)
+        self.source.current_effects = new_current_effects
+
 
     def full_remove_effect(self, eff_name: str, user: "CharacterManager"):
         new_current_effects: list[Effect] = []
@@ -1611,6 +1638,8 @@ class CharacterManager():
         self.scene.add_bordered_sprite(self.hp_bar_region, hp_bar, BLACK, 0, 0)
 
     def refresh_character(self, enemy=False):
+        if self.source.hp <= 0:
+            self.source.dead = True
         self.acted = False
         self.current_targets.clear()
         self.received_ability.clear()

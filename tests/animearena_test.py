@@ -1,8 +1,7 @@
 from pickle import PUT
 
-from _pytest.config import create_terminal_writer
 from animearena import battle_scene, character_select_scene
-from animearena.ability import Ability, ability_info_db, Target, exe_effortless_guard
+from animearena.ability import Ability, ability_info_db, Target
 from animearena.energy import Energy
 from animearena.scene_manager import SceneManager
 from animearena.character import Character, character_db
@@ -115,6 +114,34 @@ def gajeel_test_scene(test_scene: BattleScene) -> engine.Scene:
     test_scene.setup_scene(ally_team, enemy_team)
     return test_scene
 
+@pytest.fixture
+def gokudera_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("gokudera"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("gajeel"), Character("naruto"), Character("chu")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+@pytest.fixture
+def hibari_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("hibari"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("gajeel"), Character("naruto"), Character("chu")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+@pytest.fixture
+def gray_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("gray"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("gajeel"), Character("naruto"), Character("chu")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+@pytest.fixture
+def gunha_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("sogiita"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("gajeel"), Character("naruto"), Character("chu")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
 def test_detail_unpack():
     details_package = ["Justice Kick", "Shiro deals 20 damage to target enemy. If they damaged one of Shiro's allies the previous turn, this ability deals double damage.", [1,0,0,0,0,1], Target.SINGLE]
 
@@ -154,7 +181,6 @@ def test_shadow_clones(naruto_test_scene: BattleScene):
     for enemy in e_team:
         assert enemy.source.hp == 75
         assert enemy.is_stunned()
-
 
 def test_sage_mode(naruto_test_scene: BattleScene):
     naruto = naruto_test_scene.player_display.team.character_managers[0]
@@ -222,7 +248,6 @@ def test_sage_mode_rasengan(naruto_test_scene: BattleScene):
 
     assert fucking_ruler.source.hp == 50
     assert fucking_ruler.get_effect(EffectType.ALL_STUN, "Rasengan").duration == 4
-
 
 def test_aizen_mark_application(aizen_test_scene: BattleScene):
     aizen = aizen_test_scene.player_display.team.character_managers[0]
@@ -1667,3 +1692,141 @@ def test_shadow_ignore(gajeel_test_scene: BattleScene):
     naruto.used_ability.execute(naruto, eteam, pteam)
 
     assert gajeel.source.hp == 70
+
+def test_sistema_cai_stages(gokudera_test_scene: BattleScene):
+    pteam = gokudera_test_scene.player_display.team.character_managers
+    eteam = gokudera_test_scene.enemy_display.team.character_managers
+    gokudera = pteam[0]
+    gajeel = eteam[0]
+    sistema = gokudera.source.main_abilities[0]
+    skullring = gokudera.source.main_abilities[1]
+    skullbow = gokudera.source.main_abilities[2]
+    
+    gokudera.add_effect(Effect(Ability("gokudera1"), EffectType.STACK, gokudera, 280000, lambda eff: f"The Sistema C.A.I. is at Stage {eff.mag}.", mag=1))
+
+    gokudera.used_ability = sistema
+    gokudera.current_targets.append(eteam[0])
+    gokudera.current_targets.append(eteam[1])
+    gokudera.current_targets.append(eteam[2])
+    gokudera.used_ability.execute(gokudera, pteam, eteam)
+
+    assert eteam[0].source.hp == 90
+    assert gokudera.get_effect(EffectType.STACK, "Sistema C.A.I.").mag == 2
+
+    gokudera.primary_target = eteam[1]
+
+    gokudera.used_ability.execute(gokudera, pteam, eteam)
+
+    assert eteam[0].source.hp == 80
+    assert eteam[1].source.hp == 80
+    assert eteam[1].is_stunned()
+
+    gokudera.source.hp = 65
+
+    gokudera.used_ability.execute(gokudera, pteam, eteam)
+    assert eteam[0].source.hp == 70
+    assert eteam[1].source.hp == 60
+    assert eteam[1].is_stunned()
+    assert gokudera.source.hp == 80
+
+    gokudera.current_targets.append(pteam[0])
+    gokudera.current_targets.append(pteam[1])
+    gokudera.current_targets.append(pteam[2])
+
+    gokudera.used_ability.execute(gokudera, pteam, eteam)
+
+    assert eteam[0].source.hp == 45
+    assert eteam[1].source.hp == 35
+    assert eteam[0].is_stunned()
+    assert gokudera.source.hp == 100
+
+def test_vongola_bow_stage_halt(gokudera_test_scene: BattleScene):
+    pteam = gokudera_test_scene.player_display.team.character_managers
+    eteam = gokudera_test_scene.enemy_display.team.character_managers
+    gokudera = pteam[0]
+    gajeel = eteam[0]
+    sistema = gokudera.source.main_abilities[0]
+    skullring = gokudera.source.main_abilities[1]
+    skullbow = gokudera.source.main_abilities[2]
+    
+    gokudera.add_effect(Effect(Ability("gokudera1"), EffectType.STACK, gokudera, 280000, lambda eff: f"The Sistema C.A.I. is at Stage {eff.mag}.", mag=1))
+
+    gokudera.used_ability = skullbow
+    gokudera.current_targets.append(gokudera)
+    gokudera.used_ability.execute(gokudera, pteam, eteam)
+
+    gokudera.used_ability = sistema
+    gokudera.current_targets.clear()
+    gokudera.current_targets.append(eteam[0])
+    gokudera.current_targets.append(eteam[1])
+    gokudera.current_targets.append(eteam[2])
+
+    gokudera.used_ability.execute(gokudera, pteam, eteam)
+    gokudera.used_ability.execute(gokudera, pteam, eteam)
+    gokudera.used_ability.execute(gokudera, pteam, eteam)
+    gokudera.used_ability.execute(gokudera, pteam, eteam)
+    
+    assert eteam[0].source.hp == 60
+    assert gokudera.get_effect(EffectType.STACK, "Sistema C.A.I.").mag == 1
+    
+def test_skull_ring(gokudera_test_scene: BattleScene):
+    pteam = gokudera_test_scene.player_display.team.character_managers
+    eteam = gokudera_test_scene.enemy_display.team.character_managers
+    gokudera = pteam[0]
+    gajeel = eteam[0]
+    sistema = gokudera.source.main_abilities[0]
+    skullring = gokudera.source.main_abilities[1]
+    skullbow = gokudera.source.main_abilities[2]
+    
+    gokudera.add_effect(Effect(Ability("gokudera1"), EffectType.STACK, gokudera, 280000, lambda eff: f"The Sistema C.A.I. is at Stage {eff.mag}.", mag=1))
+
+    gokudera.used_ability = skullring
+    gokudera.current_targets.append(gokudera)
+    gokudera.used_ability.execute(gokudera, pteam, eteam)
+    gokudera.used_ability.execute(gokudera, pteam, eteam)
+    
+    assert gokudera.get_effect(EffectType.STACK, "Sistema C.A.I.").mag == 3
+
+def test_alaudis_handcuffs(hibari_test_scene: BattleScene):
+    pteam = hibari_test_scene.player_display.team.character_managers
+    eteam = hibari_test_scene.enemy_display.team.character_managers
+    hibari = pteam[0]
+    bite = hibari.source.main_abilities[0]
+    handcuffs = hibari.source.main_abilities[1]
+    porcospino = hibari.source.main_abilities[2]
+    gajeel = eteam[0]
+    hibari.current_targets.append(gajeel)
+    hibari.used_ability = handcuffs
+    hibari.used_ability.execute(hibari, pteam, eteam)
+
+    assert gajeel.source.hp == 85
+
+    assert porcospino.target(hibari, pteam, eteam, True) == 0
+
+def test_porcospino(hibari_test_scene: BattleScene):
+    pteam = hibari_test_scene.player_display.team.character_managers
+    eteam = hibari_test_scene.enemy_display.team.character_managers
+    hibari = pteam[0]
+    bite = hibari.source.main_abilities[0]
+    handcuffs = hibari.source.main_abilities[1]
+    porcospino = hibari.source.main_abilities[2]
+    gajeel = eteam[0]
+
+    for enemy in eteam:
+        hibari.current_targets.append(enemy)
+
+    hibari.used_ability = porcospino
+    hibari.used_ability.execute(hibari, pteam, eteam)
+
+    assert handcuffs.target(hibari, pteam, eteam) == 0
+
+    gajeel.used_ability = gajeel.source.current_abilities[0]
+
+    gajeel.current_targets.append(hibari)
+
+    gajeel.used_ability.execute(gajeel, pteam, eteam)
+
+    assert hibari.source.hp == 65
+    assert gajeel.source.hp == 90
+
+
