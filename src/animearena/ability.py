@@ -372,6 +372,19 @@ def target_getsuga_tenshou(user: "CharacterManager",
             total_targets += 1
     return total_targets 
 
+def target_kill_shinso(user: "CharacterManager",
+              playerTeam: list["CharacterManager"],
+              enemyTeam: list["CharacterManager"],
+              fake_targeting: bool = False) -> int:
+    total_targets = 0
+    for enemy in enemyTeam:
+        if enemy.hostile_target(user, "BYPASS"):
+            if enemy.has_effect(EffectType.STACK, "Kill, Kamishini no Yari"):
+                total_targets += 1
+                if not fake_targeting:
+                    enemy.set_targeted()
+    return total_targets
+
 def target_maria_the_ripper(user: "CharacterManager",
               playerTeam: list["CharacterManager"],
               enemyTeam: list["CharacterManager"],
@@ -1158,6 +1171,7 @@ def exe_nakagamis_starlight(user: "CharacterManager", playerTeam: list["Characte
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(35, target)
                 target.source.energy_contribution -= 1
+                user.check_on_drain(target)
         user.check_on_use()
         user.check_on_harm()
 
@@ -1382,7 +1396,7 @@ def exe_gokudera_block(user: "CharacterManager", playerTeam: list["CharacterMana
     user.check_on_use()
 
 #endregion
-#region Hibari Execution (Need Tests)
+#region Hibari Execution
 def exe_bite_you_to_death(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if not user.check_countered():
         for target in user.current_targets:
@@ -1416,7 +1430,7 @@ def exe_tonfa_block(user: "CharacterManager", playerTeam: list["CharacterManager
     user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Hibari is invulnerable."))
     user.check_on_use()
 #endregion
-#region Gray Execution (Need Tests)
+#region Gray Execution
 def exe_ice_make(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Gray can use his abilities."))
     user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 3, lambda eff: "Ice, Make... has been replaced by Ice, Make Unlimited.", mag=11))
@@ -1457,15 +1471,16 @@ def exe_unlimited(user: "CharacterManager", playerTeam: list["CharacterManager"]
             elif target.id > 2:
                 if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                     user.deal_damage(5, target)
-                    target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 280000, lambda eff: f"This character will gain 5 points of destructible defense.", mag=5))
+                    target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 280000, lambda eff: f"This character will take 5 damage.", mag=5))
                     harmed = True
+        user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: f"Gray is using Ice, Make Unlimited."))
         user.check_on_use()
         if helped:
             user.check_on_help()
         if harmed:
             user.check_on_harm()
 #endregion
-#region Gunha Execution (Need Tests)
+#region Gunha Execution
 
 def consume_guts(gunha :"CharacterManager", max: int) -> int:
     if not gunha.has_effect(EffectType.STACK, "Guts"):
@@ -1486,13 +1501,13 @@ def consume_guts(gunha :"CharacterManager", max: int) -> int:
 
 def exe_guts(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if user.has_effect(EffectType.MARK, "Guts"):
-        user.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff: f"Gunha has {eff.mag} Guts.", mag=2))
+        user.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff: f"Gunha has {eff.mag} Guts.", mag=2), user)
         if user.get_effect(EffectType.STACK, "Guts").mag > 2:
             user.source.main_abilities[2].target_type = Target.MULTI_ENEMY
         user.give_healing(25, user)
     else:
         user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "Gunha can use his abilities."))
-        user.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff: f"Gunha has {eff.mag} Guts.", mag=5))
+        user.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff: f"Gunha has {eff.mag} Guts.", mag=5), user)
         user.source.main_abilities[2].target_type = Target.MULTI_ENEMY
     user.check_on_use()
     
@@ -1533,13 +1548,824 @@ def exe_hyper_eccentric_punch(user: "CharacterManager", playerTeam: list["Charac
             base_damage = 25
         for target in user.current_targets:
             if charges >= 2:
-                if target.final_can_effect("BYPASS"):
+                if target.final_can_effect(user.check_bypass_effects()):
                     user.deal_pierce_damage(base_damage, target)
             else:
                 if target.final_can_effect(user.check_bypass_effects()):
                     user.deal_damage(base_damage, target)
         user.check_on_use()
         user.check_on_harm()
+#endregion
+#region Hinata Execution (Tests)
+def exe_lion_fist(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(25, target)
+                if user.has_effect(EffectType.MARK, "Byakugan"):
+                    target.source.energy_contribution -= 1
+                    user.check_on_drain(target)
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(25, target)
+                if user.has_effect(EffectType.MARK, "Byakugan"):
+                    target.source.energy_contribution -= 1
+                    user.check_on_drain(target)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_hinata_trigrams(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    counterable = False
+    for target in user.current_targets:
+        if target.id > 2:
+            counterable = True
+    if counterable and not user.check_countered():
+        drained = False
+        for target in user.current_targets:
+            if target.id > 2 and target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+                user.deal_damage(15, target)
+                if user.has_effect(EffectType.MARK, "Byakugan") and not drained:
+                    target.source.energy_contribution -= 1
+                    drained = True
+                    user.check_on_drain(target)
+            elif target.id < 3 and target.helpful_target():
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 4, lambda eff: "This character has 10 points of damage reduction.", mag=10))
+        if not user.has_effect(EffectType.MARK, "Eight Trigrams - 64 Palms"):
+            user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Eight Trigrams - 64 Palms will deal 15 damage to all enemies."))
+        else:
+            user.get_effect(EffectType.MARK, "Eight Trigrams - 64 Palms").duration = 3
+        user.check_on_use()
+        user.check_on_harm()
+    else:
+        for target in user.current_targets:
+            if target.helpful_target():
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 4, lambda eff: "This character has 10 points of damage reduction.", mag=10))
+        if not user.has_effect(EffectType.MARK, "Eight Trigrams - 64 Palms"):
+            user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Eight Trigrams - 64 Palms will deal 15 damage to all enemies."))
+        else:
+            user.get_effect(EffectType.MARK, "Eight Trigrams - 64 Palms").duration = 3
+        user.check_on_use()
+        user.check_on_harm()
+    
+
+def exe_hinata_byakugan(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 7, lambda eff: "Hinata will remove one energy from any enemy she damages, once per turn."))
+    user.check_on_use()
+
+
+def exe_gentle_fist_block(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Hinata is invulnerable."))
+#endregion
+#region Ichigo Execution (Tests)
+def exe_getsuga_tenshou(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if user.has_effect(EffectType.MARK, "Tensa Zangetsu"):
+        def_type = "BYPASS"
+        dmg_pierce = True
+    else:
+        def_type = user.check_bypass_effects()
+        dmg_pierce = False
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(def_type):
+                if dmg_pierce:
+                    user.deal_pierce_damage(40, target)
+                else:
+                    user.deal_damage(40, target)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_tensa_zangetsu(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 4, lambda eff: "Ichigo is invulnerable."))
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Getsuga Tenshou deals piercing damage and ignores invulnerabilty."))
+    user.add_effect(Effect(user.used_ability, EffectType.TARGET_SWAP, user, 3, lambda eff: "Zangetsu Slash will target all enemies.", mag=31))
+    user.source.energy_contribution += 1
+    user.check_on_use()
+
+def exe_zangetsu_slash(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            base_damage = 20
+            if user.has_effect(EffectType.STACK, "Zangetsu Slash") and user.can_boost():
+                base_damage += (5 * user.get_effect(EffectType.STACK, "Zangetsu Slash").mag)
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(base_damage, user)
+            user.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff: f"Zangetsu Slash will deal {5 * eff.mag} more damage.", mag = 1))
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_zangetsu_block(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Ichigo is invulnerable."))
+    user.check_on_use()
+#endregion
+#region Ichimaru Execution (Tests)
+def exe_butou_renjin(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(15, target)
+                target.apply_stack_effect(Effect(Ability("ichimaru3"), EffectType.STACK, user, 280000, lambda eff: f"This character will take {10 * eff.mag} affliction damage from Kill, Kamishini no Yari.", mag=1), user)
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_UNIQUE, user, 3, lambda eff: "This character will take 15 damage."))
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_13_kilometer_swing(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(25, target)
+                target.apply_stack_effect(Effect(Ability("ichimaru3"), EffectType.STACK, user, 280000, lambda eff: f"This character will take {10 * eff.mag} affliction damage from Kill, Kamishini no Yari.", mag=1), user)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_kamishini_no_yari(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect("BYPASS"):
+                base_damage = 10 * target.get_effect_with_user(EffectType.STACK, "Kill, Kamishini no Yari", user).mag
+                user.deal_aff_damage(base_damage, target)
+                if target.has_effect_with_user(EffectType.CONT_AFF_DMG, "Kill, Kamishini no Yari", user):
+                    target.get_effect_with_user(EffectType.CONT_AFF_DMG, "Kill, Kamishini no Yari", user).mag += base_damage
+                else:
+                    target.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 280000, lambda eff: f"This character will take {eff.mag} affliction damage.", mag = base_damage))
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_shinso_parry(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Ichimaru is invulnerable."))
+    user.check_on_use()
+
+#endregion
+#region Jack Execution (Tests)
+def exe_maria_the_ripper(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+                user.deal_damage(15, target)
+                user.deal_aff_damage(10, target)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_fog_of_london(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    for target in user.current_targets:
+        if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+            user.deal_aff_damage(5, target)
+            target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 5, lambda eff: "This character can be targeted by Maria the Ripper."))
+            target.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 5, lambda eff: "This character will take 5 affliction damage.", mag=5))
+    user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 5, lambda eff: "Fog of London has been replaced by Streets of the Lost.", mag = 22))
+    user.check_on_use()
+    user.check_on_harm()
+
+def exe_we_are_jack(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_aff_damage(30, target)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_smokescreen_defense(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Jack is invulnerable."))
+    user.check_on_use()
+
+def exe_streets_of_the_lost(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 5, lambda eff: "This character can be targeted by Maria the Ripper and We Are Jack."))
+                target.add_effect(Effect(user.used_ability, EffectType.ISOLATE, user, 6, lambda eff: "This character is isolated."))
+                target.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 6, lambda eff: "This character can only target Jack."))
+    user.check_on_use()
+    user.check_on_harm()
+#endregion
+#region Itachi Execution (Tests)
+def exe_amaterasu(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+                user.deal_aff_damage(10, target)
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 280000, lambda eff: "This character will take 10 affliction damage.", mag=10))
+        user.check_on_use()
+        user.check_on_harm()
+
+
+def exe_tsukuyomi(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 6, lambda eff: "This character is stunned."))
+                user.check_on_stun(target)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_susanoo(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 280000, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag=45))
+    user.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 280000, lambda eff: "Itachi will take 10 affliction damage. If his health falls below 20, Susano'o will end.", mag=10))
+    user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Amaterasu has been replaced by Totsuka Blade.", mag=11))
+    user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Tsukuyomi has been replaced by Yata Mirror.", mag=22))
+    user.receive_eff_aff_damage(10)
+    user.check_on_use()
+
+def exe_crow_genjutsu(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 280000, lambda eff: f"Itachi is invulnerable."))
+    user.check_on_use()
+
+def exe_totsuka_blade(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(35, target)
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
+                user.check_on_stun(target)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_yata_mirror(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.get_effect(EffectType.DEST_DEF, "Susano'o").alter_dest_def(20)
+    user.receive_eff_aff_damage(5)
+    user.check_on_use()
+#endregion
+#region Jiro Execution (Incomplete)
+def exe_counter_balance(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    
+
+
+def exe_heartbeat_distortion(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_heartbeat_surround(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_early_detection(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Kakashi Execution (Incomplete)
+def exe_copy_ninja(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_nindogs(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_raikiri(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_kamui(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Kuroko Execution (Incomplete)
+def exe_teleporting_strike(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_needle_pin(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_judgement_throw(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_kuroko_dodge(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Lambo Execution (Incomplete)
+def exe_ten_year_bazooka(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_conductivity(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_summon_gyudon(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_lampows_shield(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_thunder_set_charge(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_elettrico_cornata(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region La Pucelle Execution (Incomplete)
+def exe_knights_sword(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_magic_sword(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_ideal_strike(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_knights_guard(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Laxus Execution (Incomplete)
+def exe_fairy_law(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_lightning_dragons_roar(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_thunder_palace(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_laxus_block(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Leone Execution (Incomplete)
+def exe_lionel(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_beast_instinct(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_lion_fist(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_instinctual_dodge(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Levy Execution (Incomplete)
+def exe_solidscript_fire(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_solidscript_silent(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_solidscript_mask(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_solidscript_guard(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Raba Execution (Incomplete)
+def exe_crosstail_strike(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_wire_shield(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_heartseeker_thrust(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_defensive_netting(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Lucy Execution (Incomplete)
+def exe_aquarius(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_gemini(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_capricorn(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_leo(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_urano_metria(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Midoriya Execution (Incomplete)
+def exe_smash(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_air_force_gloves(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_shoot_style(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_enhanced_leap(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Minato Execution (Incomplete)
+def exe_flying_raijin(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_marked_kunai(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_partial_shiki_fuujin(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_minato_parry(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Mine Execution (Incomplete)
+def exe_roman_artillery_pumpkin(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_cutdown_shot(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_pumpkin_scouter(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_closerange_deflection(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Mirai Execution (Incomplete)
+def exe_blood_suppression_removal(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_blood_sword_combat(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_blood_shield(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_mirai_deflect(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_blood_bullet(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Mirio Execution (Incomplete)
+def exe_permeation(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_phantom_menace(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_protect_ally(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_mirio_dodge(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Misaka Execution (Incomplete)
+def exe_railgun(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_iron_sand(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_electric_rage(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_electric_deflection(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Mugen Execution (Incomplete)
+def exe_unpredictable_strike(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_way_of_the_rooster(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_unpredictable_spinning(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_mugen_block(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_hidden_knife(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Naruha Execution (Incomplete)
+def exe_bunny_assault(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_rampage_suit(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_piercing_umbrella(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_rabbit_guard(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_enraged_blow(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Natsu Execution (Incomplete)
+def exe_fire_dragons_roar(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_fire_dragons_iron_fist(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_fire_dragons_sword_horn(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_natsu_dodge(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Neji Execution (Incomplete)
+def exe_neji_trigrams(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_neji_mountain_crusher(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_selfless_genius(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_revolving_heaven(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_chakra_point_strike(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Nemurin Execution (Incomplete)
+def exe_nemurin_nap(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_nemurin_beam(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_dream_manipulation(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_dream_sovereignty(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Orihime Execution (Incomplete)
+def exe_tsubaki(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_ayame_shuno(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_lily_hinagiku_baigon(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_i_reject(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Ripple Execution (Incomplete)
+def exe_perfect_accuracy(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_shuriken_throw(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_countless_stars(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_ripple_block(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Rukia Execution (Incomplete)
+def exe_first_dance(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_second_dance(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_third_dance(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_rukia_parry(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Ruler Execution (Incomplete)
+def exe_in_the_name_of_ruler(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_minael_yunael(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_tama(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_swim_swim(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Ryohei Execution (Incomplete)
+def exe_maximum_cannon(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_kangaryu(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_vongola_headgear(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_to_the_extreme(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Saber Execution (Incomplete)
+def exe_excalibur(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_wind_blade_combat(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_avalon(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_saber_parry(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Saitama Execution (Incomplete)
+def exe_one_punch(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_consecutive_normal_punches(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_serious_punch(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_sideways_jumps(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Seiryu Execution (Incomplete)
+def exe_body_mod_arm_gun(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_raging_koro(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_berserker_howl(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_koro_defense(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_self_destruct(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_insatiable_justice(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Shigaraki Execution (Incomplete)
+def exe_decaying_touch(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_decaying_breakthrough(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_destroy_what_you_love(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_kurogiri_escape(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Shikamaru Execution (Incomplete)
+def exe_shadow_bind_jutsu(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_shadow_neck_bind(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_shadow_pin(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_hide(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Shokuhou Execution (Incomplete)
+def exe_mental_out(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_exterior(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_ally_mobilization(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+def exe_loyal_guard(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Snow White Execution (Incomplete)
+def exe_enhanced_strength(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_hear_distress(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_rabbits_foot(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+def exe_leap(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region SwimSwim Execution (Incomplete)
+def exe_ruler(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_dive(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_vitality_pills(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_water_body(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Tatsumaki Execution (Incomplete)
+def exe_rubble_barrage(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_arrest_assault(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_gather_power(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_psionic_barrier(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_return_assault(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Todoroki Execution (Incomplete)
+def exe_half_cold(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_half_hot(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_flashfreeze_heatwave(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_ice_rampart(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Tatsumi Execution (Incomplete)
+def exe_killing_strike(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_incursio(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_neuntote(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_invisibility(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Toga Execution (Incomplete)
+def exe_thirsting_knife(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_vacuum_syringe(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_transform(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_toga_dodge(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Tsunayoshi Execution (Incomplete)
+def exe_xburner(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_zero_point_breakthrough(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_burning_axle(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_flare_burst(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Uraraka Execution (Incomplete)
+def exe_zero_gravity(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_meteor_storm(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_comet_home_run(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_float(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Wendy Execution (Incomplete)
+def exe_troia(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_shredding_wedding(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_sky_dragons_roar(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_wendy_dodge(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_piercing_winds(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
+#region Yamamoto Execution (Incomplete)
+def exe_shinotsuku_ame(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_utsuhi_ame(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_asari_ugetsu(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_sakamaku_ame(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_scontro_di_rondine(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_beccata_di_rondine(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
 #endregion
 
 ability_info_db = {
@@ -2058,7 +2884,7 @@ ability_info_db = {
         "Ice, Make Unlimited",
         "Gray deals 5 damage to all enemies and grants all allies 5 destructible defense every turn.",
         [0, 1, 0, 0, 2, 0], Target.ALL_TARGET,
-        default_target("ALL", lockout=(EffectType.MARK, "Ice, Make Unlimited")), exe_unlimited
+        default_target("ALL", prep_req="Ice, Make...", lockout=(EffectType.MARK, "Ice, Make Unlimited")), exe_unlimited
     ],
     "sogiita1": [
         "Super Awesome Punch",
@@ -2081,7 +2907,7 @@ ability_info_db = {
         "Hyper Eccentric Ultra Great Giga Extreme Hyper Again Awesome Punch",
         "Gunha does 20 damage to target enemy. Using this ability consumes up to "
         +
-        "3 stacks of Guts from Gunha. If Gunha consumes at least 2 stacks, this ability ignores invulnerability, deals 5 extra damage and becomes piercing. If Gunha consumes 3 stacks, this ability"
+        "3 stacks of Guts from Gunha. If Gunha consumes at least 2 stacks, this ability deals 5 extra damage and becomes piercing. If Gunha consumes 3 stacks, this ability"
         +
         " will target all enemies.",
         [1, 0, 0, 0, 0, 0], Target.SINGLE, default_target("HOSTILE", prep_req="Guts"), exe_hyper_eccentric_punch
@@ -2140,7 +2966,7 @@ ability_info_db = {
         "increasing Zangetsu Strike's damage by 5. If used on the turn after "
         +
         "Tensa Zangetsu, it will target all enemies and permanently increase Zangetsu Strike's "
-        + "damage by 15.", [1, 0, 0, 0, 1, 0], Target.SINGLE,
+        + "damage by 5 per enemy struck.", [1, 0, 0, 0, 1, 0], Target.SINGLE,
         default_target("HOSTILE")
     ],
     "ichigo4": [
@@ -2150,26 +2976,26 @@ ability_info_db = {
     ],
     "ichimaru1": [
         "Butou Renjin",
-        "Ichimaru deals 15 damage to one enemy for two turns, adding a stack of Shinso to the target each turn when it damages them.",
+        "Ichimaru deals 15 damage to one enemy for two turns, adding a stack of Kamishini no Yari to the target each turn when it damages them.",
         [0, 0, 0, 1, 1, 2], Target.SINGLE,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_butou_renjin
     ],
     "ichimaru2": [
         "13 Kilometer Swing",
-        "Ichimaru deals 25 damage to all enemies and adds a stack of Shinso to each enemy damaged.",
+        "Ichimaru deals 25 damage to all enemies and adds a stack of Kamishini no Yari to each enemy damaged.",
         [0, 0, 0, 1, 2, 1], Target.MULTI_ENEMY,
-        default_target("HOSTILE")
+        default_target("HOSTILE"), exe_13_kilometer_swing
     ],
     "ichimaru3": [
         "Kill, Kamishini no Yari",
-        "Ichimaru consumes all stacks of Shinso, dealing 10 affliction damage to each enemy for the rest of the game for each stack of Shinso consumed from them. This effect ignores invulnerability.",
+        "Ichimaru consumes all stacks of Kamishini no Yari, dealing 10 affliction damage to each enemy for the rest of the game for each stack of consumed from them. This effect ignores invulnerability.",
         [0, 0, 0, 2, 0, 2], Target.MULTI_ENEMY,
-        default_target("HOSTILE", def_type="BYPASS", mark_req="Shinso")
+        target_kill_shinso, exe_kamishini_no_yari
     ],
     "ichimaru4": [
         "Shinso Parry", "Ichimaru becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF"), exe_shinso_parry
     ],
     "jack1": [
         "Maria the Ripper",
@@ -2214,7 +3040,7 @@ ability_info_db = {
     ],
     "itachi3": [
         "Susano'o",
-        "Itachi gains 45 destructible defense, and loses 10 health at the end of each turn. During this time, Amaterasu is replaced by Totsuka Blade and Tsukuyomi is replaced by"
+        "Itachi gains 45 destructible defense, and takes 10 affliction damage each turn. During this time, Amaterasu is replaced by Totsuka Blade and Tsukuyomi is replaced by"
         +
         " Yata Mirror. If Itachi falls below 20 health or he loses all his destructible defense, Susano'o will end.",
         [0, 2, 0, 0, 0, 6], Target.SINGLE,
@@ -2545,7 +3371,7 @@ ability_info_db = {
         default_target("HOSTILE")
     ],
     "minato3": [
-        "Partial Shiki Fuukin",
+        "Partial Shiki Fuujin",
         "Minato permanently increases the cooldowns and random cost of target enemy by one. After using this skill, Minato dies.",
         [0, 0, 0, 0, 3, 0], Target.SINGLE,
         default_target("HOSTILE")

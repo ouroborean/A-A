@@ -923,6 +923,8 @@ class CharacterManager():
                 target_type = eff.mag - (ability_target * 10)
                 if ability_target - 1 == i:
                     ability.target_type = Target(target_type)
+            if ability.name == "Hyper Eccentric Ultra Great Giga Extreme Hyper Again Awesome Punch" and self.has_effect(EffectType.STACK, "Guts") and self.get_effect(EffectType.STACK, "Guts").mag >= 3:
+                ability.target_type = Target.MULTI_ENEMY
 
     def adjust_ability_costs(self):
         for i, ability in enumerate(self.source.current_abilities):
@@ -1020,6 +1022,10 @@ class CharacterManager():
             for enemy in self.scene.enemy_display.team.character_managers:
                 if enemy.final_can_effect(self.check_bypass_effects()) and not enemy.deflecting():
                     self.deal_eff_damage(15, enemy)
+        if eff.name == "Butou Renjin":
+            if self.final_can_effect(eff.user.check_bypass_effects()) and not self.deflecting():
+                eff.user.deal_eff_damage(15, self)
+                self.apply_stack_effect(Effect(Ability("ichimaru3"), EffectType.STACK, eff.user, 280000, lambda eff: f"This character will take {10 * eff.mag} affliction damage from Kill, Kamishini no Yari.", mag=1), eff.user)
 
     def check_countered(self) -> bool:
         if not self.has_effect(EffectType.MARK, "Mental Radar"):
@@ -1306,6 +1312,9 @@ class CharacterManager():
                     manager.remove_effect(manager.get_effect(EffectType.MARK, "Illusory Breakdown"))
                 if manager.has_effect(EffectType.MARK, "Mental Immolation") and manager.get_effect(EffectType.MARK, "Mental Immolation").user == self:
                     manager.remove_effect(manager.get_effect(EffectType.MARK, "Mental Immolation"))
+        if self.has_effect(EffectType.CONT_AFF_DMG, "Susano'o"):
+            if self.source.hp < 20 or self.get_effect(EffectType.DEST_DEF, "Susano'o").mag <= 0:
+                self.full_remove_effect("Susano'o", self)
 
 
     def deflecting(self) -> bool:
@@ -1431,6 +1440,8 @@ class CharacterManager():
         if not targeter.has_effect(EffectType.MARK, "Frozen Castle") and target.has_effect(EffectType.UNIQUE, "Frozen Castle"):
             return True
         if not targeter.has_effect(EffectType.UNIQUE, "Frozen Castle") and target.has_effect(EffectType.MARK, "Frozen Castle"):
+            return True
+        if targeter.has_effect(EffectType.UNIQUE, "Streets of the Lost") and targeter != targeter.get_effect(EffectType.UNIQUE, "Streets of the Lost").user:
             return True
         return False
 

@@ -1829,4 +1829,233 @@ def test_porcospino(hibari_test_scene: BattleScene):
     assert hibari.source.hp == 65
     assert gajeel.source.hp == 90
 
+def test_ice_make_targeting(gray_test_scene: BattleScene):
+    pteam = gray_test_scene.player_display.team.character_managers
+    eteam = gray_test_scene.enemy_display.team.character_managers
+    gray = pteam[0]
+    icemake = gray.source.main_abilities[0]
+    freezelancer = gray.source.main_abilities[1]
+    hammer = gray.source.main_abilities[2]
+    unlimited = gray.source.alt_abilities[0]
+
+    assert freezelancer.target(gray, pteam, eteam, True) == 0
+    assert hammer.target(gray, pteam, eteam, True) == 0
+    assert unlimited.target(gray, pteam, eteam, True) == 0
+
+def test_unlimited(gray_test_scene: BattleScene):
+    pteam = gray_test_scene.player_display.team.character_managers
+    eteam = gray_test_scene.enemy_display.team.character_managers
+    gray = pteam[0]
+    icemake = gray.source.main_abilities[0]
+    freezelancer = gray.source.main_abilities[1]
+    hammer = gray.source.main_abilities[2]
+    unlimited = gray.source.alt_abilities[0]
+
+    for player in pteam:
+        gray.current_targets.append(player)
+    for enemy in eteam:
+        gray.current_targets.append(enemy)
+
+    gray.used_ability = unlimited
+    gray.used_ability.execute(gray, pteam, eteam)
+
+    gray_test_scene.resolve_ticking_ability()
+    gray_test_scene.resolve_ticking_ability()
+    gray_test_scene.resolve_ticking_ability()
+    gray_test_scene.resolve_ticking_ability()
+    gray_test_scene.resolve_ticking_ability()
+    gray_test_scene.resolve_ticking_ability()
+
+
+
+    for enemy in eteam:
+        assert enemy.source.hp == 70
+    
+    assert gray.get_effect(EffectType.DEST_DEF, "Ice, Make Unlimited").mag == 30
+
+def test_guts(gunha_test_scene:BattleScene):
+    pteam = gunha_test_scene.player_display.team.character_managers
+    eteam = gunha_test_scene.enemy_display.team.character_managers
+    gunha = pteam[0]
+    gajeel = eteam[0]
+
+    guts = gunha.source.main_abilities[3]
+    superawesome = gunha.source.main_abilities[0]
+    suppression = gunha.source.main_abilities[1]
+    hypereccentric = gunha.source.main_abilities[2]
+
+    assert superawesome.target(gunha, pteam, eteam, True) == 0
+    gunha.used_ability = guts
+    gunha.current_targets.append(gunha)
+
+    gunha.used_ability.execute(gunha, pteam, eteam)
+
+    assert superawesome.target(gunha, pteam, eteam, True) == 3
+    assert gunha.has_effect(EffectType.MARK, "Guts")
+    assert gunha.get_effect(EffectType.STACK, "Guts").mag == 5
+
+    gunha.source.hp = 75
+
+    gunha.used_ability.execute(gunha, pteam, eteam)
+    assert gunha.get_effect(EffectType.STACK, "Guts").mag == 7
+    assert gunha.source.hp == 100
+
+def test_super_awesome_full_charge(gunha_test_scene:BattleScene):
+    pteam = gunha_test_scene.player_display.team.character_managers
+    eteam = gunha_test_scene.enemy_display.team.character_managers
+    gunha = pteam[0]
+    gajeel = eteam[0]
+
+    guts = gunha.source.main_abilities[3]
+    superawesome = gunha.source.main_abilities[0]
+    suppression = gunha.source.main_abilities[1]
+    hypereccentric = gunha.source.main_abilities[2]
+
+    gunha.used_ability = guts
+    gunha.current_targets.append(gunha)
+
+    gunha.used_ability.execute(gunha, pteam, eteam)
+
+    gunha.current_targets.clear()
+    gunha.current_targets.append(gajeel)
+    gunha.used_ability = superawesome
+    gunha.used_ability.execute(gunha, pteam, eteam)
+
+    assert gajeel.source.hp == 55
+    assert gajeel.is_stunned()
+
+def test_super_awesome_mid_charge(gunha_test_scene:BattleScene):
+    pteam = gunha_test_scene.player_display.team.character_managers
+    eteam = gunha_test_scene.enemy_display.team.character_managers
+    gunha = pteam[0]
+    gajeel = eteam[0]
+
+    guts = gunha.source.main_abilities[3]
+    superawesome = gunha.source.main_abilities[0]
+    suppression = gunha.source.main_abilities[1]
+    hypereccentric = gunha.source.main_abilities[2]
+
+    gunha.used_ability = guts
+    gunha.current_targets.append(gunha)
+
+    gunha.used_ability.execute(gunha, pteam, eteam)
+    gunha.get_effect(EffectType.STACK, "Guts").alter_mag(-3)
+
+    gunha.current_targets.clear()
+    gunha.current_targets.append(gajeel)
+    gunha.used_ability = superawesome
+    gunha.used_ability.execute(gunha, pteam, eteam)
+
+    assert gajeel.source.hp == 55
+    assert not gajeel.is_stunned()
+
+def test_super_awesome_no_charge(gunha_test_scene:BattleScene):
+    pteam = gunha_test_scene.player_display.team.character_managers
+    eteam = gunha_test_scene.enemy_display.team.character_managers
+    gunha = pteam[0]
+    gajeel = eteam[0]
+
+    guts = gunha.source.main_abilities[3]
+    superawesome = gunha.source.main_abilities[0]
+    suppression = gunha.source.main_abilities[1]
+    hypereccentric = gunha.source.main_abilities[2]
+
+    gunha.used_ability = guts
+    gunha.current_targets.append(gunha)
+
+    gunha.used_ability.execute(gunha, pteam, eteam)
+    gunha.get_effect(EffectType.STACK, "Guts").alter_mag(-5)
+
+    gunha.current_targets.clear()
+    gunha.current_targets.append(gajeel)
+    gunha.used_ability = superawesome
+    gunha.used_ability.execute(gunha, pteam, eteam)
+
+    assert gajeel.source.hp == 65
+
+def test_overwhelming_suppression_full_charge(gunha_test_scene:BattleScene):
+    pteam = gunha_test_scene.player_display.team.character_managers
+    eteam = gunha_test_scene.enemy_display.team.character_managers
+    gunha = pteam[0]
+    gajeel = eteam[0]
+
+    guts = gunha.source.main_abilities[3]
+    superawesome = gunha.source.main_abilities[0]
+    suppression = gunha.source.main_abilities[1]
+    hypereccentric = gunha.source.main_abilities[2]
+
+    gunha.used_ability = guts
+    gunha.current_targets.append(gunha)
+
+    gunha.used_ability.execute(gunha, pteam, eteam)
+    
+
+    gunha.current_targets.clear()
+    gunha.current_targets.append(gajeel)
+    gunha.used_ability = suppression
+    gunha.used_ability.execute(gunha, pteam, eteam)
+
+    gajeel.used_ability = gajeel.source.main_abilities[3]
+    gajeel.used_ability.execute(gajeel, pteam, eteam)
+
+    assert not gajeel.check_invuln()
+    assert gajeel.get_boosts(0) == -10
+
+def test_overwhelming_suppression_mid_charge(gunha_test_scene:BattleScene):
+    pteam = gunha_test_scene.player_display.team.character_managers
+    eteam = gunha_test_scene.enemy_display.team.character_managers
+    gunha = pteam[0]
+    gajeel = eteam[0]
+
+    guts = gunha.source.main_abilities[3]
+    superawesome = gunha.source.main_abilities[0]
+    suppression = gunha.source.main_abilities[1]
+    hypereccentric = gunha.source.main_abilities[2]
+
+    gunha.used_ability = guts
+    gunha.current_targets.append(gunha)
+
+    gunha.used_ability.execute(gunha, pteam, eteam)
+    gunha.get_effect(EffectType.STACK, "Guts").alter_mag(-3)
+
+    gunha.current_targets.clear()
+    gunha.current_targets.append(gajeel)
+    gunha.used_ability = suppression
+    gunha.used_ability.execute(gunha, pteam, eteam)
+
+    gajeel.used_ability = gajeel.source.main_abilities[3]
+    gajeel.used_ability.execute(gajeel, pteam, eteam)
+
+    assert gajeel.check_invuln()
+
+    assert gajeel.get_boosts(0) == -10
+
+def test_overwhelming_suppression_no_charge(gunha_test_scene:BattleScene):
+    pteam = gunha_test_scene.player_display.team.character_managers
+    eteam = gunha_test_scene.enemy_display.team.character_managers
+    gunha = pteam[0]
+    gajeel = eteam[0]
+
+    guts = gunha.source.main_abilities[3]
+    superawesome = gunha.source.main_abilities[0]
+    suppression = gunha.source.main_abilities[1]
+    hypereccentric = gunha.source.main_abilities[2]
+
+    gunha.used_ability = guts
+    gunha.current_targets.append(gunha)
+
+    gunha.used_ability.execute(gunha, pteam, eteam)
+    gunha.get_effect(EffectType.STACK, "Guts").alter_mag(-5)
+
+    gunha.current_targets.clear()
+    gunha.current_targets.append(gajeel)
+    gunha.used_ability = suppression
+    gunha.used_ability.execute(gunha, pteam, eteam)
+
+    gajeel.used_ability = gajeel.source.main_abilities[3]
+    gajeel.used_ability.execute(gajeel, pteam, eteam)
+
+    assert gajeel.check_invuln()
+
+    assert gajeel.get_boosts(0) == -5
 
