@@ -300,6 +300,9 @@ class BattleScene(engine.Scene):
             if manager.acted:
                 manager.used_ability.execute(manager, self.player_display.team.character_managers,
                                              self.enemy_display.team.character_managers)
+                manager.used_ability.cooldown += manager.check_for_cooldown_mod()
+                if manager.used_ability.cooldown < 0:
+                    manager.used_ability.cooldown = 0
                 manager.used_ability.start_cooldown()
         self.resolve_ticking_ability()
 
@@ -541,6 +544,8 @@ class BattleScene(engine.Scene):
             for eff in manager.source.current_effects:
                 eff.tick_duration()
                 if eff.duration == 0:
+                    if eff.name == "Lightning Dragon's Roar":
+                        manager.add_effect(Effect(Ability("laxus2"), EffectType.ALL_DR, eff.user, 2, lambda eff: "This character will take 10 more damage.", mag=-10))
                     if eff.name == "Mahapadma" and eff.eff_type == EffectType.MARK:
                         manager.add_effect(Effect(Ability("esdeathalt1"), EffectType.ALL_STUN, manager, 5, lambda eff: "Esdeath is stunned."))
                     if eff.name == "Quickdraw - Rifle" and eff.eff_type == EffectType.CONT_USE:
@@ -578,7 +583,8 @@ class BattleScene(engine.Scene):
             for eff in manager.source.current_effects:
                 eff.tick_duration()
                 if eff.duration == 0:
-                    pass
+                    if eff.invisible:
+                        manager.add_effect(Effect(eff.source, EffectType.UNIQUE, eff.user, 2, lambda eff: f"{eff.name} has ended."))
             new_list = [eff for eff in manager.source.current_effects if eff.duration > 0]
             manager.source.current_effects = new_list
 
@@ -929,6 +935,10 @@ class CharacterManager():
     def adjust_ability_costs(self):
         for i, ability in enumerate(self.source.current_abilities):
             ability.reset_costs()
+            if ability.name == "Knight's Sword" and self.has_effect(EffectType.STACK, "Magic Sword"):
+                ability.modify_ability_cost(Energy(4), self.get_effect(EffectType.STACK, "Magic Sword").mag)
+            if ability.name == "Roman Artillery - Pumpkin" and self.source.hp < 30:
+                ability.modify_ability_cost(Energy(3), -1)
             gen = (eff for eff in self.source.current_effects
                    if eff.eff_type == EffectType.COST_ADJUST)
             for eff in gen:
@@ -956,7 +966,9 @@ class CharacterManager():
 
 
     def check_on_help(self):
-        pass
+        for target in self.current_targets:
+            if target.has_effect(EffectType.UNIQUE, "Tsukuyomi"):
+                target.full_remove_effect("Tsukuyomi", target.get_effect(EffectType.UNIQUE, "Tsukuyomi").user)
 
     def check_on_use(self):
         if self.has_effect(EffectType.MARK, "Hidden Mine"):
@@ -965,6 +977,8 @@ class CharacterManager():
             self.full_remove_effect("Hidden Mine", self.get_effect(EffectType.MARK, "Hidden Mine").user)
         if self.has_effect(EffectType.MARK, "Illusory Disorientation"):
             self.full_remove_effect("Illusory Disorientation", self.get_effect(EffectType.MARK, "Illusory Disorientation").user)
+        if self.has_effect(EffectType.MARK, "Solid Script - Fire"):
+            self.receive_eff_aff_damage(10)
 
     def check_bypass_effects(self) -> str:
 
@@ -976,6 +990,9 @@ class CharacterManager():
 
     def check_on_stun(self, target: "CharacterManager"):
         #TODO stun checks
+        
+        if target.has_effect(EffectType.MARK, "Counter-Balance"):
+            self.source.energy_contribution -= 1
 
         if target.is_stunned():
             target.cancel_control_effects()
@@ -997,8 +1014,11 @@ class CharacterManager():
                     manager.full_remove_effect(eff.name, self)
                 
 
-    def check_on_drain(self, target):
-        pass
+    def check_on_drain(self, target: "CharacterManager"):
+        
+        if target.has_effect(EffectType.MARK, "Counter-Balance"):
+            self.add_effect(Effect(Ability("jiro1"), EffectType.ALL_STUN, target.get_effect(EffectType.MARK, "Counter-Balance").user, 3, lambda eff: "This character is stunned."))
+
 
     def check_unique_cont(self, eff: Effect):
         if eff.name == "Relentless Assault":
@@ -1027,22 +1047,31 @@ class CharacterManager():
                 eff.user.deal_eff_damage(15, self)
                 self.apply_stack_effect(Effect(Ability("ichimaru3"), EffectType.STACK, eff.user, 280000, lambda eff: f"This character will take {10 * eff.mag} affliction damage from Kill, Kamishini no Yari.", mag=1), eff.user)
 
-    def check_countered(self) -> bool:
+    def check_countered(self, pteam: list["CharacterManager"], eteam: list["CharacterManager"]) -> bool:
         if not self.has_effect(EffectType.MARK, "Mental Radar"):
             #self reflect effects:
             gen = (eff for eff in self.source.current_effects
-                if eff.eff_type == EffectType.REFLECT)
+                if eff.eff_type == EffectType.REFLECT and not self.scene.is_allied(eff))
             for eff in gen:
                 pass
+
             #self counter check
-            gen = (eff for eff in self.source.current_effects if eff.eff_type == EffectType.COUNTER)
+            gen = (eff for eff in self.source.current_effects if eff.eff_type == EffectType.COUNTER and not self.scene.is_allied(eff))
             for eff in gen:
                 pass
             
             #target counter check
             for target in self.current_targets:
-                gen = (eff for eff in target.source.current_effects if eff.eff_type == EffectType.COUNTER)
+
+                gen = (eff for eff in target.source.current_effects if eff.eff_type == EffectType.COUNTER and not self.scene.is_allied(eff))
                 for eff in gen:
+                    if eff.name == "One For All - Shoot Style":
+                        src = Ability("midoriya3")
+                        self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by One For All - Shoot Style."))
+                        if self.has_effect(EffectType.COUNTER, "Third Dance - Shirafune"):
+                            #TODO Shirafune things
+                            pass
+                        return True
                     if eff.name == "Casseur de Logistille":
                         src = Ability("astolfo1")
                         if self.used_ability._base_cost[Energy.SPECIAL] > 0 or self.used_ability._base_cost[Energy.MENTAL] > 0:
@@ -1055,7 +1084,16 @@ class CharacterManager():
                                 #TODO Shirafune things
                                 pass
                             return True
-                                
+                
+                gen = (eff for eff in target.source.current_effects
+                if eff.eff_type == EffectType.REFLECT and not self.scene.is_allied(eff))
+                for eff in gen:
+                    if eff.name == "Copy Ninja Kakashi":
+                        alt_targets = [char for char in self.current_targets if char != target]
+                        alt_targets.append(self) 
+                        self.current_targets = alt_targets
+                        self.used_ability.execute(self, pteam, eteam)
+                        return True
 
 
         return False
@@ -1071,6 +1109,14 @@ class CharacterManager():
                     self.add_effect(Effect(Ability("frenda2"), EffectType.MARK, eff.user, 280000, lambda leff: f"If an enemy damages this character, all stacks of Doll Trap will be transferred to them.", invisible=True))
                 self.apply_stack_effect(Effect(Ability("frenda2"), EffectType.STACK, eff.user, 280000, lambda leff: f"Detonate will deal {20 * leff.mag} damage to this character.", mag=eff.mag, invisible=True), eff.user)
                 target.full_remove_effect("Doll Trap", eff.user)
+        if target.has_effect(EffectType.ALL_DR, "Conductivity"):
+            target.get_effect(EffectType.ALL_DR, "Conductivity").user.receive_eff_damage(10)
+
+        if target.source.hp <= 0:
+            if self.has_effect(EffectType.STUN_IMMUNE, "Beast Instinct"):
+                self.get_effect(EffectType.STUN_IMMUNE, "Beast Instinct").duration = 5
+            if target.has_effect(EffectType.MARK, "Beast Instinct"):
+                self.receive_eff_healing(20)
 
     def apply_stack_effect(self, effect: Effect, user: "CharacterManager"):
         gen = [eff for eff in self.source.current_effects if (eff.eff_type == effect.eff_type and eff.name == effect.name and eff.user == user)]
@@ -1088,7 +1134,9 @@ class CharacterManager():
         for i, ability in enumerate(self.source.current_abilities):
             if self.used_ability == ability:
                 which = i + 1
-        
+                if ability.name == "Knight's Sword" and self.has_effect(EffectType.STACK, "Magic Sword"):
+                    mod_damage += (20 * self.get_effect(EffectType.STACK, "Magic Sword").mag)
+            
         
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.BOOST_NEGATE)
@@ -1116,7 +1164,6 @@ class CharacterManager():
             if self.has_effect(EffectType.STACK, "Trap of Argalia - Down With A Touch!") and not no_boost:
                 mod_damage += (self.get_effect(EffectType.STACK, "Trap of Argalia - Down With A Touch!").mag * 5)
 
-
         return mod_damage
 
     def can_boost(self) -> bool:
@@ -1133,6 +1180,12 @@ class CharacterManager():
                 return True
         
         if self.has_effect(EffectType.STACK, "Trap of Argalia - Down With A Touch!"):
+            return True
+        if self.has_effect(EffectType.STACK, "Zangetsu Strike"):
+            return True
+        if self.has_effect(EffectType.MARK, "Teleporting Strike"):
+            return True
+        if self.has_effect(EffectType.STACK, "Magic Sword"):
             return True
         return False
 
@@ -1151,10 +1204,26 @@ class CharacterManager():
 
     def check_for_cooldown_mod(self) -> int:
         cd_mod = 0
+        which = 0
+        
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.COOLDOWN_MOD)
+        for i, ability in enumerate(self.source.current_abilities):
+            if self.used_ability == ability:
+                if ability.name == "Knight's Sword" and self.has_effect(EffectType.STACK, "Magic Sword"):
+                    cd_mod += self.get_effect(EffectType.STACK, "Magic Sword").mag
+                which = i + 1
         for eff in gen:
-            cd_mod += eff.mag
+            negative = False
+            if eff.mag < 0:
+                negative = True
+            ability_target = math.trunc(eff.mag / 10)
+            
+            boost_value = eff.mag - (ability_target * 10)
+            if negative:
+                ability_target = ability_target * -1
+            if ability_target == which or ability_target == 0:
+                cd_mod = cd_mod + boost_value
         return cd_mod
 
     def check_stun_duration_mod(self, base_dur: int) -> int:
@@ -1237,6 +1306,13 @@ class CharacterManager():
             return False
         return True
 
+    def is_aff_immune(self) -> bool:
+        gen = (eff for eff in self.source.current_effects
+               if eff.eff_type == EffectType.AFF_IMMUNE)
+        for eff in gen:
+            return True
+        return False
+
     def is_stunned(self) -> bool:
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.ALL_STUN)
@@ -1254,8 +1330,16 @@ class CharacterManager():
 
     def deal_aff_damage(self, damage: int, target: "CharacterManager"):
         #TODO check for affliction boosts
-        target.receive_aff_dmg(damage)
-        self.check_on_damage_dealt(target)
+
+        if not target.is_aff_immune():
+
+            target.receive_aff_dmg(damage)
+
+            if target.has_effect(EffectType.UNIQUE, "Thunder Palace"):
+                self.receive_eff_damage(damage)
+                target.full_remove_effect("Thunder Palace", target)
+
+            self.check_on_damage_dealt(target)
 
     def receive_aff_dmg(self, damage: int):
         #TODO add affliction damage received boosts
@@ -1272,8 +1356,9 @@ class CharacterManager():
 
     def deal_eff_aff_damage(self, damage: int, target: "CharacterManager"):
         #TODO add affliction damage boosts
-        target.receive_eff_aff_damage(damage)
-        self.check_on_damage_dealt(target)
+        if not target.is_aff_immune():
+            target.receive_eff_aff_damage(damage)
+            self.check_on_damage_dealt(target)
 
     def receive_eff_aff_damage(self, damage: int):
         #TODO add affliction damage received boosts
@@ -1290,7 +1375,13 @@ class CharacterManager():
 
     def deal_damage(self, damage: int, target: "CharacterManager"):
         damage = self.get_boosts(damage)
+
         target.receive_damage(damage)
+
+        if target.has_effect(EffectType.UNIQUE, "Thunder Palace"):
+            self.receive_eff_damage(damage)
+            target.full_remove_effect("Thunder Palace", target)
+
         self.check_on_damage_dealt(target)
 
     def damage_taken_check(self):
@@ -1337,6 +1428,11 @@ class CharacterManager():
     def deal_pierce_damage(self, damage: int, target: "CharacterManager"):
         damage = self.get_boosts(damage)
         target.receive_pierce_damage(damage)
+
+        if target.has_effect(EffectType.UNIQUE, "Thunder Palace"):
+            self.receive_eff_damage(damage)
+            target.full_remove_effect("Thunder Palace", target)
+
         self.check_on_damage_dealt(target)
 
     def receive_pierce_damage(self, damage: int):
@@ -1791,9 +1887,10 @@ class CharacterManager():
     def update_ability(self):
 
         
-
+        
         self.check_ability_swaps()
         self.adjust_targeting_types()
+        
 
         for i, chosen_ability in enumerate(self.source.current_abilities):
 

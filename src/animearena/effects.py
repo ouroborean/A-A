@@ -57,6 +57,7 @@ class EffectType(enum.IntEnum):
     IGNORE = 42
     CONT_PIERCE_DMG = 43
     BOOST_NEGATE = 44
+    AFF_IMMUNE = 45
 
 
 class Effect:

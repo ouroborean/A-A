@@ -407,7 +407,7 @@ def target_heartbeat_distortion(user: "CharacterManager",
 
     targeting = user.check_bypass_effects()
 
-    if not user.has_effect(EffectType.MARK, "Heartbeat Distortion"):
+    if not user.has_effect(EffectType.CONT_USE, "Heartbeat Distortion"):
         for enemy in enemyTeam:
             if enemy.has_effect(EffectType.MARK, "Heartbeat Surround"):
                 targeting = "BYPASS"
@@ -427,7 +427,7 @@ def target_heartbeat_surround(user: "CharacterManager",
 
     targeting = user.check_bypass_effects()
 
-    if not user.has_effect(EffectType.MARK, "Heartbeat Surround"):
+    if not user.has_effect(EffectType.CONT_USE, "Heartbeat Surround"):
         for enemy in enemyTeam:
             if enemy.has_effect(EffectType.MARK, "Heartbeat Distortion"):
                 targeting = "BYPASS"
@@ -497,10 +497,27 @@ def target_beast_instinct(user: "CharacterManager",
                 if not fake_targeting:
                     enemy.set_targeted()
                 total_targets += 1
-    if not fake_targeting:
-        user.set_targeted()
-    total_targets += 1
+        if not fake_targeting:
+            user.set_targeted()
+        total_targets += 1
     return total_targets
+
+def target_lion_fist(user: "CharacterManager",
+              playerTeam: list["CharacterManager"],
+              enemyTeam: list["CharacterManager"],
+              fake_targeting: bool = False) -> int:
+    total_targets = 0
+    targeting = user.check_bypass_effects()
+    if user.has_effect(EffectType.MARK, "King of Beasts Transformation - Lionel"):
+        for enemy in enemyTeam:
+            if enemy.has_effect(EffectType.MARK, "Beast Instinct"):
+                targeting = "BYPASS"
+            if enemy.hostile_target(user, targeting):
+                if not fake_targeting:
+                    enemy.set_targeted()
+                total_targets += 1
+    return total_targets
+
 
 def target_pumpkin(user: "CharacterManager",
               playerTeam: list["CharacterManager"],
@@ -674,7 +691,7 @@ def target_titanias_rampage(user: "CharacterManager",
     pass
 #region Naruto Execution
 def exe_rasengan(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         base_damage = 25
         stun_duration = 2
         if user.has_effect(EffectType.ALL_BOOST, "Sage Mode"):
@@ -695,7 +712,7 @@ def exe_shadow_clones(user: "CharacterManager", playerTeam: list["CharacterManag
     user.check_on_use()
 
 def exe_naruto_taijutsu(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         base_damage = 30
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
@@ -716,7 +733,7 @@ def exe_sage_mode(user: "CharacterManager", playerTeam: list["CharacterManager"]
     user.check_on_use()
 
 def exe_uzumaki_barrage(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         base_damage = 15
         stunned = False
         for target in user.current_targets:
@@ -731,7 +748,7 @@ def exe_uzumaki_barrage(user: "CharacterManager", playerTeam: list["CharacterMan
         user.check_on_harm()
 
 def exe_toad_taijutsu(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         base_damage = 35
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
@@ -742,7 +759,7 @@ def exe_toad_taijutsu(user: "CharacterManager", playerTeam: list["CharacterManag
 #endregion
 #region Aizen Execution
 def exe_shatter(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 target.add_effect(Effect(Ability("aizen1"), EffectType.COST_ADJUST, user, 2, lambda eff: "This character's ability costs are increased by one random energy.", mag=51))
@@ -761,7 +778,7 @@ def exe_shatter(user: "CharacterManager", playerTeam: list["CharacterManager"], 
         user.check_on_harm()
 
 def exe_overwhelming_power(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             base_damage=25
             if target.has_effect(EffectType.MARK, "Shatter, Kyoka Suigetsu"):
@@ -776,7 +793,7 @@ def exe_overwhelming_power(user: "CharacterManager", playerTeam: list["Character
         user.check_on_harm()
 
 def exe_black_coffin(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
 
         if user.primary_target.final_can_effect(user.check_bypass_effects()):
             if user.primary_target.has_effect(EffectType.MARK, "Shatter, Kyoka Suigetsu"):
@@ -802,14 +819,14 @@ def exe_effortless_guard(user: "CharacterManager", playerTeam: list["CharacterMa
 #endregion
 #region Akame Execution
 def exe_red_eyed_killer(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 target.add_effect(Effect(Ability("akame1"), EffectType.MARK, user, 3, lambda eff: "Akame can use One Cut Killing on this character."))
     user.check_on_use()
 
 def exe_one_cut_killing(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()) or (user.has_effect(EffectType.MARK, "Little War Horn") and target.final_can_effect("FULLBYPASS")):
                 base_damage = 100
@@ -833,7 +850,7 @@ def exe_casseur(user: "CharacterManager", playerTeam: list["CharacterManager"], 
     user.check_on_use()
 
 def exe_trap(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             base_damage = 20
             if target.final_can_effect(user.check_bypass_effects()):
@@ -847,7 +864,7 @@ def exe_trap(user: "CharacterManager", playerTeam: list["CharacterManager"], ene
             
 
 def exe_luna(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.id < 3:
                 hostile_effects = [eff for eff in target.source.current_effects if eff.user.is_enemy()]
@@ -873,7 +890,7 @@ def exe_kosmos(user: "CharacterManager", playerTeam: list["CharacterManager"], e
 #endregion
 #region Calamity Mary Execution
 def exe_pistol(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
 
         for target in user.current_targets:
             base_damage = 15
@@ -884,7 +901,7 @@ def exe_pistol(user: "CharacterManager", playerTeam: list["CharacterManager"], e
         user.check_on_harm()
 
 def exe_mine(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 4, lambda eff: "If this character uses a new ability, they will take 20 piercing damage and this effect will end."))
@@ -893,7 +910,7 @@ def exe_mine(user: "CharacterManager", playerTeam: list["CharacterManager"], ene
         user.check_on_harm()
 
 def exe_grenade_toss(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
 
         for target in user.current_targets:
             base_damage = 20
@@ -910,7 +927,7 @@ def exe_rifle_guard(user: "CharacterManager", playerTeam: list["CharacterManager
     user.check_on_use()
 
 def exe_rifle(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
 
         for target in user.current_targets:
             base_damage = 15
@@ -924,7 +941,7 @@ def exe_rifle(user: "CharacterManager", playerTeam: list["CharacterManager"], en
         user.check_on_harm()
 
 def exe_sniper(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
 
         for target in user.current_targets:
             base_damage = 55
@@ -942,7 +959,7 @@ def exe_target_lock(user: "CharacterManager", playerTeam: list["CharacterManager
     user.check_on_use()
 
 def exe_satellite_cannon(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             base_damage = 35
             if target.final_can_effect("BYPASS"):
@@ -951,7 +968,7 @@ def exe_satellite_cannon(user: "CharacterManager", playerTeam: list["CharacterMa
         user.check_on_use()
 
 def exe_active_combat_mode(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             base_damage = 10
             if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
@@ -974,7 +991,7 @@ def exe_you_are_needed(user: "CharacterManager", playerTeam: list["CharacterMana
     user.check_on_use()
 
 def exe_illusory_breakdown(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "If Chrome's destructible defense is not broken, this character will receive 25 damage and be stunned for one turn."))
@@ -984,7 +1001,7 @@ def exe_illusory_breakdown(user: "CharacterManager", playerTeam: list["Character
 
 
 def exe_mental_immolation(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "If Chrome's destructible defense is not broken, this character will receive 20 damage and Chrome will remove one random energy from them."))
@@ -997,7 +1014,7 @@ def exe_mental_substitution(user: "CharacterManager", playerTeam: list["Characte
     user.check_on_use()
 
 def exe_trident_combat(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             base_damage = 25
             if target.final_can_effect(user.check_bypass_effects()):
@@ -1011,7 +1028,7 @@ def exe_illusory_world_destruction(user: "CharacterManager", playerTeam: list["C
     user.check_on_use()
 
 def exe_mental_annihilation(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "If Mukuro's destructible defense is not broken, this character will receive 35 damage that ignores invulnerability."))
@@ -1028,7 +1045,7 @@ def exe_trident_deflection(user: "CharacterManager", playerTeam: list["Character
 
 
 def exe_relentless_assault(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             base_damage = 15
             if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
@@ -1047,7 +1064,7 @@ def exe_flashing_deflection(user: "CharacterManager", playerTeam: list["Characte
     user.check_on_use()
 
 def exe_gae_bolg(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             base_damage = 40
             if target.final_can_effect("BYPASS"):
@@ -1069,7 +1086,7 @@ def exe_chu_block(user: "CharacterManager", playerTeam: list["CharacterManager"]
 #endregion
 #region Cranberry Execution
 def exe_illusory_disorientation(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 target.add_effect(Effect(user.used_ability, EffectType.COST_ADJUST, user, 6, lambda eff: "This character's ability costs are increased by 1 random.", mag=51))
@@ -1080,7 +1097,7 @@ def exe_illusory_disorientation(user: "CharacterManager", playerTeam: list["Char
         user.check_on_harm()
 
 def exe_fortissimo(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect("FULLBYPASS"):
                 base_damage = 25
@@ -1102,7 +1119,7 @@ def exe_cranberry_block(user: "CharacterManager", playerTeam: list["CharacterMan
     user.check_on_use()
 
 def exe_merciless_finish(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting:
                 user.deal_aff_damage(15, target)
@@ -1124,7 +1141,7 @@ def exe_clear_heart_clothing(user: "CharacterManager", playerTeam: list["Charact
 def exe_heavens_wheel_armor(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.erza_requip()
     user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "Erza has equipped Heaven's Wheel Armor."))
-    user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 280000, lambda eff: "Erza will ignore affliction damage."))
+    user.add_effect(Effect(user.used_ability, EffectType.AFF_IMMUNE, user, 280000, lambda eff: "Erza will ignore affliction damage."))
     user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Heaven's Wheel Armor has been replaced by Circle Blade.", mag = 22))
     user.check_on_use()
 
@@ -1157,7 +1174,7 @@ def exe_titanias_rampage(user: "CharacterManager", playerTeam: list["CharacterMa
 
 
 def exe_circle_blade(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(20, target)
@@ -1166,7 +1183,7 @@ def exe_circle_blade(user: "CharacterManager", playerTeam: list["CharacterManage
         user.check_on_harm()
 
 def exe_nakagamis_starlight(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(35, target)
@@ -1231,7 +1248,7 @@ def exe_mahapadma(user: "CharacterManager", playerTeam: list["CharacterManager"]
 #endregion
 #region Frenda Execution
 def exe_close_combat_bombs(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect():
                 target.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 5, lambda eff: f"Detonate will deal {15 * eff.mag} damage to this character.", mag=1), user)
@@ -1245,7 +1262,7 @@ def exe_doll_trap(user: "CharacterManager", playerTeam: list["CharacterManager"]
     user.check_on_use()
 
 def exe_detonate(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect("BYPASS"):
                 base_damage = 0
@@ -1265,7 +1282,7 @@ def exe_frenda_dodge(user: "CharacterManager", playerTeam: list["CharacterManage
 #endregion
 #region Gajeel Execution
 def exe_iron_dragon_roar(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_pierce_damage(35, target)
@@ -1273,7 +1290,7 @@ def exe_iron_dragon_roar(user: "CharacterManager", playerTeam: list["CharacterMa
         user.check_on_harm()
 
 def exe_iron_dragon_club(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_pierce_damage(20, target)
@@ -1294,7 +1311,7 @@ def exe_gajeel_block(user: "CharacterManager", playerTeam: list["CharacterManage
     user.check_on_use()
 
 def exe_iron_shadow_dragon_roar(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect("BYPASS"):
                 user.deal_damage(20, target)
@@ -1302,7 +1319,7 @@ def exe_iron_shadow_dragon_roar(user: "CharacterManager", playerTeam: list["Char
         user.check_on_harm()
 
 def exe_iron_shadow_dragon_club(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect("BYPASS"):
                 user.deal_damage(25, target)
@@ -1328,7 +1345,7 @@ def advance_sistema_cai(sistema: Effect):
 def exe_sistema_cai(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     stage = user.get_effect(EffectType.STACK, "Sistema C.A.I.").mag
     
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         if stage == 1:
             for target in user.current_targets:
                 if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
@@ -1398,7 +1415,7 @@ def exe_gokudera_block(user: "CharacterManager", playerTeam: list["CharacterMana
 #endregion
 #region Hibari Execution
 def exe_bite_you_to_death(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(20, target)
@@ -1406,7 +1423,7 @@ def exe_bite_you_to_death(user: "CharacterManager", playerTeam: list["CharacterM
         user.check_on_harm()
 
 def exe_handcuffs(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(15, target)
@@ -1418,7 +1435,7 @@ def exe_handcuffs(user: "CharacterManager", playerTeam: list["CharacterManager"]
         user.check_on_harm()
 
 def exe_porcospino(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 target.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 4, lambda eff: "If this character uses a new harmful ability, they will take 10 damage."))
@@ -1437,7 +1454,7 @@ def exe_ice_make(user: "CharacterManager", playerTeam: list["CharacterManager"],
     user.check_on_use()
 
 def exe_freeze_lancer(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                 user.deal_damage(15, target)
@@ -1447,7 +1464,7 @@ def exe_freeze_lancer(user: "CharacterManager", playerTeam: list["CharacterManag
 
 
 def exe_hammer(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(20, target)
@@ -1462,7 +1479,7 @@ def exe_shield(user: "CharacterManager", playerTeam: list["CharacterManager"], e
 def exe_unlimited(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     helped = False
     harmed = False
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.id < 3:
                 target.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 280000, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag=5))
@@ -1512,7 +1529,7 @@ def exe_guts(user: "CharacterManager", playerTeam: list["CharacterManager"], ene
     user.check_on_use()
     
 def exe_super_awesome_punch(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         charges = consume_guts(user, 5)
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
@@ -1527,7 +1544,7 @@ def exe_super_awesome_punch(user: "CharacterManager", playerTeam: list["Characte
         user.check_on_harm()
                 
 def exe_overwhelming_suppression(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         charges = consume_guts(user, 3)
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
@@ -1541,7 +1558,7 @@ def exe_overwhelming_suppression(user: "CharacterManager", playerTeam: list["Cha
         user.check_on_harm()
 
 def exe_hyper_eccentric_punch(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         charges = consume_guts(user, 3)
         base_damage = 20
         if charges >= 2 and user.can_boost():
@@ -1558,7 +1575,7 @@ def exe_hyper_eccentric_punch(user: "CharacterManager", playerTeam: list["Charac
 #endregion
 #region Hinata Execution (Tests)
 def exe_lion_fist(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(25, target)
@@ -1578,7 +1595,7 @@ def exe_hinata_trigrams(user: "CharacterManager", playerTeam: list["CharacterMan
     for target in user.current_targets:
         if target.id > 2:
             counterable = True
-    if counterable and not user.check_countered():
+    if counterable and not user.check_countered(playerTeam, enemyTeam):
         drained = False
         for target in user.current_targets:
             if target.id > 2 and target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
@@ -1623,7 +1640,7 @@ def exe_getsuga_tenshou(user: "CharacterManager", playerTeam: list["CharacterMan
     else:
         def_type = user.check_bypass_effects()
         dmg_pierce = False
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(def_type):
                 if dmg_pierce:
@@ -1641,7 +1658,7 @@ def exe_tensa_zangetsu(user: "CharacterManager", playerTeam: list["CharacterMana
     user.check_on_use()
 
 def exe_zangetsu_slash(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             base_damage = 20
             if user.has_effect(EffectType.STACK, "Zangetsu Slash") and user.can_boost():
@@ -1658,7 +1675,7 @@ def exe_zangetsu_block(user: "CharacterManager", playerTeam: list["CharacterMana
 #endregion
 #region Ichimaru Execution (Tests)
 def exe_butou_renjin(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(15, target)
@@ -1668,7 +1685,7 @@ def exe_butou_renjin(user: "CharacterManager", playerTeam: list["CharacterManage
         user.check_on_harm()
 
 def exe_13_kilometer_swing(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(25, target)
@@ -1677,7 +1694,7 @@ def exe_13_kilometer_swing(user: "CharacterManager", playerTeam: list["Character
         user.check_on_harm()
 
 def exe_kamishini_no_yari(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect("BYPASS"):
                 base_damage = 10 * target.get_effect_with_user(EffectType.STACK, "Kill, Kamishini no Yari", user).mag
@@ -1696,7 +1713,7 @@ def exe_shinso_parry(user: "CharacterManager", playerTeam: list["CharacterManage
 #endregion
 #region Jack Execution (Tests)
 def exe_maria_the_ripper(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                 user.deal_damage(15, target)
@@ -1715,7 +1732,7 @@ def exe_fog_of_london(user: "CharacterManager", playerTeam: list["CharacterManag
     user.check_on_harm()
 
 def exe_we_are_jack(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_aff_damage(30, target)
@@ -1727,7 +1744,7 @@ def exe_smokescreen_defense(user: "CharacterManager", playerTeam: list["Characte
     user.check_on_use()
 
 def exe_streets_of_the_lost(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 5, lambda eff: "This character can be targeted by Maria the Ripper and We Are Jack."))
@@ -1738,7 +1755,7 @@ def exe_streets_of_the_lost(user: "CharacterManager", playerTeam: list["Characte
 #endregion
 #region Itachi Execution (Tests)
 def exe_amaterasu(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                 user.deal_aff_damage(10, target)
@@ -1748,9 +1765,10 @@ def exe_amaterasu(user: "CharacterManager", playerTeam: list["CharacterManager"]
 
 
 def exe_tsukuyomi(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
+                target.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 6, lambda eff: "If this character is aided by an ally, this effect will end."))
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 6, lambda eff: "This character is stunned."))
                 user.check_on_stun(target)
         user.check_on_use()
@@ -1769,7 +1787,7 @@ def exe_crow_genjutsu(user: "CharacterManager", playerTeam: list["CharacterManag
     user.check_on_use()
 
 def exe_totsuka_blade(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(35, target)
@@ -1783,184 +1801,608 @@ def exe_yata_mirror(user: "CharacterManager", playerTeam: list["CharacterManager
     user.receive_eff_aff_damage(5)
     user.check_on_use()
 #endregion
-#region Jiro Execution (Incomplete)
+#region Jiro Execution (Tests)
 def exe_counter_balance(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    
-
+    for target in user.current_targets:
+        target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 2, lambda eff: "Any enemy that stuns this character will lose one energy.", invisible=True))
+        target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 2, lambda eff: "Any enemy that drains energy this character will be stunned for one turn.", invisible=True))
+    user.check_on_use()
 
 def exe_heartbeat_distortion(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if user.has_effect(EffectType.CONT_USE, "Heartbeat Surround"):
+        def_type = "BYPASS"
+        if not user.check_countered(playerTeam, enemyTeam):
+            for target in user.current_targets:
+                base_damage = 15
+                if target.final_can_effect(def_type) and not target.deflecting():
+                    user.deal_damage(base_damage, target)
+            user.check_on_use()
+            user.check_on_harm()
+    else:
+        def_type = user.check_bypass_effects()
+        if not user.check_countered(playerTeam, enemyTeam):
+            for target in user.current_targets:
+                base_damage = 5
+                if target.final_can_effect(def_type) and not target.deflecting():
+                    user.deal_damage(base_damage, target)
+                    target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 7, lambda eff:"This character will take 5 damage.", mag=5))
+            user.add_effect(Effect(user.used_ability, EffectType.CONT_USE, user, 7, lambda eff: "Jiro is using Hearbeat Distortion. This effect will end if Jiro is stunned."))
+            user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 7, lambda eff: "Heartbeat Surround will ignore invulnerability and deal 20 damage to a single enemy."))
+            user.add_effect(Effect(user.used_ability, EffectType.COST_ADJUST, user, 7, lambda eff: "Heartbeat Surround will cost one less random energy.", mag = -351))
+            user.check_on_use()
+            user.check_on_harm()
 
 def exe_heartbeat_surround(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if user.has_effect(EffectType.CONT_USE, "Heartbeat Distortion"):
+        def_type = "BYPASS"
+        if not user.check_countered(playerTeam, enemyTeam):
+            for target in user.current_targets:
+                base_damage = 20
+                if target.final_can_effect(def_type):
+                    user.deal_damage(base_damage, target)
+            user.check_on_use()
+            user.check_on_harm()
+    else:
+        def_type = user.check_bypass_effects()
+        if not user.check_countered(playerTeam, enemyTeam):
+            for target in user.current_targets:
+                base_damage = 10
+                if target.final_can_effect(def_type) and not target.deflecting():
+                    user.deal_damage(base_damage, target)
+                    target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 7, lambda eff:"This character will take 10 damage.", mag=5))
+            user.add_effect(Effect(user.used_ability, EffectType.CONT_USE, user, 7, lambda eff: "Jiro is using Hearbeat Surround. This effect will end if Jiro is stunned."))
+            user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 7, lambda eff: "Heartbeat Distortion will ignore invulnerability and deal 15 damage to all enemies."))
+            user.add_effect(Effect(user.used_ability, EffectType.COST_ADJUST, user, 7, lambda eff: "Heartbeat Distortion will cost one less random energy.", mag = -251))
+            user.check_on_use()
+            user.check_on_harm()
 
 def exe_early_detection(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Jiro is invulnerable."))
+    user.check_on_use()
 #endregion
-#region Kakashi Execution (Incomplete)
+#region Kakashi Execution (Tests)
 def exe_copy_ninja(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.REFLECT, user, 2, lambda eff: "Kakashi will reflect the first hostile ability that targets him.", invisible=True))
+    user.check_on_use()
 
 def exe_nindogs(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(20, target)
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
+                target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "This character will take double damage from Raikiri."))
+                user.check_on_stun(target)
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_raikiri(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            base_damage = 40
+            if target.has_effect(EffectType.MARK, "Summon - Nin-dogs"):
+                base_damage = 80
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(base_damage, target)
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_kamui(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if user in user.current_targets:
+        user.add_effect(Effect(user.used_ability, EffectType.IGNORE, user, 2, lambda eff: "Kakashi will ignore all harmful effects."))
+        user.check_on_use()
+    else:
+        if not user.check_countered(playerTeam, enemyTeam):
+            for target in user.current_targets:
+                if target.final_can_effect("BYPASS"):
+                    user.deal_pierce_damage(20, target)
+                    if target.check_invuln():
+                        target.add_effect(Effect(user.used_ability, EffectType.ISOLATE, user, 2, lambda eff: "This character is isolated."))
+            user.check_on_use()
+            user.check_on_harm()
+
 #endregion
-#region Kuroko Execution (Incomplete)
+#region Kuroko Execution (Tests)
 def exe_teleporting_strike(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            base_damage = 10
+            if user.has_effect(EffectType.MARK, "Judgement Throw") and user.can_boost():
+                base_damage = 25
+            if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+                user.deal_damage(base_damage, target)
+        if user.has_effect(EffectType.MARK, "Needle Pin"):
+            user.used_ability.cooldown = 0
+        user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Kuroko is invulnerable."))
+        user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Needle Pin will ignore invulnerability and deal 15 piercing damage."))
+        user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Judgement Throw will have double effect."))
 
 def exe_needle_pin(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        if user.has_effect(EffectType.MARK, "Teleporting Strike"):
+            def_type = "BYPASS"
+        else:
+            def_type = user.check_bypass_effects()
+        for target in user.current_targets:
+            if target.final_can_effect(def_type):
+                if user.has_effect(EffectType.MARK, "Teleporting Strike") and not target.deflecting():
+                    user.deal_pierce_damage(15, target)
+                target.add_effect(Effect(user.used_ability, EffectType.DEF_NEGATE, user, 3, lambda eff: "This character cannot reduce damage or become invulnerable."))
+                if user.has_effect(EffectType.MARK, "Judgement Throw"):
+                    target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
+                    user.check_on_stun()
+        user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Teleporting Strike will have no cooldown."))
+        user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Judgement Throw will remove one random energy from its target."))
+        user.check_on_use()
+        user.check_on_harm()  
 
 def exe_judgement_throw(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        if user.has_effect(EffectType.MARK, "Teleporting Strike"):
+            if user.can_boost():
+                base_damage = 30
+            else:
+                base_damage = 15
+            weaken = 20
+        else:
+            base_damage = 15 
+            weaken = 10
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+                user.deal_damage(base_damage, target)
+                if user.has_effect(EffectType.MARK, "Needle Pin"):
+                    target.source.energy_contribution -= 1
+                    user.check_on_drain(target)
+        user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Teleporting Strike will deal 15 more damage."))
+        user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Needle Pin will stun its target for one turn."))
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_kuroko_dodge(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Kuroko is invulnerable."))
+    user.check_on_use()
 #endregion
-#region Lambo Execution (Incomplete)
+#region Lambo Execution (Tests)
 def exe_ten_year_bazooka(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.full_remove_effect("Summon Gyudon", user)
+    for p in playerTeam:
+        p.full_remove_effect("Summon Gyudon", user)
+    for e in enemyTeam:
+        e.full_remove_effect("Summon Gyudon", user)
+    if user.has_effect(EffectType.MARK, "Ten-Year Bazooka"):
+        user.full_remove_effect("Ten-Year Bazooka", user)
+        user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 5, lambda eff: "Lambo has used the Ten-Year Bazooka."))
+        user.add_effect(Effect(user.used_ability, EffectType.PROF_SWAP, user, 5, lambda eff: "Teen Lambo has been replaced by Adult Lambo.", mag = 2))
+        user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 5, lambda eff: "Thunder, Set, Charge! has been replaced by Elettrico Cornata.", mag = 32))
+    elif user.has_effect(EffectType.UNIQUE, "Ten-Year Bazooka"):
+        user.full_remove_effect("Ten-Year Bazooka", user)
+    else:
+        user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 7, lambda eff: "Lambo has used the Ten-Year Bazooka."))
+        user.add_effect(Effect(user.used_ability, EffectType.PROF_SWAP, user, 7, lambda eff: "Lambo has been replaced by Teen Lambo.", mag = 1))
+        user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 7, lambda eff: "Summon Gyudon has been replaced by Thunder, Set, Charge!", mag= 31))
+    user.check_on_use()
 
 def exe_conductivity(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    for target in user.current_targets:
+        if target != user:
+            if target.helpful_target():
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 4, lambda eff: "This character has 20 points of damage reduction. If they receive a new damaging ability during this time, Lambo will take 10 damage.", mag = 10))
+        else:
+            user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 4, lambda eff: "If an ally affected by Conductivity receives a new harmful ability, Lambo will take 10 damage."))
+    user.check_on_use()
 
 def exe_summon_gyudon(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    harmed = False
+    helped = False
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.id > 2:
+                if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+                    user.deal_damage(5, target)
+                    target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 280000, lambda eff: "This character will take 5 damage.", mag=5))
+                    harmed = True
+            elif target.id < 3:
+                if target.helpful_target():
+                    target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 280000, lambda eff: "This character has 10 points of damage reduction.", mag=10))
+                    helped = True
+        user.check_on_use()
+        if helped:
+            user.check_on_help()
+        if harmed:
+            user.check_on_harm()
+
+
 
 def exe_lampows_shield(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Lambo is invulnerable."))
+    user.check_on_use()
 
 def exe_thunder_set_charge(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(25, target)
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_elettrico_cornata(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(35, target)
+        user.check_on_use()
+        user.check_on_harm()
 #endregion
-#region La Pucelle Execution (Incomplete)
+#region La Pucelle Execution (Tests)
 def exe_knights_sword(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(20, target)
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_magic_sword(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff: f"Knight's Sword deals {eff.mag * 20} bonus damage, costs {eff.mag} more random energy, and has its cooldown increased by {eff.mag}.", mag=1))
+    user.check_on_use()
 
 def exe_ideal_strike(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    
+    for target in user.current_targets:
+        if target.final_can_effect("BYPASS"):
+            user.deal_damage(40, target)
+    user.check_on_use()
+    user.check_on_harm()
 
 def exe_knights_guard(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "La Pucelle is invulnerable."))
+    user.check_on_use()
 #endregion
-#region Laxus Execution (Incomplete)
+#region Laxus Execution (Tests)
 def exe_fairy_law(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    helped = False
+    harmed = False
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.id < 3 and target.helpful_target():
+                user.give_healing(20, target)
+                helped = True
+            elif target.id > 2 and target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(20, target)
+                harmed = True
+        user.check_on_use()
+        if helped:
+            user.check_on_help()
+        if harmed:
+            user.check_on_harm()
 
 def exe_lightning_dragons_roar(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(40, target)
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
+                user.check_on_stun(target)
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_thunder_palace(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 5, lambda eff:"If this effect expires naturally, Laxus will deal 40 damage to the entire enemy team. If he is damaged by a new ability during this time, this effect will end and the offending character will take damage equal to the original damage of the ability they used."))
+    user.check_on_use()
 
 def exe_laxus_block(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Laxus is invulnerable."))
+    user.check_on_use()
 #endregion
-#region Leone Execution (Incomplete)
+#region Leone Execution (Tests)
 def exe_lionel(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "Leone can use her abilities."))
+    user.add_effect(Effect(user.used_ability, EffectType.CONT_HEAL, user, 280000, lambda eff:"Leone will heal 10 health."))
+    user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 280000, lambda eff: "Leone will heal 10 health when she damages an enemy or uses Instinctual Dodge."))
+    user.check_on_use()
 
 def exe_beast_instinct(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    harmed = False
+    if not user.check_countered():
+        for target in user.current_targets:
+            if target != user:
+                if target.final_can_effect(user.check_bypass_effects()):
+                    target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 5, lambda eff: "Lion Fist will ignore invulnerability and deal 20 more damage to this target."))
+                    harmed = True
+            else:
+                user.add_effect(Effect(user.used_ability, EffectType.STUN_IMMUNE, user, 5, lambda eff: "Leone will ignore stun and counter effects."))
+        user.check_on_use()
+        if harmed:
+            user.check_on_harm()
 
 def exe_lion_fist(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if user.has_effect(EffectType.STUN_IMMUNE, "Beast Instinct") or not user.check_countered():
+        for target in user.current_targets:
+            if target.has_effect(EffectType.MARK, "Beast Instinct"):
+                def_type = "BYPASS"
+                base_damage = 55
+            else:
+                def_type = user.check_bypass_effects()
+                base_damage = 35
+            if target.final_can_effect(def_type):
+                user.deal_damage(55, target)
+                user.receive_eff_healing(10)
+        user.check_on_use()
+        user.check_on_harm()
+                
 
 def exe_instinctual_dodge(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Leone is invulnerable."))
+    user.receive_eff_healing(10)
+    user.check_on_use()
 #endregion
-#region Levy Execution (Incomplete)
+#region Levy Execution (Tests)
 def exe_solidscript_fire(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "If this character uses a new ability, they will take 10 affliction damage."))
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 3, lambda eff: "This character will take 10 affliction damage.", mag=10))
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_solidscript_silent(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    for target in user.current_targets:
+        if target.final_can_effect("FULLBYPASS"):
+            target.add_effect(Effect(user.used_ability, EffectType.ISOLATE, user, 4, lambda eff: "This character is isolated."))
+    user.check_on_use()
+
 
 def exe_solidscript_mask(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    for target in user.current_targets:
+        if target.helpful_target():
+            target.add_effect(Effect(user.used_ability, EffectType.STUN_IMMUNE, user, 4, lambda eff: "This character will ignore stun effects."))
+            target.add_effect(Effect(user.used_ability, EffectType.AFF_IMMUNE, user, 4, lambda eff: "This character will ignore affliction damage."))
+    user.check_on_use()
 
 def exe_solidscript_guard(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Levy is invulnerable."))
+    user.check_on_use()
 #endregion
-#region Raba Execution (Incomplete)
+#region Raba Execution (Tests)
+
+def all_marked(team: list["CharacterManager"], mark_name: str):
+    for char in team:
+        if not char.has_effect(EffectType.MARK, mark_name):
+            return False
+    return True
+
 def exe_crosstail_strike(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered():
+        if all_marked(enemyTeam, "Cross-Tail Strike"):
+            user.current_targets.clear()
+            for enemy in enemyTeam:
+                if enemy.final_can_effect("BYPASS"):
+                    enemy.full_remove_effect("Cross-Tail Strike", user)
+                    user.deal_pierce_damage(20, enemy)
+        else:
+            for target in user.current_targets:
+                if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+                    user.deal_damage(15, target)
+                    if target.has_effect(EffectType.MARK, "Cross-Tail Strike"):
+                        user.remove_effect(user.get_effect(EffectType.COST_ADJUST, "Cross-Tail Strike"))
+                    else:
+                        target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "This character has been marked by Cross-Tail Strike."))
+            if not user.has_effect(EffectType.COST_ADJUST, "Cross-Tail Strike"):
+                user.add_effect(Effect(user.used_ability, EffectType.COST_ADJUST, user, 280000, lambda eff: "Until Lubbock uses Cross-Tail Strike on a marked enemy, it costs one less weapon energy.", mag = -141))
+        user.check_on_use()
+        user.check_on_harm()
+
+
 
 def exe_wire_shield(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered():
+        if all_marked(enemyTeam, "Wire Shield"):
+            user.current_targets.clear()
+            for player in playerTeam:
+                if player.helpful_target():
+                    player.remove_effect(player.get_effect(EffectType.MARK, "Wire Shield"))
+                    player.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "This character is invulnerable."))
+        else:
+            for target in user.current_targets:
+                if target.helpful_target():
+                    if target.has_effect(EffectType.DEST_DEF, "Wire Shield"):
+                        target.get_effect(EffectType.DEST_DEF, "Wire Shield").alter_dest_def(15)
+                    else:
+                        target.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 280000, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag=15))
+                    if target.has_effect(EffectType.MARK, "Wire Shield"):
+                        user.remove_effect(user.get_effect(EffectType.COST_ADJUST, "Wire Shield"))
+                    else:
+                        target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "This character has been marked by Wire Shield."))
+            if not user.has_effect(EffectType.COST_ADJUST, "Wire Shield"):
+                user.add_effect(Effect(user.used_ability, EffectType.COST_ADJUST, user, 280000, lambda eff: "Until Lubbock uses Wire Shield on a marked ally, it costs one less weapon energy.", mag = -241))
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_heartseeker_thrust(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_pierce_damage(30, target)
+                if user.has_effect(EffectType.MARK, "Wire Shield"):
+                    target.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 3, lambda eff: "This character will receive 15 affliction damage.", mag=15))
+                if target.has_effect(EffectType.MARK, "Cross-Tail Strike"):
+                    target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
+                    user.check_on_stun(target)
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_defensive_netting(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Lubbock is invulnerable."))
+    user.check_on_use()
 #endregion
-#region Lucy Execution (Incomplete)
+#region Lucy Execution (Tests)
 def exe_aquarius(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    helped = False
+    harmed = False
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.id < 3 and target.helpful_target():
+                helped = True
+                if user.has_effect(EffectType.MARK, "Gemini"):
+                    help_duration = 4
+                else:
+                    help_duration = 2
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, help_duration, lambda eff: "This character has 10 points of damage reduction.", mag=10))
+            if target.id > 2 and target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+                harmed = True
+                user.deal_damage(15, target)
+                if user.has_effect(EffectType.MARK, "Gemini"):
+                    target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 3, lambda eff: "This character will take 10 damage.", mag=15))
+        user.check_on_use()
+        if helped:
+            user.check_on_help()
+        if harmed:
+            user.check_on_harm()
+
 
 def exe_gemini(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 7, lambda eff: "Lucy's abilities will stay active for one extra turn."))
+    user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 7, lambda eff: "Gemini has been replaced by Urano Metria.", mag = 21))
+    user.check_on_use()
 
 def exe_capricorn(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(20, target)
+                if user.has_effect(EffectType.MARK, "Gemini"):
+                    target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 3, lambda eff: "This character will take 20 damage.", mag=20))
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_leo(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if user.has_effect(EffectType.MARK, "Gemini"):
+        duration = 4
+    else:
+        duration = 2
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, duration, lambda eff: "Lucy is invulnerable."))
+    user.check_on_use()
 
 def exe_urano_metria(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(20, target)
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 3, lambda eff: "This character will take 20 damage.", mag=20))
+        user.check_on_use()
+        user.check_on_harm()
 #endregion
-#region Midoriya Execution (Incomplete)
+#region Midoriya Execution (Tests)
 def exe_smash(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(45, target)
+                user.receive_eff_aff_damage(20)
+                user.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 3, lambda eff: "This character is stunned."))
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_air_force_gloves(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+                user.deal_damage(15, target)
+                user.add_effect(Effect(user.used_ability, EffectType.COOLDOWN_MOD, user, 2, lambda eff: "This character's cooldowns have been increased by 1.", mag = 1))
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_shoot_style(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(20, target)
+        user.add_effect(Effect(user.used_ability, EffectType.COUNTER, user, 2, lambda eff: "Midoriya will counter the first harmful ability used on him.", invisible=True))
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_enhanced_leap(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Midoriya is invulnerable."))
+    user.check_on_use()
 #endregion
-#region Minato Execution (Incomplete)
+#region Minato Execution (Tests)
 def exe_flying_raijin(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect("BYPASS"):
+                user.deal_pierce_damage(35, target)
+                if target.has_effect(EffectType.MARK, "Marked Kunai"):
+                    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Minato is invulnerable."))
+                    target.full_remove_effect("Marked Kunai", user)
+                    user.used_ability.cooldown = 0
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_marked_kunai(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+                user.deal_pierce_damage(10, target)
+                target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "This character has been marked."))
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_partial_shiki_fuujin(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                target.add_effect(Effect(user.used_ability, EffectType.COOLDOWN_MOD, user, 280000, lambda eff: "This character's cooldowns have been increased by 1.", mag = 1))
+                target.add_effect(Effect(user.used_ability, EffectType.COST_ADJUST, user, 280000, lambda eff: "This character's ability costs have been increased by one random.", mag = 51))
 
 def exe_minato_parry(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Minato is invulnerable."))
+    user.check_on_use()
 #endregion
-#region Mine Execution (Incomplete)
+#region Mine Execution (Tests)
 def exe_roman_artillery_pumpkin(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        if user.has_effect(EffectType.MARK, "Pumpkin Scouter"):
+            def_type = "BYPASS"
+        else:
+            def_type = user.check_bypass_effects()
+        for target in user.current_targets:
+            if target.final_can_effect(def_type):
+                base_damage = 25
+                if user.source.hp < 60 and user.can_boost():
+                    base_damage = 35
+                if user.has_effect(EffectType.MARK, "Pumpkin Scouter") and user.can_boost():
+                    base_damage += 5
+                user.deal_damage(base_damage, target)
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_cutdown_shot(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        if user.has_effect(EffectType.MARK, "Pumpkin Scouter"):
+            def_type = "BYPASS"
+        else:
+            def_type = user.check_bypass_effects()
+        for target in user.current_targets:
+            if target.final_can_effect(def_type):
+                base_damage = 25
+                if user.source.hp < 25 and user.can_boost():
+                    base_damage = 50
+                if user.has_effect(EffectType.MARK, "Pumpkin Scouter") and user.can_boost():
+                    base_damage += 5
+                user.deal_damage(base_damage, target)
+                if user.source.hp < 50:
+                    target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
+                    user.check_on_stun(target)
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_pumpkin_scouter(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 5, lambda eff: "Mine's abilities will ignore invulnerabilty and deal 5 additional damage."))
+    user.check_on_use()
 
 def exe_closerange_deflection(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Mine is invulnerable."))
 #endregion
 #region Mirai Execution (Incomplete)
 def exe_blood_suppression_removal(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
@@ -3141,9 +3583,9 @@ ability_info_db = {
     ],
     "lambo1": [
         "Ten-Year Bazooka",
-        "Lambo switches places with himself ten years in the future. The first time this is used, Conductivity"
+        "Lambo switches places with himself ten years in the future. The first time this is used, Summon Gyudon"
         +
-        " will be replaced by Thunder, Set, Charge! for three turns. If used again, Thunder, Set, Charge! will be replaced by Elettrico Cornata for two turns.",
+        " will be replaced by Thunder, Set, Charge! for the next three turns. If used again, Thunder, Set, Charge! will be replaced by Elettrico Cornata for the next two turns. If used again, Lambo will return to his normal state.",
         [0, 0, 0, 1, 0, 0], Target.SINGLE,
         default_target("SELF")
     ],
@@ -3241,14 +3683,13 @@ ability_info_db = {
         +
         "If this ability kills an enemy that is affected by Beast Instinct, Leone will heal for 20 health.",
         [1, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HOSTILE",
-                       prep_req="King of Beasts Transformation - Lionel")
+        target_lion_fist
     ],
     "leone4": [
         "Instinctual Dodge",
         "Leone becomes invulnerable for one turn. Using this ability counts as a damaging ability for triggering King of Beasts Transformation - Lionel's healing.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF")
+        default_target("SELF", prep_req="King of Beasts Transformation - Lionel")
     ],
     "levy1": [
         "Solid Script - Fire",
@@ -3278,7 +3719,7 @@ ability_info_db = {
         "Cross-Tail Strike",
         "Lubbock deals 15 damage to one target and marks them with Cross-Tail Strike. Until Lubbock uses this ability on an enemy already marked with Cross-Tail Strike, this ability will cost no energy. "
         +
-        "If this ability targets a marked enemy and all living enemies are marked, this ability will deal 15 piercing damage to all marked enemies, ignoring invulnerability. This effect consumes all active marks.",
+        "If this ability targets a marked enemy and all living enemies are marked, this ability will deal 20 piercing damage to all marked enemies, ignoring invulnerability. This effect consumes all active marks.",
         [0, 0, 0, 1, 0, 0], Target.SINGLE,
         default_target("HOSTILE")
     ],
@@ -3310,7 +3751,7 @@ ability_info_db = {
     ],
     "lucy2": [
         "Gemini",
-        "For three turns, Lucy's abilities will stay active for one extra turn. During this time, this ability is replaced by Urano Metria.",
+        "For the next three turns, Lucy's abilities will stay active for one extra turn. During this time, this ability is replaced by Urano Metria.",
         [0, 0, 0, 1, 0, 0], Target.SINGLE,
         default_target("SELF")
     ],
@@ -3360,7 +3801,7 @@ ability_info_db = {
         "Flying Raijin",
         "Minato deals 35 piercing damage that ignores invulnerability to one enemy. If used on a target marked with Marked Kunai, Minato becomes invulnerable for "
         +
-        "one turn and the cooldown on Flying Raijin is reset. This effect consumes Marked Kunai's mark.",
+        "one turn and the cooldown on Flying Raijin is reduced to 0. This effect consumes Marked Kunai's mark.",
         [0, 1, 0, 0, 0, 2], Target.SINGLE,
         default_target("HOSTILE")
     ],

@@ -567,26 +567,6 @@ def test_trap_stack_boost(astolfo_test_scene: BattleScene):
 
     assert fucking_ruler.source.hp == 55
 
-def test_casseur(astolfo_test_scene: BattleScene):
-    astolfo = astolfo_test_scene.player_display.team.character_managers[0]
-    eteam = astolfo_test_scene.enemy_display.team.character_managers
-    pteam = astolfo_test_scene.player_display.team.character_managers
-    casseur = astolfo.source.current_abilities[0]
-    naruto = eteam[1]
-    astolfo.current_targets.append(astolfo)
-    astolfo.used_ability = casseur
-    rasengan = naruto.source.current_abilities[1]
-    naruto.current_targets.append(astolfo)
-    naruto.used_ability = rasengan
-
-    casseur.execute(astolfo, pteam, eteam)
-
-    rasengan.execute(naruto, pteam, eteam)
-
-    assert astolfo.source.hp == 100
-    assert naruto.has_effect(EffectType.ALL_STUN, "Casseur de Logistille")
-    assert naruto.has_effect(EffectType.ISOLATE, "Casseur de Logistille")
-
 def test_effect_removal(naruto_test_scene: BattleScene):
     naruto = naruto_test_scene.player_display.team.character_managers[0]
     e_team = naruto_test_scene.enemy_display.team.character_managers
