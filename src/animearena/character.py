@@ -14,6 +14,7 @@ RESOURCES = Path(__file__).parent.parent.parent / "resources"
 
 class Character:
 
+
     profile_image: Image
     name: str
     main_abilities: list[Ability]
