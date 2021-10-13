@@ -1,0 +1,49 @@
+syntax = "proto2";
+
+
+
+message MatchProto {
+
+    message TeamProto {
+
+        message CharacterProto {
+            
+            message EffectProto {
+
+                optional string name = 1;
+                optional string true_name = 2;
+                optional int duration = 3;
+                optional int mag = 4;
+                optional bool invisible = 5;
+                optional string desc = 6;
+                int user_id = 7;
+            }
+            
+            repeated EffectProto effects = 1;
+            optional int32 hp = 2;
+            optional int32 energyCont = 3;
+            optional int32 physCont = 4;
+            optional int32 specCont = 5;
+            optional int32 mentCont = 6;
+            optional int32 wepCont = 7;
+            optional int32 ability1CD = 8;
+            optional int32 ability2CD = 9;
+            optional int32 ability3CD = 10;
+            optional int32 ability4CD = 11;
+            optional int32 alt1CD = 12;
+            optional int32 alt2CD = 13;
+            optional int32 alt3CD = 14;
+            optional int32 alt4CD = 15;
+            optional int32 controlledCharacterSlot = 18;
+            
+        }
+
+        repeated CharacterProto characters = 1;
+
+    }
+
+    
+    TeamProto myTeam = 1;
+    TeamProto yourTeam = 2;
+
+}
