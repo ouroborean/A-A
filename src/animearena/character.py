@@ -198,8 +198,6 @@ character_db = {"naruto": Character("naruto", "Uzumaki Naruto, a former outcast 
                 "Saitama trained with a singular purpose, to gain strength. Now, after having achieved his goal, he now forced to face an enemy more resilient than he could have imagined: his own overwhelming power."),
                 "tatsumaki": Character("tatsumaki", "Tatsumaki, the Tornado of Terror, is the Hero Associations Rank 2 hero, and the most powerful esper in the world. She prefers to work alone, using her unparalleled psychic powers and " +
                 "caustic personality to ward off both threats and allies."),
-                "mugen": Character("mugen", "Mugen, one of the samurai accompanying a young girl on her search for the samurai who smells of sunflowers. Uncouth and abrasive, Mugen utilizes " +
-                "a style of swordsmanship that emphasizes unpredictability in its attacks, making him a flexible fighter and a dangerous foe."),
                 "chachamaru": Character("chachamaru", "Chachamaru is a robot designed in the image of a high school girl. She serves as the combat partner to Evangeline A.K. McDowell, and serves her" +
                 " loyally with a wide variety of versatile functions."),
                 "mirai": Character("mirai", "Kuriyama Mirai, an isolated Spirit World Warrior. Mirai is the last of her clan, who were feared and reviled due to their ability to manipulate their cursed blood to use in battle.")

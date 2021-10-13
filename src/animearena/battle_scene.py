@@ -959,6 +959,8 @@ class CharacterManager():
             if character.id > 2:
                 if character.has_effect(EffectType.UNIQUE, "Iron Shadow Dragon") and not character.is_ignoring():
                     character.add_effect(Effect(Ability("gajeel3"), EffectType.IGNORE, character, 1, lambda eff: ""))
+                if character.has_effect(EffectType.MARK, "Quirk - Permeation"):
+                    character.add_effect(Effect(Ability("mirio2"), EffectType.MARK, character, 2, lambda eff: "This character will take 15 more piercing damage from Phantom Menace, and it will automatically target them."))
         if self.has_effect(EffectType.UNIQUE, "Porcospino Nuvola"):
             self.receive_eff_damage(10)
                     
@@ -1349,10 +1351,11 @@ class CharacterManager():
 
         if mod_damage > 0:
             self.damage_taken_check()
+            if self.has_effect(EffectType.MARK, "Electric Rage"):
+                self.scene.player_display.team.energy_pool[Energy.SPECIAL] += 1
+            
 
-        if self.source.hp <= 0:
-            self.source.hp = 0
-            self.source.dead = True
+        self.death_check()
 
     def deal_eff_aff_damage(self, damage: int, target: "CharacterManager"):
         #TODO add affliction damage boosts
@@ -1369,9 +1372,7 @@ class CharacterManager():
         if mod_damage > 0:
             self.damage_taken_check()
 
-        if self.source.hp <= 0:
-            self.source.hp = 0
-            self.source.dead = True
+        self.death_check()
 
     def deal_damage(self, damage: int, target: "CharacterManager"):
         damage = self.get_boosts(damage)
@@ -1420,10 +1421,20 @@ class CharacterManager():
         
         if mod_damage > 0:
             self.damage_taken_check()
+            if self.has_effect(EffectType.MARK, "Electric Rage"):
+                self.scene.player_display.team.energy_pool[Energy.SPECIAL] += 1
+
+        self.death_check()
+
+    def death_check(self):
 
         if self.source.hp <= 0:
-            self.source.hp = 0
-            self.source.dead = True
+            if self.has_effect(EffectType.MARK, "Electric Rage"):
+                self.source.hp = 1
+            else:
+                self.source.hp = 0
+                self.source.dead = True
+                self.source.current_effects.clear()
 
     def deal_pierce_damage(self, damage: int, target: "CharacterManager"):
         damage = self.get_boosts(damage)
@@ -1440,9 +1451,10 @@ class CharacterManager():
         self.source.hp -= mod_damage
         if mod_damage > 0:
             self.damage_taken_check()
-        if self.source.hp <= 0:
-            self.source.hp = 0
-            self.source.dead = True
+            if self.has_effect(EffectType.MARK, "Electric Rage"):
+                self.scene.player_display.team.energy_pool[Energy.SPECIAL] += 1
+        
+        self.death_check()
 
     def deal_eff_damage(self, damage: int, target: "CharacterManager"):
         damage = self.get_boosts(damage)
@@ -1455,9 +1467,8 @@ class CharacterManager():
         self.source.hp -= mod_damage
         if mod_damage > 0:
             self.damage_taken_check()
-        if self.source.hp <= 0:
-            self.source.hp = 0
-            self.source.dead = True
+        
+        self.death_check()
 
     def deal_eff_pierce_damage(self, damage: int, target: "CharacterManager"):
         damage = self.get_boosts(damage)

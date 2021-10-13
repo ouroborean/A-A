@@ -2404,47 +2404,116 @@ def exe_pumpkin_scouter(user: "CharacterManager", playerTeam: list["CharacterMan
 def exe_closerange_deflection(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Mine is invulnerable."))
 #endregion
-#region Mirai Execution (Incomplete)
+#region Mirai Execution (Tests)
 def exe_blood_suppression_removal(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 5, lambda eff: "Mirai's abilities cause their target to receive 10 affliction damage for 2 turns."))
+    user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 5, lambda eff: "Blood Suppression Removal has been replaced by Blood Bullet.", mag = 11))
+    user.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 5, lambda eff: "Mirai will take 10 affliction damage.", mag=10))
+    user.receive_eff_aff_damage(10)
+    user.check_on_use()
 
 def exe_blood_sword_combat(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(30, target)
+                if user.has_effect(EffectType.MARK, "Blood Suppression Removal"):
+                    user.deal_eff_aff_damage(10, target)
+                    target.add_effect(Effect(Ability("mirai1"), EffectType.CONT_AFF_DMG, user, 3, lambda eff: "This character will take 10 affliction damage.", mag = 10))
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_blood_shield(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 2, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag = 20))
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 2, lambda eff: f"This character has {eff.mag} points of damage reduction.", mag = 20))
+    if user.has_effect(EffectType.MARK, "Blood Suppression Removal"):
+        user.receive_eff_aff_damage(10)
+        user.add_effect(Effect(Ability("mirai1"), EffectType.CONT_AFF_DMG, user, 3, lambda eff: "This character will take 10 affliction damage.", mag = 10))
+    user.check_on_use()
+    
 
 def exe_mirai_deflect(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Mirai is invulnerable."))
+    user.check_on_use()
 
 def exe_blood_bullet(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+                user.deal_aff_damage(10, target)
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 3, lambda eff: "This character will take 10 affliction damage.", mag = 10))
+                if user.has_effect(EffectType.MARK, "Blood Suppression Removal"):
+                    user.deal_eff_aff_damage(10, target)
+                    target.add_effect(Effect(Ability("mirai1"), EffectType.CONT_AFF_DMG, user, 3, lambda eff: "This character will take 10 affliction damage.", mag = 10))
+        user.check_on_use()
+        user.check_on_harm()
+
 #endregion
-#region Mirio Execution (Incomplete)
+#region Mirio Execution (Tests)
 def exe_permeation(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 2, lambda eff: "Any enemy that uses a new harmful effect on Mirio will be marked for Phantom Menace.", invisible=True))
+    user.add_effect(Effect(user.used_ability, EffectType.IGNORE, user, 2, lambda eff: "Mirio will ignore all harmful effects.", invisible=True))
+    user.check_on_use()
 
 def exe_phantom_menace(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    for enemy in enemyTeam:
+        if enemy.has_effect(EffectType.MARK, "Phantom Menace") and not (enemy in user.current_targets):
+            user.current_targets.append(enemy)
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect("BYPASS"):
+                base_damage = 20
+                if target.has_effect(EffectType.MARK, "Phantom Menace"):
+                    base_damage = 35
+                user.deal_pierce_damage(base_damage, target)
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_protect_ally(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    for target in user.current_targets:
+        target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 2, lambda eff: "Any enemy that uses a new harmful effect on this character will be marked for Phantom Menace.",invisible=True))
+        target.add_effect(Effect(user.used_ability, EffectType.IGNORE, user, 2, lambda eff: "This character will ignore all harmful effects.",invisible=True))
+    user.check_on_use()
+    user.check_on_help()
+    
 
 def exe_mirio_dodge(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Mirio is invulnerable."))
+    user.check_on_use()
 #endregion
-#region Misaka Execution (Incomplete)
+#region Misaka Execution (Tests)
 def exe_railgun(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    for target in user.current_targets:
+        if target.final_can_effect("BYPASS"):
+            user.deal_damage(45, target)
+    user.check_on_use()
+    user.check_on_harm()
 
 def exe_iron_sand(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    helped = False
+    harmed = False
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.id > 2 and target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(20, target)
+                harmed = True
+            elif target.id < 3 and target.helpful_target():
+                target.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 2, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag=20))
+                helped = True
+        user.check_on_use()
+        if helped:
+            user.check_on_help()
+        if harmed:
+            user.check_on_harm()
 
 def exe_electric_rage(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 4, lambda eff: "Misaka cannot be killed."))
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 4, lambda eff: "If Misaka is damaged by a new ability, she will gain one special energy."))
+    user.check_on_use()
 
 def exe_electric_deflection(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, 2, lambda eff: "Misaka is invulnerable."))
+    user.check_on_use()
 #endregion
 #region Mugen Execution (Incomplete)
 def exe_unpredictable_strike(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
