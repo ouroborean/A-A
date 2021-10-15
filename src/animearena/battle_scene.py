@@ -159,9 +159,11 @@ class BattleScene(engine.Scene):
     current_button: Optional[sdl2.ext.SoftwareSprite]
     round_any_cost: int
     waiting_for_turn: bool
+    window_up: bool
 
     def __init__(self, scene_manager, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.window_up = False
         self.waiting_for_turn = False
         self.scene_manager = scene_manager
         self.ally_managers = []
@@ -312,6 +314,9 @@ class BattleScene(engine.Scene):
                 return True
         return False
 
+    def return_character(self, char_name) -> Character:
+        return character_db[char_name]
+
     def resolve_ticking_ability(self):
         for manager in self.player_display.team.character_managers:
             gen = (eff for eff in manager.source.current_effects
@@ -401,6 +406,7 @@ class BattleScene(engine.Scene):
             self.offered_pool[attr] = 0
         self.turn_expend_region.clear()
         self.draw_turn_end_region()
+        self.window_up = False
         self.turn_end()
 
     def tick_ability_cooldown(self):
@@ -419,6 +425,7 @@ class BattleScene(engine.Scene):
                 self.ally_energy_pool[attr] += energy
                 self.offered_pool[attr] = 0
         self.turn_expend_region.clear()
+        self.window_up = False
         self.draw_turn_end_region()
 
     def plus_button_click(self, button, _sender):
@@ -439,10 +446,14 @@ class BattleScene(engine.Scene):
 
     def turn_end_button_click(self, _button, _sender):
         if not self.waiting_for_turn:
+            self.reset_targeting()
+            self.return_targeting_to_default()
+            self.full_update()
             if self.round_any_cost == 0:
                 self.execution_loop()
                 self.turn_end()
             else:
+                self.window_up = True
                 self.turn_end_region.clear()
                 self.draw_any_cost_expenditure_window()
 
@@ -544,6 +555,18 @@ class BattleScene(engine.Scene):
             for eff in manager.source.current_effects:
                 eff.tick_duration()
                 if eff.duration == 0:
+                    if eff.name == "Quirk - Transform":
+                        for effect in manager.source.current_effects:
+                            if effect.user == manager:
+                                manager.remove_effect(effect)
+                        swap_hp = manager.source.hp
+                        swap_effects = manager.source.current_effects
+                        manager.source = Character("toga")
+                        manager.source.hp = swap_hp
+                        manager.source.current_effects = swap_effects
+                    if eff.name == "Bunny Assault":
+                        if manager.has_effect(EffectType.DEST_DEF, "Perfect Paper - Rampage Suit"):
+                            manager.get_effect(EffectType.DEST_DEF, "Perfect Paper - Rampage Suit").alter_dest_def(20)
                     if eff.name == "Lightning Dragon's Roar":
                         manager.add_effect(Effect(Ability("laxus2"), EffectType.ALL_DR, eff.user, 2, lambda eff: "This character will take 10 more damage.", mag=-10))
                     if eff.name == "Mahapadma" and eff.eff_type == EffectType.MARK:
@@ -593,7 +616,6 @@ class BattleScene(engine.Scene):
         self.waiting_for_turn = False
         self.round_any_cost = 0
         self.acting_character = None
-        self.selected_ability = None
         self.generate_energy()
         for manager in self.player_display.team.character_managers:
             manager.refresh_character()
@@ -817,6 +839,8 @@ class BattleScene(engine.Scene):
 
     def remove_targets(self, ability: Ability):
         for manager in self.player_display.team.character_managers:
+            if ability == manager.used_ability:
+                manager.current_targets.clear()
             if manager.received_ability.count(ability):
                 manager.received_ability.remove(ability)
         for manager in self.enemy_display.team.character_managers:
@@ -935,10 +959,18 @@ class CharacterManager():
     def adjust_ability_costs(self):
         for i, ability in enumerate(self.source.current_abilities):
             ability.reset_costs()
+            if self.has_effect(EffectType.STACK, "Quirk - Half-Cold"):
+                ability.modify_ability_cost(Energy(4), self.get_effect(EffectType.STACK, "Quirk - Half-Cold").mag)
             if ability.name == "Knight's Sword" and self.has_effect(EffectType.STACK, "Magic Sword"):
                 ability.modify_ability_cost(Energy(4), self.get_effect(EffectType.STACK, "Magic Sword").mag)
             if ability.name == "Roman Artillery - Pumpkin" and self.source.hp < 30:
                 ability.modify_ability_cost(Energy(3), -1)
+            if ability.name == "Kangaryu" and self.has_effect(EffectType.STACK, "To The Extreme!"):
+                if not self.has_effect(EffectType.MARK, "Vongola Headgear"):
+                    ability.modify_ability_cost(Energy(4), self.get_effect(EffectType.STACK, "To The Extreme!").mag)
+            if ability.name == "Maximum Cannon" and self.has_effect(EffectType.STACK, "To The Extreme!"):
+                if not self.has_effect(EffectType.MARK, "Vongola Headgear"):
+                    ability.modify_ability_cost(Energy(4), self.get_effect(EffectType.STACK, "To The Extreme!").mag)
             gen = (eff for eff in self.source.current_effects
                    if eff.eff_type == EffectType.COST_ADJUST)
             for eff in gen:
@@ -957,12 +989,19 @@ class CharacterManager():
     def check_on_harm(self):
         for character in self.current_targets:
             if character.id > 2:
+                if character.has_effect(EffectType.UNIQUE, "Hear Distress"):
+                    character.source.energy_contribution += 1
                 if character.has_effect(EffectType.UNIQUE, "Iron Shadow Dragon") and not character.is_ignoring():
                     character.add_effect(Effect(Ability("gajeel3"), EffectType.IGNORE, character, 1, lambda eff: ""))
                 if character.has_effect(EffectType.MARK, "Quirk - Permeation"):
                     character.add_effect(Effect(Ability("mirio2"), EffectType.MARK, character, 2, lambda eff: "This character will take 15 more piercing damage from Phantom Menace, and it will automatically target them."))
+                if character.has_effect(EffectType.MARK, "Protect Ally"):
+                    character.add_effect(Effect(Ability("mirio2"), EffectType.MARK, character, 2, lambda eff: "This character will take 15 more piercing damage from Phantom Menace, and it will automatically target them."))
+                if character.has_effect(EffectType.DEST_DEF, "Four-God Resisting Shield"):
+                    self.receive_eff_damage(15)
         if self.has_effect(EffectType.UNIQUE, "Porcospino Nuvola"):
             self.receive_eff_damage(10)
+        
                     
 
 
@@ -983,7 +1022,8 @@ class CharacterManager():
             self.receive_eff_aff_damage(10)
 
     def check_bypass_effects(self) -> str:
-
+        if self.has_effect(EffectType.UNIQUE, "Dive"):
+            return "BYPASS"
         return "NORMAL"
 
     def receive_stun(self):
@@ -1023,6 +1063,28 @@ class CharacterManager():
 
 
     def check_unique_cont(self, eff: Effect):
+        if eff.name == "Vacuum Syringe":
+            if self.final_can_effect(eff.user.check_bypass_effects()):
+                self.receive_eff_aff_damage(10)
+                self.apply_stack_effect(Effect(Ability("toga3"), EffectType.STACK, eff.user, 280000, lambda eff: f"Toga has drawn blood from this character {eff.mag} time(s).", mag = 1), eff.user)
+        if eff.name == "Decaying Touch":
+            if self.final_can_effect(eff.user.check_bypass_effects()):
+                self.receive_eff_aff_damage((5 * (2 ** eff.mag)))
+        if eff.name == "Nemurin Nap":
+            eff.alter_mag(1)
+            if eff.mag == 2:
+                self.add_effect(Effect(Ability("nemu1"), EffectType.COST_ADJUST, eff.user, 280000, lambda eff:"Nemurin Beam will cost one less random energy.", mag = -251))
+                self.add_effect(Effect(Ability("nemu1"), EffectType.COST_ADJUST, eff.user, 280000, lambda eff:"Dream Manipulation will cost one less random energy.", mag = -351))
+            if eff.mag == 3:
+                self.add_effect(Effect(Ability("nemu1"), EffectType.TARGET_SWAP, eff.user, 280000, lambda eff:"Nemurin Beam will target all enemies.", mag = 21))
+                self.add_effect(Effect(Ability("nemu1"), EffectType.TARGET_SWAP, eff.user, 280000, lambda eff:"Dream Manipulation will target all allies.", mag = 31))
+        if eff.name == "Eight Trigrams - 128 Palms":
+            if self.final_can_effect(eff.user.check_bypass_effects()) and (not self.deflecting() or (2 * (eff.mag ** 2) > 15)):
+                base_damage = (2 * (eff.mag ** 2))
+                eff.user.deal_eff_damage(base_damage, self)
+                eff.alter_mag(1)
+                if self.has_effect(EffectType.MARK, "Chakra Point Strike") and base_damage > self.check_for_dmg_reduction():
+                    self.source.energy_contribution -= 1
         if eff.name == "Relentless Assault":
             if self.final_can_effect(eff.user.check_bypass_effects()) and not self.deflecting():
                 if self.check_for_dmg_reduction() < 15:
@@ -1060,31 +1122,71 @@ class CharacterManager():
             #self counter check
             gen = (eff for eff in self.source.current_effects if eff.eff_type == EffectType.COUNTER and not self.scene.is_allied(eff))
             for eff in gen:
-                pass
+                if eff.name == "Hear Distress":
+                    src = Ability("snowwhite2")
+                    self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Hear Distress."))
+                    self.source.energy_contribution -= 1
+                    eff.user.check_on_drain(self)
+                    if self.has_effect(EffectType.MARK, "Third Dance - Shirafune"):
+                        self.full_remove_effect("Third Dance - Shirafune", self)
+                        if eff.user.final_can_effect():
+                            eff.user.receive_eff_damage(30)
+                            eff.user.add_effect(Effect(Ability("rukia3"), EffectType.ALL_STUN, self, 2, lambda eff: "This character is stunned."))
+                            self.check_on_stun(eff.user)
+                    return True
             
             #target counter check
             for target in self.current_targets:
 
                 gen = (eff for eff in target.source.current_effects if eff.eff_type == EffectType.COUNTER and not self.scene.is_allied(eff))
                 for eff in gen:
+                    if eff.name == "Zero Point":
+                        src = Ability("tsunayoshi3")
+                        self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Zero Point Breakthrough."))
+                        self.add_effect(Effect(src, EffectType.ALL_STUN, ))
+                        if self.has_effect(EffectType.MARK, "Third Dance - Shirafune"):
+                            self.full_remove_effect("Third Dance - Shirafune", self)
+                            if target.final_can_effect():
+                                target.receive_eff_damage(30)
+                                target.add_effect(Effect(Ability("rukia3"), EffectType.ALL_STUN, self, 2, lambda eff: "This character is stunned."))
+                                self.check_on_stun(target)
+                        return True
                     if eff.name == "One For All - Shoot Style":
                         src = Ability("midoriya3")
                         self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by One For All - Shoot Style."))
-                        if self.has_effect(EffectType.COUNTER, "Third Dance - Shirafune"):
-                            #TODO Shirafune things
-                            pass
+                        if self.has_effect(EffectType.MARK, "Third Dance - Shirafune"):
+                            self.full_remove_effect("Third Dance - Shirafune", self)
+                            if target.final_can_effect():
+                                target.receive_eff_damage(30)
+                                target.add_effect(Effect(Ability("rukia3"), EffectType.ALL_STUN, self, 2, lambda eff: "This character is stunned."))
+                                self.check_on_stun(target)
+                        return True
+                    if eff.name == "Minion - Tama":
+                        src = Ability("ruler3")
+                        self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Minion - Tama."))
+                        if not self.final_can_effect():
+                            self.receive_eff_pierce_damage(20)
+                        if self.has_effect(EffectType.MARK, "Third Dance - Shirafune"):
+                            self.full_remove_effect("Third Dance - Shirafune", self)
+                            if target.final_can_effect():
+                                target.receive_eff_damage(30)
+                                target.add_effect(Effect(Ability("rukia3"), EffectType.ALL_STUN, self, 2, lambda eff: "This character is stunned."))
+                                self.check_on_stun(target)
                         return True
                     if eff.name == "Casseur de Logistille":
                         src = Ability("astolfo1")
                         if self.used_ability._base_cost[Energy.SPECIAL] > 0 or self.used_ability._base_cost[Energy.MENTAL] > 0:
                             self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Casseur de Logistille."))
-                            if not self.source.ignoring:
+                            if not self.final_can_effect():
                                 self.add_effect(Effect(src, EffectType.ALL_STUN, eff.user, 3, lambda eff: "This character is stunned."))
                                 self.add_effect(Effect(src, EffectType.ISOLATE, eff.user, 3, lambda eff: "This character is isolated."))
                                 eff.user.check_on_stun(self)
-                            if self.has_effect(EffectType.COUNTER, "Third Dance - Shirafune"):
-                                #TODO Shirafune things
-                                pass
+                            if self.has_effect(EffectType.MARK, "Third Dance - Shirafune"):
+                                self.full_remove_effect("Third Dance - Shirafune", self)
+                                if target.final_can_effect():
+                                    target.receive_eff_damage(30)
+                                    target.add_effect(Effect(Ability("rukia3"), EffectType.ALL_STUN, self, 2, lambda eff: "This character is stunned."))
+                                    self.check_on_stun(target)
                             return True
                 
                 gen = (eff for eff in target.source.current_effects
@@ -1104,6 +1206,8 @@ class CharacterManager():
         #TODO check user effects
 
         #TODO check target effects
+        if target.has_effect(EffectType.ALL_DR, "Arrest Assault"):
+            target.get_effect(EffectType.ALL_DR, "Arrest Assault").user.get_effect(EffectType.UNIQUE, "Arrest Assault").alter_mag(1)
         if target.has_effect(EffectType.MARK, "Doll Trap"):
             target_dolls = [eff for eff in target.source.current_effects if eff.eff_type == EffectType.STACK and eff.name == "Doll Trap"]
             for eff in target_dolls:
@@ -1128,6 +1232,227 @@ class CharacterManager():
         else:
             self.add_effect(effect)        
 
+    def get_dest_def_total(self) -> int:
+        gen = (eff for eff in self.source.current_effects
+               if eff.eff_type == EffectType.DEST_DEF)
+        dest_def = 0
+        for eff in gen:
+            dest_def += eff.mag
+        return dest_def
+
+    def will_die(self, damage:int) -> bool:
+        total_life = self.get_dest_def_total() + self.source.hp
+        return damage >= total_life
+
+    def deal_damage(self, damage: int, target: "CharacterManager"):
+        mod_damage = self.get_boosts(damage)
+
+        if mod_damage > target.check_for_dmg_reduction():
+            if self.has_effect(EffectType.UNIQUE, "Three-God Empowering Shield"):
+                self.receive_eff_healing(10)
+
+        target.receive_damage(mod_damage)
+
+        if target.has_effect(EffectType.UNIQUE, "Thunder Palace"):
+            self.receive_eff_damage(mod_damage)
+            target.full_remove_effect("Thunder Palace", target)
+        if target.has_effect(EffectType.UNIQUE, "Burning Axle"):
+            user = target.get_effect(EffectType.UNIQUE, "Burning Axle").user
+            target.full_remove_effect("Burning Axle", user)
+            target.add_effect(Effect(Ability("tsunayoshi3"), EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
+            user.check_on_stun(target)
+
+        self.check_on_damage_dealt(target)
+
+    def receive_damage(self, damage: int):
+        mod_damage = damage - self.check_for_dmg_reduction()
+
+        if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
+            mod_damage = mod_damage * 2
+
+        if self.will_die(mod_damage):
+            if self.has_effect(EffectType.MARK, "Selfless Genius"):
+                mod_damage = 0
+                self.add_effect(Effect(Ability("neji3"), EffectType.ALL_BOOST, self.get_effect(EffectType.MARK, "Selfless Genius").user, 2, lambda eff: "This character will deal 10 more damage with non-affliction abilities.", mag = 10))
+                self.get_effect(EffectType.MARK, "Selfless Genius").user.source.hp = 0
+                self.get_effect(EffectType.MARK, "Selfless Genius").user.source.dead = True
+
+        mod_damage = self.pass_through_dest_def(mod_damage)
+        
+        
+        self.source.hp -= mod_damage
+        
+        if mod_damage > 0:
+            self.damage_taken_check(mod_damage)
+            if self.has_effect(EffectType.MARK, "Electric Rage"):
+                self.scene.player_display.team.energy_pool[Energy.SPECIAL] += 1
+
+        self.death_check()
+
+    def deal_eff_damage(self, damage: int, target: "CharacterManager"):
+        damage = self.get_boosts(damage)
+        target.receive_eff_damage(damage)
+        self.check_on_damage_dealt(target)
+
+    def receive_eff_damage(self, damage: int):
+        mod_damage = damage - self.check_for_dmg_reduction()
+
+        if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
+            mod_damage = mod_damage * 2
+
+        if self.will_die(mod_damage):
+            if self.has_effect(EffectType.MARK, "Selfless Genius"):
+                mod_damage = 0
+                self.add_effect(Effect(Ability("neji3"), EffectType.ALL_BOOST, self.get_effect(EffectType.MARK, "Selfless Genius").user, 2, lambda eff: "This character will deal 10 more damage with non-affliction abilities.", mag = 10))
+                self.get_effect(EffectType.MARK, "Selfless Genius").user.source.hp = 0
+                self.get_effect(EffectType.MARK, "Selfless Genius").user.source.dead = True
+
+        mod_damage = self.pass_through_dest_def(mod_damage)
+        self.source.hp -= mod_damage
+        if mod_damage > 0:
+            self.damage_taken_check(mod_damage)
+        
+        self.death_check()
+
+    def deal_pierce_damage(self, damage: int, target: "CharacterManager"):
+        mod_damage = self.get_boosts(damage)
+
+        if mod_damage > target.check_for_dmg_reduction():
+            if self.has_effect(EffectType.UNIQUE, "Three-God Empowering Shield"):
+                self.receive_eff_healing(10)
+
+        target.receive_pierce_damage(mod_damage)
+
+        if target.has_effect(EffectType.UNIQUE, "Thunder Palace"):
+            self.receive_eff_damage(mod_damage)
+            target.full_remove_effect("Thunder Palace", target)
+        if target.has_effect(EffectType.UNIQUE, "Burning Axle"):
+            user = target.get_effect(EffectType.UNIQUE, "Burning Axle").user
+            target.full_remove_effect("Burning Axle", user)
+            target.add_effect(Effect(Ability("tsunayoshi3"), EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
+            user.check_on_stun(target)
+
+        self.check_on_damage_dealt(target)
+
+    def receive_pierce_damage(self, damage: int):
+        mod_damage = damage
+        if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
+            mod_damage = mod_damage * 2
+        if self.will_die(mod_damage):
+            if self.has_effect(EffectType.MARK, "Selfless Genius"):
+                mod_damage = 0
+                self.add_effect(Effect(Ability("neji3"), EffectType.ALL_BOOST, self.get_effect(EffectType.MARK, "Selfless Genius").user, 2, lambda eff: "This character will deal 10 more damage with non-affliction abilities.", mag = 10))
+                self.get_effect(EffectType.MARK, "Selfless Genius").user.source.hp = 0
+                self.get_effect(EffectType.MARK, "Selfless Genius").user.source.dead = True
+
+        
+
+        mod_damage = self.pass_through_dest_def(mod_damage)
+        self.source.hp -= mod_damage
+        if mod_damage > 0:
+            self.damage_taken_check(mod_damage)
+            if self.has_effect(EffectType.MARK, "Electric Rage"):
+                self.scene.player_display.team.energy_pool[Energy.SPECIAL] += 1
+        
+        self.death_check()
+
+    
+
+    def deal_eff_pierce_damage(self, damage: int, target: "CharacterManager"):
+        damage = self.get_boosts(damage)
+        target.receive_eff_pierce_damage(damage)
+        self.check_on_damage_dealt(target)
+
+    
+
+    def receive_eff_pierce_damage(self, damage: int):
+        mod_damage = damage
+
+        if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
+            mod_damage = mod_damage * 2
+
+        if self.will_die(mod_damage):
+            if self.has_effect(EffectType.MARK, "Selfless Genius"):
+                mod_damage = 0
+                self.add_effect(Effect(Ability("neji3"), EffectType.ALL_BOOST, self.get_effect(EffectType.MARK, "Selfless Genius").user, 2, lambda eff: "This character will deal 10 more damage with non-affliction abilities.", mag = 10))
+                self.get_effect(EffectType.MARK, "Selfless Genius").user.source.hp = 0
+                self.get_effect(EffectType.MARK, "Selfless Genius").user.source.dead = True
+        mod_damage = self.pass_through_dest_def(mod_damage)
+        self.source.hp -= mod_damage
+        if mod_damage > 0:
+            self.damage_taken_check(mod_damage)
+        if self.source.hp <= 0:
+            self.source.hp = 0
+            self.source.dead = True
+
+    def deal_aff_damage(self, damage: int, target: "CharacterManager"):
+        #TODO check for affliction boosts
+
+        if not target.is_aff_immune():
+            
+            if self.has_effect(EffectType.UNIQUE, "Three-God Empowering Shield"):
+                self.receive_eff_healing(10)
+
+            target.receive_aff_dmg(damage)
+
+            if target.has_effect(EffectType.UNIQUE, "Thunder Palace"):
+                self.receive_eff_damage(damage)
+                target.full_remove_effect("Thunder Palace", target)
+            if target.has_effect(EffectType.UNIQUE, "Burning Axle"):
+                user = target.get_effect(EffectType.UNIQUE, "Burning Axle").user
+                target.full_remove_effect("Burning Axle", user)
+                target.add_effect(Effect(Ability("tsunayoshi3"), EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
+                user.check_on_stun(target)
+
+            self.check_on_damage_dealt(target)
+
+    def receive_aff_dmg(self, damage: int):
+        #TODO add affliction damage received boosts
+        mod_damage = damage
+
+        if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
+            mod_damage = mod_damage * 2
+
+        if self.will_die(mod_damage):
+            if self.has_effect(EffectType.MARK, "Selfless Genius"):
+                mod_damage = 0
+                self.add_effect(Effect(Ability("neji3"), EffectType.ALL_BOOST, self.get_effect(EffectType.MARK, "Selfless Genius").user, 2, lambda eff: "This character will deal 10 more damage with non-affliction abilities.", mag = 10))
+                self.get_effect(EffectType.MARK, "Selfless Genius").user.source.hp = 0
+                self.get_effect(EffectType.MARK, "Selfless Genius").user.source.dead = True
+        self.source.hp -= mod_damage
+
+        if mod_damage > 0:
+            self.damage_taken_check(mod_damage)
+            if self.has_effect(EffectType.MARK, "Electric Rage"):
+                self.scene.player_display.team.energy_pool[Energy.SPECIAL] += 1
+            
+
+        self.death_check()
+
+    def deal_eff_aff_damage(self, damage: int, target: "CharacterManager"):
+        #TODO add affliction damage boosts
+        if not target.is_aff_immune():
+            target.receive_eff_aff_damage(damage)
+            self.check_on_damage_dealt(target)
+
+    def receive_eff_aff_damage(self, damage: int):
+        #TODO add affliction damage received boosts
+        mod_damage = damage
+
+        if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
+            mod_damage = mod_damage * 2
+        if self.will_die(mod_damage):
+            if self.has_effect(EffectType.MARK, "Selfless Genius"):
+                mod_damage = 0
+                self.add_effect(Effect(Ability("neji3"), EffectType.ALL_BOOST, self.get_effect(EffectType.MARK, "Selfless Genius").user, 2, lambda eff: "This character will deal 10 more damage with non-affliction abilities.", mag = 10))
+                self.get_effect(EffectType.MARK, "Selfless Genius").user.source.hp = 0
+                self.get_effect(EffectType.MARK, "Selfless Genius").user.source.dead = True
+        self.source.hp -= mod_damage
+
+        if mod_damage > 0:
+            self.damage_taken_check(mod_damage)
+
+        self.death_check()
 
     def get_boosts(self, damage: int) -> int:
         mod_damage = damage
@@ -1138,7 +1463,8 @@ class CharacterManager():
                 which = i + 1
                 if ability.name == "Knight's Sword" and self.has_effect(EffectType.STACK, "Magic Sword"):
                     mod_damage += (20 * self.get_effect(EffectType.STACK, "Magic Sword").mag)
-            
+                if ability.name == "Maximum Cannon" and self.has_effect(EffectType.STACK, "To The Extreme!"):
+                    mod_damage += (15 * self.get_effect(EffectType.STACK, "To The Extreme!").mag)
         
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.BOOST_NEGATE)
@@ -1193,15 +1519,23 @@ class CharacterManager():
 
     def check_for_dmg_reduction(self) -> int:
         dr = 0
-        gen = (eff for eff in self.source.current_effects
-               if eff.eff_type == EffectType.ALL_DR)
-        for eff in gen:
-            dr += eff.mag
+        no_boost = False
+
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.DEF_NEGATE)
         for eff in gen:
-            dr = 0
+            no_boost = True
             break
+
+        gen = (eff for eff in self.source.current_effects
+               if eff.eff_type == EffectType.ALL_DR)
+        for eff in gen:
+            if no_boost:
+                if eff.mag < 0:
+                    dr += eff.mag
+            else:
+                dr += eff.mag
+        
         return dr
 
     def check_for_cooldown_mod(self) -> int:
@@ -1268,6 +1602,16 @@ class CharacterManager():
 
     def check_for_collapsing_dest_def(self, eff: Effect):
         if eff.mag == 0:
+            if eff.name == "Five-God Inviolate Shield":
+                self.full_remove_effect("Five-God Inviolate Shield", eff.user)
+                for manager in self.scene.player_display.team.character_managers:
+                    manager.full_remove_effect("Five-God Inviolate Shield", eff.user)
+            if eff.name == "Four-God Resisting Shield":
+                self.full_remove_effect("Four-God Resisting Shield", eff.user)
+            if eff.name == "Three-God Linking Shield":
+                self.full_remove_effect("Three-God Linking Shield", eff.user)
+            if eff.name == "Perfect Paper - Rampage Suit":
+                self.full_remove_effect("Perfect Paper - Rampage Suit", eff.user)
             if eff.name == "Illusory Breakdown":
                 self.full_remove_effect("Illusory Breakdown", self)
                 for manager in self.scene.enemy_display.team.character_managers:
@@ -1330,63 +1674,25 @@ class CharacterManager():
             break
         return output
 
-    def deal_aff_damage(self, damage: int, target: "CharacterManager"):
-        #TODO check for affliction boosts
-
-        if not target.is_aff_immune():
-
-            target.receive_aff_dmg(damage)
-
-            if target.has_effect(EffectType.UNIQUE, "Thunder Palace"):
-                self.receive_eff_damage(damage)
-                target.full_remove_effect("Thunder Palace", target)
-
-            self.check_on_damage_dealt(target)
-
-    def receive_aff_dmg(self, damage: int):
-        #TODO add affliction damage received boosts
-        mod_damage = damage
-
-        self.source.hp -= mod_damage
-
-        if mod_damage > 0:
-            self.damage_taken_check()
-            if self.has_effect(EffectType.MARK, "Electric Rage"):
-                self.scene.player_display.team.energy_pool[Energy.SPECIAL] += 1
-            
-
-        self.death_check()
-
-    def deal_eff_aff_damage(self, damage: int, target: "CharacterManager"):
-        #TODO add affliction damage boosts
-        if not target.is_aff_immune():
-            target.receive_eff_aff_damage(damage)
-            self.check_on_damage_dealt(target)
-
-    def receive_eff_aff_damage(self, damage: int):
-        #TODO add affliction damage received boosts
-        mod_damage = damage
-
-        self.source.hp -= mod_damage
-
-        if mod_damage > 0:
-            self.damage_taken_check()
-
-        self.death_check()
-
-    def deal_damage(self, damage: int, target: "CharacterManager"):
-        damage = self.get_boosts(damage)
-
-        target.receive_damage(damage)
-
-        if target.has_effect(EffectType.UNIQUE, "Thunder Palace"):
-            self.receive_eff_damage(damage)
-            target.full_remove_effect("Thunder Palace", target)
-
-        self.check_on_damage_dealt(target)
-
-    def damage_taken_check(self):
-        
+    def damage_taken_check(self, damage: int):
+        if self.source.name == "seiryu" and self.source.hp < 30:
+            self.add_effect(Effect(Ability("seiryualt1"), EffectType.ABILITY_SWAP, self, 280000, lambda eff: "Body Modification - Arm Gun has been replaced by Body Modification - Self Destruct.", mag = 11))
+        if self.has_effect(EffectType.MARK, "To The Extreme!"):
+            extreme = self.get_effect(EffectType.MARK, "To The Extreme!")
+            extreme.alter_mag(damage)
+            if extreme.mag > 20:
+                stacks = extreme.mag // 20
+                extreme.alter_mag(-(stacks * 20))
+                self.apply_stack_effect(Effect(Ability("ryohei4"), EffectType.STACK, self, 280000, lambda eff: f"Maximum Cannon will deal {eff.mag * 15} more damage and cost {eff.mag} more random energy.", mag=stacks))
+                self.apply_stack_effect(Effect(Ability("ryohei4"), EffectType.STACK, self, 280000, lambda eff: f"Kangaryu will heal {eff.mag * 20} more health and cost {eff.mag} more random energy.", mag=stacks))
+        if self.has_effect(EffectType.CONT_UNIQUE, "Nemurin Nap"):
+            self.get_effect(EffectType.CONT_UNIQUE, "Nemurin Nap").alter_mag(-1)
+            if self.get_effect(EffectType.CONT_UNIQUE, "Nemurin Nap").mag == 2:
+                self.remove_effect(self.get_effect(EffectType.TARGET_SWAP, "Nemurin Nap"))
+                self.remove_effect(self.get_effect(EffectType.TARGET_SWAP, "Nemurin Nap"))
+            if self.get_effect(EffectType.CONT_UNIQUE, "Nemurin Nap").mag == 1:
+                self.remove_effect(self.get_effect(EffectType.COST_ADJUST, "Nemurin Nap"))
+                self.remove_effect(self.get_effect(EffectType.COST_ADJUST, "Nemurin Nap"))
         if self.has_effect(EffectType.MARK, "You Are Needed") and self.source.hp < 30:
             self.full_remove_effect("You Are Needed", self)
             src = Ability("chrome1")
@@ -1412,68 +1718,20 @@ class CharacterManager():
     def deflecting(self) -> bool:
         return self.has_effect(EffectType.MARK, "Flashing Deflection")
 
-    def receive_damage(self, damage: int):
-        mod_damage = damage - self.check_for_dmg_reduction()
-        mod_damage = self.pass_through_dest_def(mod_damage)
-        
-        
-        self.source.hp -= mod_damage
-        
-        if mod_damage > 0:
-            self.damage_taken_check()
-            if self.has_effect(EffectType.MARK, "Electric Rage"):
-                self.scene.player_display.team.energy_pool[Energy.SPECIAL] += 1
-
-        self.death_check()
+    
 
     def death_check(self):
 
         if self.source.hp <= 0:
             if self.has_effect(EffectType.MARK, "Electric Rage"):
                 self.source.hp = 1
+            elif self.has_effect(EffectType.MARK, "Lucky Rabbit's Foot"):
+                self.source.hp = 35
             else:
                 self.source.hp = 0
                 self.source.dead = True
                 self.source.current_effects.clear()
 
-    def deal_pierce_damage(self, damage: int, target: "CharacterManager"):
-        damage = self.get_boosts(damage)
-        target.receive_pierce_damage(damage)
-
-        if target.has_effect(EffectType.UNIQUE, "Thunder Palace"):
-            self.receive_eff_damage(damage)
-            target.full_remove_effect("Thunder Palace", target)
-
-        self.check_on_damage_dealt(target)
-
-    def receive_pierce_damage(self, damage: int):
-        mod_damage = self.pass_through_dest_def(damage)
-        self.source.hp -= mod_damage
-        if mod_damage > 0:
-            self.damage_taken_check()
-            if self.has_effect(EffectType.MARK, "Electric Rage"):
-                self.scene.player_display.team.energy_pool[Energy.SPECIAL] += 1
-        
-        self.death_check()
-
-    def deal_eff_damage(self, damage: int, target: "CharacterManager"):
-        damage = self.get_boosts(damage)
-        target.receive_eff_damage(damage)
-        self.check_on_damage_dealt(target)
-
-    def receive_eff_damage(self, damage: int):
-        mod_damage = damage - self.check_for_dmg_reduction()
-        mod_damage = self.pass_through_dest_def(mod_damage)
-        self.source.hp -= mod_damage
-        if mod_damage > 0:
-            self.damage_taken_check()
-        
-        self.death_check()
-
-    def deal_eff_pierce_damage(self, damage: int, target: "CharacterManager"):
-        damage = self.get_boosts(damage)
-        target.receive_eff_pierce_damage(damage)
-        self.check_on_damage_dealt(target)
 
     def check_energy_contribution(self) -> list[int]:
         output = [0, 0, 0, 0, 0]
@@ -1490,23 +1748,23 @@ class CharacterManager():
             output[energy_type] += mod_value
         return output
 
-    def receive_eff_pierce_damage(self, damage: int):
-        mod_damage = damage
-        mod_damage = self.pass_through_dest_def(mod_damage)
-        self.source.hp -= mod_damage
-        if mod_damage > 0:
-            self.damage_taken_check()
-        if self.source.hp <= 0:
-            self.source.hp = 0
-            self.source.dead = True
-
     def give_healing(self, healing: int, target: "CharacterManager"):
         #TODO add healing boosts
-        target.receive_healing(healing)
+        mod_healing = healing
+
+        if self.used_ability.name == "Kangaryu":
+            if self.has_effect(EffectType.STACK, "To The Extreme!"):
+                mod_healing += (20 * self.get_effect(EffectType.STACK, "To The Extreme!").mag)
+
+        target.receive_healing(mod_healing)
 
     def receive_healing(self, healing: int):
         mod_healing = healing  #TODO: Add healing reduction/boost checking
         #TODO: Check for healing negation
+
+        if self.source.name == "seiryu" and self.source.hp >= 30:
+            self.full_remove_effect("Body Modification - Self Destruct", self)
+
         self.source.hp += mod_healing
         if self.source.hp > 100:
             self.source.hp = 100
@@ -1554,9 +1812,9 @@ class CharacterManager():
 
     def hostile_target(self, targeter: "CharacterManager", def_type = "NORMAL") -> bool:
         if def_type == "NORMAL":
-            return not (self.check_invuln() or self.source.dead or self.source.untargetable or self.special_targeting_exemptions(targeter))
+            return not (self.check_invuln() or self.has_effect(EffectType.UNIQUE, "Shadow Pin") or self.source.dead or self.source.untargetable or self.special_targeting_exemptions(targeter))
         elif def_type == "BYPASS":
-            return not (self.source.dead or self.source.untargetable or self.special_targeting_exemptions(targeter))
+            return not (self.source.dead or self.has_effect(EffectType.UNIQUE, "Shadow Pin") or self.source.untargetable or self.special_targeting_exemptions(targeter))
 
     def final_can_effect(self, def_type = "NORMAL") -> bool:
         if def_type == "NORMAL":
@@ -1761,7 +2019,6 @@ class CharacterManager():
         self.acted = False
         self.current_targets.clear()
         self.received_ability.clear()
-        self.selected_ability = None
         self.used_ability = None
         self.targeted = False
         self.targeting = False

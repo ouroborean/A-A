@@ -6,7 +6,6 @@ import sdl2.ext
 import copy
 import typing
 from animearena.ability import Ability
-
 if typing.TYPE_CHECKING:
     from animearena.effects import Effect
 
