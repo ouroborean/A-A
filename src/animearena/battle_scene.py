@@ -1012,6 +1012,13 @@ class CharacterManager():
                 target.full_remove_effect("Tsukuyomi", target.get_effect(EffectType.UNIQUE, "Tsukuyomi").user)
 
     def check_on_use(self):
+        for target in self.current_targets:
+            if (target.has_effect(EffectType.MARK, "Shredding Wedding") and not self.has_effect(EffectType.MARK, "Shredding Wedding")) or (self.has_effect(EffectType.MARK, "Shredding Wedding") and not target.has_effect(EffectType.MARK, "Shredding Wedding")):
+                if self.final_can_effect():
+                    self.receive_pierce_damage(20)
+        if self.has_effect(EffectType.CONT_UNIQUE, "Utsuhi Ame"):
+            self.get_effect(EffectType.CONT_UNIQUE, "Utsuhi Ame").alter_mag(1)
+            self.get_effect(EffectType.CONT_UNIQUE, "Utsuhi Ame").desc = lambda eff: "This character will take 40 damage and Yamamoto will gain 3 stacks of Asari Ugetsu."
         if self.has_effect(EffectType.MARK, "Hidden Mine"):
             if self.final_can_effect():
                 self.receive_eff_pierce_damage(20)
@@ -1023,6 +1030,8 @@ class CharacterManager():
 
     def check_bypass_effects(self) -> str:
         if self.has_effect(EffectType.UNIQUE, "Dive"):
+            return "BYPASS"
+        if self.has_effect(EffectType.UNIQUE, "Quirk - Zero Gravity"):
             return "BYPASS"
         return "NORMAL"
 
@@ -1061,8 +1070,24 @@ class CharacterManager():
         if target.has_effect(EffectType.MARK, "Counter-Balance"):
             self.add_effect(Effect(Ability("jiro1"), EffectType.ALL_STUN, target.get_effect(EffectType.MARK, "Counter-Balance").user, 3, lambda eff: "This character is stunned."))
 
+    def check_damage_drain(self) -> int:
+        gen = [eff for eff in self.source.current_effects if eff.eff_type == EffectType.ALL_BOOST and eff.mag < 0]
+
+        total_drain = 0
+        for eff in gen:
+            total_drain += eff.mag
+        
+        return total_drain
+
 
     def check_unique_cont(self, eff: Effect):
+        if eff.name == "Utsuhi Ame":
+            if self.final_can_effect(eff.user.check_bypass_effects()):
+                self.receive_eff_damage(eff.mag * 20)
+                if eff.mag == 1:
+                    eff.user.apply_stack_effect(Effect(Ability("yamamoto3"), EffectType.STACK, eff.user, 280000, lambda eff: f"Yamamoto has {eff.mag} stack(s) of Asari Ugetsu.", mag = 1))
+                else:
+                    eff.user.apply_stack_effect(Effect(Ability("yamamoto3"), EffectType.STACK, eff.user, 280000, lambda eff: f"Yamamoto has {eff.mag} stack(s) of Asari Ugetsu.", mag = 3))
         if eff.name == "Vacuum Syringe":
             if self.final_can_effect(eff.user.check_bypass_effects()):
                 self.receive_eff_aff_damage(10)
@@ -1112,75 +1137,47 @@ class CharacterManager():
                 self.apply_stack_effect(Effect(Ability("ichimaru3"), EffectType.STACK, eff.user, 280000, lambda eff: f"This character will take {10 * eff.mag} affliction damage from Kill, Kamishini no Yari.", mag=1), eff.user)
 
     def check_countered(self, pteam: list["CharacterManager"], eteam: list["CharacterManager"]) -> bool:
-        if not self.has_effect(EffectType.MARK, "Mental Radar"):
-            #self reflect effects:
-            gen = (eff for eff in self.source.current_effects
-                if eff.eff_type == EffectType.REFLECT and not self.scene.is_allied(eff))
-            for eff in gen:
-                pass
 
-            #self counter check
-            gen = (eff for eff in self.source.current_effects if eff.eff_type == EffectType.COUNTER and not self.scene.is_allied(eff))
-            for eff in gen:
-                if eff.name == "Hear Distress":
-                    src = Ability("snowwhite2")
-                    self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Hear Distress."))
-                    self.source.energy_contribution -= 1
-                    eff.user.check_on_drain(self)
-                    if self.has_effect(EffectType.MARK, "Third Dance - Shirafune"):
-                        self.full_remove_effect("Third Dance - Shirafune", self)
-                        if eff.user.final_can_effect():
-                            eff.user.receive_eff_damage(30)
-                            eff.user.add_effect(Effect(Ability("rukia3"), EffectType.ALL_STUN, self, 2, lambda eff: "This character is stunned."))
-                            self.check_on_stun(eff.user)
+        def is_harmful(self: "CharacterManager", eteam: list["CharacterManager"]) -> bool:
+            for enemy in eteam:
+                if eteam in self.current_targets:
                     return True
-            
-            #target counter check
-            for target in self.current_targets:
+            return False
 
-                gen = (eff for eff in target.source.current_effects if eff.eff_type == EffectType.COUNTER and not self.scene.is_allied(eff))
+        if is_harmful(self, eteam):
+            if not self.has_effect(EffectType.MARK, "Mental Radar"):
+                #self reflect effects:
+                gen = (eff for eff in self.source.current_effects
+                    if eff.eff_type == EffectType.REFLECT and not self.scene.is_allied(eff))
                 for eff in gen:
-                    if eff.name == "Zero Point":
-                        src = Ability("tsunayoshi3")
-                        self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Zero Point Breakthrough."))
-                        self.add_effect(Effect(src, EffectType.ALL_STUN, ))
+                    pass
+
+                #self counter check
+                gen = (eff for eff in self.source.current_effects if eff.eff_type == EffectType.COUNTER and not self.scene.is_allied(eff))
+                for eff in gen:
+                    if eff.name == "Hear Distress":
+                        src = Ability("snowwhite2")
+                        self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Hear Distress."))
+                        self.source.energy_contribution -= 1
+                        eff.user.check_on_drain(self)
                         if self.has_effect(EffectType.MARK, "Third Dance - Shirafune"):
                             self.full_remove_effect("Third Dance - Shirafune", self)
-                            if target.final_can_effect():
-                                target.receive_eff_damage(30)
-                                target.add_effect(Effect(Ability("rukia3"), EffectType.ALL_STUN, self, 2, lambda eff: "This character is stunned."))
-                                self.check_on_stun(target)
+                            if eff.user.final_can_effect():
+                                eff.user.receive_eff_damage(30)
+                                eff.user.add_effect(Effect(Ability("rukia3"), EffectType.ALL_STUN, self, 2, lambda eff: "This character is stunned."))
+                                self.check_on_stun(eff.user)
                         return True
-                    if eff.name == "One For All - Shoot Style":
-                        src = Ability("midoriya3")
-                        self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by One For All - Shoot Style."))
-                        if self.has_effect(EffectType.MARK, "Third Dance - Shirafune"):
-                            self.full_remove_effect("Third Dance - Shirafune", self)
-                            if target.final_can_effect():
-                                target.receive_eff_damage(30)
-                                target.add_effect(Effect(Ability("rukia3"), EffectType.ALL_STUN, self, 2, lambda eff: "This character is stunned."))
-                                self.check_on_stun(target)
-                        return True
-                    if eff.name == "Minion - Tama":
-                        src = Ability("ruler3")
-                        self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Minion - Tama."))
-                        if not self.final_can_effect():
-                            self.receive_eff_pierce_damage(20)
-                        if self.has_effect(EffectType.MARK, "Third Dance - Shirafune"):
-                            self.full_remove_effect("Third Dance - Shirafune", self)
-                            if target.final_can_effect():
-                                target.receive_eff_damage(30)
-                                target.add_effect(Effect(Ability("rukia3"), EffectType.ALL_STUN, self, 2, lambda eff: "This character is stunned."))
-                                self.check_on_stun(target)
-                        return True
-                    if eff.name == "Casseur de Logistille":
-                        src = Ability("astolfo1")
-                        if self.used_ability._base_cost[Energy.SPECIAL] > 0 or self.used_ability._base_cost[Energy.MENTAL] > 0:
-                            self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Casseur de Logistille."))
-                            if not self.final_can_effect():
-                                self.add_effect(Effect(src, EffectType.ALL_STUN, eff.user, 3, lambda eff: "This character is stunned."))
-                                self.add_effect(Effect(src, EffectType.ISOLATE, eff.user, 3, lambda eff: "This character is isolated."))
-                                eff.user.check_on_stun(self)
+                
+                #target counter check
+                for target in self.current_targets:
+
+                    gen = (eff for eff in target.source.current_effects if eff.eff_type == EffectType.COUNTER and not self.scene.is_allied(eff))
+                    for eff in gen:
+                        if eff.name == "Zero Point":
+                            src = Ability("tsunayoshi3")
+                            self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Zero Point Breakthrough."))
+                            self.add_effect(Effect(src, EffectType.ALL_STUN, eff.user, 5, lambda eff: "This character is stunned."))
+                            eff.user.add_effect(Effect(src, EffectType.ALL_BOOST, eff.user, 4, lambda eff: "X-Burner will deal 10 more damage.", mag = 110))
                             if self.has_effect(EffectType.MARK, "Third Dance - Shirafune"):
                                 self.full_remove_effect("Third Dance - Shirafune", self)
                                 if target.final_can_effect():
@@ -1188,16 +1185,54 @@ class CharacterManager():
                                     target.add_effect(Effect(Ability("rukia3"), EffectType.ALL_STUN, self, 2, lambda eff: "This character is stunned."))
                                     self.check_on_stun(target)
                             return True
-                
-                gen = (eff for eff in target.source.current_effects
-                if eff.eff_type == EffectType.REFLECT and not self.scene.is_allied(eff))
-                for eff in gen:
-                    if eff.name == "Copy Ninja Kakashi":
-                        alt_targets = [char for char in self.current_targets if char != target]
-                        alt_targets.append(self) 
-                        self.current_targets = alt_targets
-                        self.used_ability.execute(self, pteam, eteam)
-                        return True
+                        if eff.name == "One For All - Shoot Style":
+                            src = Ability("midoriya3")
+                            self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by One For All - Shoot Style."))
+                            if self.has_effect(EffectType.MARK, "Third Dance - Shirafune"):
+                                self.full_remove_effect("Third Dance - Shirafune", self)
+                                if target.final_can_effect():
+                                    target.receive_eff_damage(30)
+                                    target.add_effect(Effect(Ability("rukia3"), EffectType.ALL_STUN, self, 2, lambda eff: "This character is stunned."))
+                                    self.check_on_stun(target)
+                            return True
+                        if eff.name == "Minion - Tama":
+                            src = Ability("ruler3")
+                            self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Minion - Tama."))
+                            eff.user.source.main_abilities[2].cooldown_remaining = 2
+                            if not self.final_can_effect():
+                                self.receive_eff_pierce_damage(20)
+                            if self.has_effect(EffectType.MARK, "Third Dance - Shirafune"):
+                                self.full_remove_effect("Third Dance - Shirafune", self)
+                                if target.final_can_effect():
+                                    target.receive_eff_damage(30)
+                                    target.add_effect(Effect(Ability("rukia3"), EffectType.ALL_STUN, self, 2, lambda eff: "This character is stunned."))
+                                    self.check_on_stun(target)
+                            return True
+                        if eff.name == "Casseur de Logistille":
+                            src = Ability("astolfo1")
+                            if self.used_ability._base_cost[Energy.SPECIAL] > 0 or self.used_ability._base_cost[Energy.MENTAL] > 0:
+                                self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Casseur de Logistille."))
+                                if not self.final_can_effect():
+                                    self.add_effect(Effect(src, EffectType.ALL_STUN, eff.user, 3, lambda eff: "This character is stunned."))
+                                    self.add_effect(Effect(src, EffectType.ISOLATE, eff.user, 3, lambda eff: "This character is isolated."))
+                                    eff.user.check_on_stun(self)
+                                if self.has_effect(EffectType.MARK, "Third Dance - Shirafune"):
+                                    self.full_remove_effect("Third Dance - Shirafune", self)
+                                    if target.final_can_effect():
+                                        target.receive_eff_damage(30)
+                                        target.add_effect(Effect(Ability("rukia3"), EffectType.ALL_STUN, self, 2, lambda eff: "This character is stunned."))
+                                        self.check_on_stun(target)
+                                return True
+                    
+                    gen = (eff for eff in target.source.current_effects
+                    if eff.eff_type == EffectType.REFLECT and not self.scene.is_allied(eff))
+                    for eff in gen:
+                        if eff.name == "Copy Ninja Kakashi":
+                            alt_targets = [char for char in self.current_targets if char != target]
+                            alt_targets.append(self) 
+                            self.current_targets = alt_targets
+                            self.used_ability.execute(self, pteam, eteam)
+                            return True
 
 
         return False
