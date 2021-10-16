@@ -1,10 +1,12 @@
 from pathlib import Path
 from typing import Union
+import os
 
 import sdl2
 import sdl2.ext
 import sdl2.surface
 import sdl2.sdlttf
+import importlib.resources
 
 
 
@@ -14,8 +16,19 @@ from animearena.character import Character, character_db
 from animearena.ability import Ability
 from animearena.engine import FilterType
 
-FONT_FILENAME = "Basic-Regular.ttf"
+def get_path(file_name: str) -> Path:
+    with importlib.resources.path('animearena.resources', file_name) as path:
+        return path
+
 FONTSIZE = 16
+FONT_FILENAME = "Basic-Regular.ttf"
+
+def init_font():
+    with importlib.resources.path('animearena.resources', FONT_FILENAME) as path:
+        return sdl2.sdlttf.TTF_OpenFont(str.encode(os.fspath(path)), FONTSIZE)
+
+
+
 RESOURCES = Path(__file__).parent.parent.parent / "resources"
 BLUE = sdl2.SDL_Color(0, 0, 255)
 RED = sdl2.SDL_Color(255, 0, 0)
@@ -49,8 +62,7 @@ class CharacterSelectScene(engine.Scene):
         self.page_on_display = 1
         self.display_character = None
         self.scene_manager = scene_manager
-        fontpath = str.encode(f"{RESOURCES / FONT_FILENAME}")
-        self.font = sdl2.sdlttf.TTF_OpenFont(fontpath, FONTSIZE)
+        self.font = init_font()
 
         self.character_select_region = self.region.subregion(15, 400, 770, 285)
 

@@ -1,3 +1,4 @@
+import pathlib
 import PIL
 from PIL import Image
 from pathlib import Path
@@ -7,18 +8,16 @@ import copy
 import typing
 import os
 import sys
+import importlib.resources
 from animearena.ability import Ability
 if typing.TYPE_CHECKING:
     from animearena.effects import Effect
-def resource_path(relative_path):
-    try:
-    # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
 
-    return os.path.join(base_path, relative_path)
-RESOURCES = Path(__file__).parent.parent.parent / "resources"
+def get_image_from_path(file_name: str) -> Image:
+    with importlib.resources.path('animearena.resources', file_name) as path:
+        return Image.open(path)
+
+
 
 class Character:
 
@@ -65,11 +64,11 @@ class Character:
         self.selected = False
         self.damage_reduction = 0
         self.current_effects = []
-        self.profile_image = Image.open(resource_path(RESOURCES / (name + "prof.png")))
-        self.main_prof = Image.open(resource_path(RESOURCES / (name + "prof.png")))
+        self.profile_image = get_image_from_path(name + "prof.png")
+        self.main_prof = get_image_from_path(name + "prof.png")
         try:
-            self.altprof1 = Image.open(resource_path(RESOURCES / (name + "altprof1.png")))
-            self.altprof2 = Image.open(resource_path(RESOURCES / (name + "altprof2.png")))
+            self.altprof1 = get_image_from_path(name + "altprof1.png")
+            self.altprof2 = get_image_from_path(name + "altprof2.png")
         except:
             pass
 

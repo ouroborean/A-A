@@ -9,17 +9,13 @@ import enum
 import copy
 import sys
 import os
-
+import importlib.resources
 from animearena.effects import EffectType, Effect
 
-def resource_path(relative_path):
-    try:
-    # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
+def get_path(file_name: str) -> Path:
+    with importlib.resources.path('animearena.resources', file_name) as path:
+        return path
 
-    return os.path.join(base_path, relative_path)
 
 RESOURCES = Path(__file__).parent.parent.parent / "resources"
 import typing
@@ -69,7 +65,7 @@ class Ability():
     def __init__(self, name: str = None):
         if name:
             self.db_name = name
-            self.image = Image.open(resource_path(RESOURCES / (name + ".png")))
+            self.image = Image.open(get_path(name + ".png"))
         try:
             details_package = ability_info_db[name]
             self.unpack_details(details_package)

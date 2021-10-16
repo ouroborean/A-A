@@ -7,6 +7,8 @@ import dill as pickle
 import itertools
 import textwrap
 import copy
+import os
+import importlib.resources
 from animearena import engine
 from animearena import character
 from animearena.character import Character, character_db
@@ -21,6 +23,11 @@ from typing import Optional
 FONT_FILENAME = "Basic-Regular.ttf"
 FONTSIZE = 16
 COOLDOWN_FONTSIZE = 100
+
+def init_font(size: int):
+    with importlib.resources.path('animearena.resources', FONT_FILENAME) as path:
+        return sdl2.sdlttf.TTF_OpenFont(str.encode(os.fspath(path)), size)
+
 RESOURCES = Path(__file__).parent.parent.parent / "resources"
 BLUE = sdl2.SDL_Color(0, 0, 255)
 RED = sdl2.SDL_Color(255, 0, 0)
@@ -169,9 +176,9 @@ class BattleScene(engine.Scene):
         self.current_button = None
         self.player_display = ActiveTeamDisplay(self)
         self.enemy_display = EnemyTeamDisplay(self)
-        fontpath = str.encode(f"{RESOURCES / FONT_FILENAME}")
-        self.font = sdl2.sdlttf.TTF_OpenFont(fontpath, FONTSIZE)
-        self.cooldown_font = sdl2.sdlttf.TTF_OpenFont(fontpath, COOLDOWN_FONTSIZE)
+        
+        self.font = init_font(FONTSIZE)
+        self.cooldown_font = init_font(COOLDOWN_FONTSIZE)
         self.selected_ability = None
         self.acting_character = None
         self.ally_energy_pool = {

@@ -4,6 +4,7 @@ import enum
 import logging
 import operator
 import textwrap
+import importlib.resources
 from typing import Iterator
 from typing import Literal
 from typing import MutableMapping
@@ -19,14 +20,10 @@ import sdl2.sdlttf
 import sdl2.surface
 from sdl2 import endian
 from pathlib import Path
-def resource_path(relative_path):
-    try:
-    # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
+def get_image_from_path(file_name: str) -> Image:
+    with importlib.resources.path('animearena.resources', file_name) as path:
+        return Image.open(path)
 
-    return os.path.join(base_path, relative_path)
 RESOURCES = Path(__file__).parent.parent.parent / "resources"
 
 def sat_subtract(subtractor: int, subtractee: int) -> int:
@@ -64,7 +61,7 @@ class Scene:
         log = logging.getLogger(__name__)
         for (k, v) in kwargs.items():
             log.debug("Loading image: %s", v)
-            self.surfaces[k] = Image.open(resource_path(RESOURCES / v))
+            self.surfaces[k] = get_image_from_path(v)
 
     def renderables(self) -> Iterator[sdl2.ext.Sprite]:
         return iter(self.region)
