@@ -7,8 +7,19 @@ import sdl2
 import sdl2.ext
 import enum
 import copy
+import sys
+import os
 
 from animearena.effects import EffectType, Effect
+
+def resource_path(relative_path):
+    try:
+    # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 RESOURCES = Path(__file__).parent.parent.parent / "resources"
 import typing
@@ -58,7 +69,7 @@ class Ability():
     def __init__(self, name: str = None):
         if name:
             self.db_name = name
-            self.image = Image.open(RESOURCES / (name + ".png"))
+            self.image = Image.open(resource_path(RESOURCES / (name + ".png")))
         try:
             details_package = ability_info_db[name]
             self.unpack_details(details_package)

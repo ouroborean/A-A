@@ -1,5 +1,4 @@
 import math
-from operator import mod
 import sdl2
 import sdl2.ext
 import sdl2.surface
@@ -8,18 +7,16 @@ import dill as pickle
 import itertools
 import textwrap
 import copy
-from animearena import character_select_scene, engine
+from animearena import engine
 from animearena import character
-from animearena import energy
 from animearena.character import Character, character_db
-from animearena.ability import Ability, Target, ability_info_db
-from animearena.engine import FilterType
+from animearena.ability import Ability, Target
 from animearena.energy import Energy
 from animearena.effects import Effect, EffectType
-from random import seed, randint
+from random import randint
 
 from pathlib import Path
-from typing import Union, Optional
+from typing import Optional
 
 FONT_FILENAME = "Basic-Regular.ttf"
 FONTSIZE = 16

@@ -2,20 +2,24 @@
 
 from asyncio.exceptions import CancelledError
 import logging
-from typing import Tuple
 import asyncio
 import contextvars
 import time
-import sys
-
 
 import sdl2
 import sdl2.ext
 import sdl2.sdlttf
 
-from animearena import engine, character_select_scene, battle_scene, client
+from animearena import character_select_scene
+from animearena import battle_scene
+from animearena import client
 from animearena.byte_buffer import ByteBuffer
 from animearena.scene_manager import SceneManager
+
+
+
+
+
 
 def main():
     """Main game entry point."""

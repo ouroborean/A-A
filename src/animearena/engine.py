@@ -4,18 +4,29 @@ import enum
 import logging
 import operator
 import textwrap
-from typing import (Iterable, Iterator, Literal, MutableMapping, Optional, Tuple, Union)
-
+from typing import Iterator
+from typing import Literal
+from typing import MutableMapping
+from typing import Optional
+from typing import Tuple
+from typing import Union
+import sys
+import os
 from PIL import Image
-import PIL
-import glob
 import sdl2
 import sdl2.ext
 import sdl2.sdlttf
 import sdl2.surface
 from sdl2 import endian
 from pathlib import Path
+def resource_path(relative_path):
+    try:
+    # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
 
+    return os.path.join(base_path, relative_path)
 RESOURCES = Path(__file__).parent.parent.parent / "resources"
 
 def sat_subtract(subtractor: int, subtractee: int) -> int:
@@ -53,7 +64,7 @@ class Scene:
         log = logging.getLogger(__name__)
         for (k, v) in kwargs.items():
             log.debug("Loading image: %s", v)
-            self.surfaces[k] = Image.open(RESOURCES / v)
+            self.surfaces[k] = Image.open(resource_path(RESOURCES / v))
 
     def renderables(self) -> Iterator[sdl2.ext.Sprite]:
         return iter(self.region)

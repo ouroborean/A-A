@@ -5,7 +5,8 @@ import sdl2
 import sdl2.ext
 import sdl2.surface
 import sdl2.sdlttf
-import ctypes
+
+
 
 from animearena import engine
 from animearena import character
