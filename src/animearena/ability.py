@@ -1615,8 +1615,9 @@ def exe_hyper_eccentric_punch(user: "CharacterManager", playerTeam: list["Charac
         user.check_on_use()
         user.check_on_harm()
 #endregion
-#region Hinata Execution (Tests)
+#region Hinata Execution
 def exe_twin_lion_fist(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    used = False
     if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
@@ -1624,11 +1625,16 @@ def exe_twin_lion_fist(user: "CharacterManager", playerTeam: list["CharacterMana
                 if user.has_effect(EffectType.MARK, "Byakugan"):
                     target.source.energy_contribution -= 1
                     user.check_on_drain(target)
+                used = True
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(25, target)
                 if user.has_effect(EffectType.MARK, "Byakugan"):
                     target.source.energy_contribution -= 1
                     user.check_on_drain(target)
+                used = True
+    if used:
         user.check_on_use()
         user.check_on_harm()
 
@@ -1674,7 +1680,7 @@ def exe_hinata_byakugan(user: "CharacterManager", playerTeam: list["CharacterMan
 def exe_gentle_fist_block(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Hinata is invulnerable."))
 #endregion
-#region Ichigo Execution (Tests)
+#region Ichigo Execution
 def exe_getsuga_tenshou(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if user.has_effect(EffectType.MARK, "Tensa Zangetsu"):
         def_type = "BYPASS"
@@ -1695,19 +1701,22 @@ def exe_getsuga_tenshou(user: "CharacterManager", playerTeam: list["CharacterMan
 def exe_tensa_zangetsu(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 4, lambda eff: "Ichigo is invulnerable."))
     user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Getsuga Tenshou deals piercing damage and ignores invulnerabilty."))
-    user.add_effect(Effect(user.used_ability, EffectType.TARGET_SWAP, user, 3, lambda eff: "Zangetsu Slash will target all enemies.", mag=31))
+    user.add_effect(Effect(user.used_ability, EffectType.TARGET_SWAP, user, 3, lambda eff: "Zangetsu Strike will target all enemies.", mag=31))
     user.source.energy_contribution += 1
     user.check_on_use()
 
 def exe_zangetsu_slash(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if not user.check_countered(playerTeam, enemyTeam):
+        affected = 0
         for target in user.current_targets:
             base_damage = 20
-            if user.has_effect(EffectType.STACK, "Zangetsu Slash") and user.can_boost():
-                base_damage += (5 * user.get_effect(EffectType.STACK, "Zangetsu Slash").mag)
+            if user.has_effect(EffectType.STACK, "Zangetsu Strike") and user.can_boost():
+                base_damage += (5 * user.get_effect(EffectType.STACK, "Zangetsu Strike").mag)
             if target.final_can_effect(user.check_bypass_effects()):
-                user.deal_damage(base_damage, user)
-            user.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff: f"Zangetsu Slash will deal {5 * eff.mag} more damage.", mag = 1))
+                user.deal_damage(base_damage, target)
+                affected += 1
+        if affected > 0:
+            user.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff: f"Zangetsu Strike will deal {5 * eff.mag} more damage.", mag = affected), user)
         user.check_on_use()
         user.check_on_harm()
 
@@ -1715,7 +1724,7 @@ def exe_zangetsu_block(user: "CharacterManager", playerTeam: list["CharacterMana
     user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Ichigo is invulnerable."))
     user.check_on_use()
 #endregion
-#region Ichimaru Execution (Tests)
+#region Ichimaru Execution
 def exe_butou_renjin(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
@@ -1740,11 +1749,16 @@ def exe_kamishini_no_yari(user: "CharacterManager", playerTeam: list["CharacterM
         for target in user.current_targets:
             if target.final_can_effect("BYPASS"):
                 base_damage = 10 * target.get_effect_with_user(EffectType.STACK, "Kill, Kamishini no Yari", user).mag
+                stack_addition = base_damage
+                if target.has_effect_with_user(EffectType.CONT_AFF_DMG, "Kill, Kamishini no Yari", user):
+                    base_damage += target.get_effect(EffectType.CONT_AFF_DMG, "Kill, Kamishini no Yari").mag
+                    target.get_effect(EffectType.CONT_AFF_DMG, "Kill, Kamishini no Yari").waiting = True
                 user.deal_aff_damage(base_damage, target)
                 if target.has_effect_with_user(EffectType.CONT_AFF_DMG, "Kill, Kamishini no Yari", user):
-                    target.get_effect_with_user(EffectType.CONT_AFF_DMG, "Kill, Kamishini no Yari", user).mag += base_damage
+                    target.get_effect_with_user(EffectType.CONT_AFF_DMG, "Kill, Kamishini no Yari", user).mag += stack_addition
                 else:
                     target.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 280000, lambda eff: f"This character will take {eff.mag} affliction damage.", mag = base_damage))
+                target.remove_effect(target.get_effect_with_user(EffectType.STACK, "Kill, Kamishini no Yari", user))
         user.check_on_use()
         user.check_on_harm()
 
@@ -1753,7 +1767,7 @@ def exe_shinso_parry(user: "CharacterManager", playerTeam: list["CharacterManage
     user.check_on_use()
 
 #endregion
-#region Jack Execution (Tests)
+#region Jack Execution
 def exe_maria_the_ripper(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
@@ -4371,7 +4385,7 @@ ability_info_db = {
     "hinata2": [
         "Eight Trigrams - 64 Palms",
         "Hinata gives her entire team 10 points of damage reduction for 2 turns. If used again within 2 turns, this ability will also deal 15 damage to the enemy team.",
-        [1, 0, 0, 0, 0, 0], Target.MULTI_ALLY, target_eight_trigrams, exe_hinata_trigrams
+        [1, 0, 0, 0, 0, 0], Target.ALL_TARGET, target_eight_trigrams, exe_hinata_trigrams
     ],
     "hinata3": [
         "Byakugan",

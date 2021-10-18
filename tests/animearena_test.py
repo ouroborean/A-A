@@ -19,6 +19,69 @@ scene_manager = SceneManager()
 uiprocessor = sdl2.ext.UIProcessor()
 resources_path = "resources"
 
+def do_targeting(scene: BattleScene, targeter: CharacterManager, primary_target: CharacterManager):
+    scene.acting_character = targeter
+    scene.selected_ability = targeter.used_ability
+    scene.apply_targeting(primary_target)
+
+def do_enemy_targeting(scene: BattleScene, targeter: CharacterManager, primary_target: CharacterManager):
+    scene.acting_character = targeter
+    scene.selected_ability = targeter.used_ability
+    enemy_apply_targeting(scene, primary_target)
+
+def tick_one_turn(scene: BattleScene):
+    scene.resolve_ticking_ability()
+    scene.tick_effect_duration()
+    scene.tick_effect_duration()
+
+def enemy_apply_targeting(scene: BattleScene, primary_target: CharacterManager):
+        if scene.selected_ability.target_type == Target.SINGLE:
+            scene.acting_character.add_current_target(primary_target)
+            primary_target.add_received_ability(scene.selected_ability)
+        elif scene.selected_ability.target_type == Target.MULTI_ALLY:
+            scene.selected_ability.primary_target = primary_target
+            for manager in scene.enemy_display.team.character_managers:
+                if manager.targeted:
+                    scene.acting_character.add_current_target(manager)
+                    manager.add_received_ability(scene.selected_ability)
+        elif scene.selected_ability.target_type == Target.MULTI_ENEMY:
+            scene.selected_ability.primary_target = primary_target
+            for manager in scene.player_display.team.character_managers:
+                if manager.targeted:
+                    scene.acting_character.add_current_target(manager)
+                    manager.add_received_ability(scene.selected_ability)
+        elif scene.selected_ability.target_type == Target.ALL_TARGET:
+            scene.selected_ability.primary_target = primary_target
+            for manager in scene.player_display.team.character_managers:
+                if manager.targeted:
+                    scene.acting_character.add_current_target(manager)
+                    manager.add_received_ability(scene.selected_ability)
+            for manager in scene.enemy_display.team.character_managers:
+                if manager.targeted:
+                    scene.acting_character.add_current_target(manager)
+                    manager.add_received_ability(scene.selected_ability)
+        scene.reset_targeting()
+        scene.acting_character.primary_target = primary_target
+        scene.selected_ability.user = scene.acting_character
+        scene.acting_character.used_ability = scene.selected_ability
+        scene.selected_ability = None
+        scene.acting_character.acted = True
+
+def ally_use_ability(scene: BattleScene, targeter: CharacterManager, primary_target: CharacterManager, ability: Ability):
+    targeter.used_ability = ability
+    targeter.used_ability.target(targeter, scene.player_display.team.character_managers, scene.enemy_display.team.character_managers)
+    do_targeting(scene, targeter, primary_target)
+    targeter.used_ability.execute(targeter, scene.player_display.team.character_managers, scene.enemy_display.team.character_managers)
+    targeter.current_targets.clear()
+    tick_one_turn(scene)
+
+def enemy_use_ability(scene: BattleScene, targeter: CharacterManager, primary_target: CharacterManager, ability: Ability):
+    targeter.used_ability = ability
+    targeter.used_ability.target(targeter, scene.enemy_display.team.character_managers, scene.player_display.team.character_managers)
+    do_enemy_targeting(scene, targeter, primary_target)
+    targeter.used_ability.execute(targeter, scene.enemy_display.team.character_managers, scene.player_display.team.character_managers)
+    targeter.current_targets.clear()
+
 @pytest.fixture
 def test_scene() -> engine.Scene:
     return make_battle_scene(scene_manager)
@@ -139,6 +202,34 @@ def gray_test_scene(test_scene: BattleScene) -> engine.Scene:
 def gunha_test_scene(test_scene: BattleScene) -> engine.Scene:
     ally_team = [Character("sogiita"), Character("toga"), Character("nemu")]
     enemy_team = [Character("gajeel"), Character("naruto"), Character("chu")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+@pytest.fixture
+def hinata_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("hinata"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("astolfo"), Character("naruto"), Character("chu")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+@pytest.fixture
+def ichigo_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("ichigo"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("astolfo"), Character("naruto"), Character("cmary")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+@pytest.fixture
+def ichimaru_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("ichimaru"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("astolfo"), Character("naruto"), Character("cmary")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+@pytest.fixture
+def jack_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("jack"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("astolfo"), Character("naruto"), Character("cmary")]
     test_scene.setup_scene(ally_team, enemy_team)
     return test_scene
 
@@ -2038,4 +2129,458 @@ def test_overwhelming_suppression_no_charge(gunha_test_scene:BattleScene):
     assert gajeel.check_invuln()
 
     assert gajeel.get_boosts(0) == -5
+
+def test_twin_lion_fist(hinata_test_scene:BattleScene):
+    pteam = hinata_test_scene.player_display.team.character_managers
+    eteam = hinata_test_scene.enemy_display.team.character_managers
+    hinata = pteam[0]
+    lionfist = hinata.source.main_abilities[0]
+
+    hinata.used_ability = lionfist
+    hinata.current_targets.append(eteam[0])
+    hinata.used_ability.execute(hinata, pteam, eteam)
+
+    assert eteam[0].source.hp == 50
+
+def test_twin_lion_fist_with_boost(hinata_test_scene:BattleScene):
+    pteam = hinata_test_scene.player_display.team.character_managers
+    eteam = hinata_test_scene.enemy_display.team.character_managers
+    hinata = pteam[0]
+    lionfist = hinata.source.main_abilities[0]
+
+    hinata.used_ability = lionfist
+    hinata.current_targets.append(eteam[0])
+
+    hinata.add_effect(Effect(hinata.used_ability, EffectType.ALL_BOOST, hinata, 2, lambda eff: "", mag=10))
+
+    hinata.used_ability.execute(hinata, pteam, eteam)
+
+    assert eteam[0].source.hp == 30
+
+def test_twin_lion_fist_with_counter(hinata_test_scene:BattleScene):
+    pteam = hinata_test_scene.player_display.team.character_managers
+    eteam = hinata_test_scene.enemy_display.team.character_managers
+    hinata = pteam[0]
+    lionfist = hinata.source.main_abilities[0]
+
+    hinata.used_ability = lionfist
+    hinata.current_targets.append(eteam[0])
+
+    eteam[0].used_ability = eteam[0].source.main_abilities[0]
+    eteam[0].current_targets.append(eteam[0])
+    eteam[0].used_ability.execute(eteam[0], eteam, pteam)
+
+    assert eteam[0].has_effect(EffectType.COUNTER, "Casseur de Logistille")
+
+    hinata.used_ability.execute(hinata, pteam, eteam)
+
+    assert eteam[0].source.hp == 75
+    assert hinata.is_stunned()
+
+def test_trigrams_dr(hinata_test_scene:BattleScene):
+    pteam = hinata_test_scene.player_display.team.character_managers
+    eteam = hinata_test_scene.enemy_display.team.character_managers
+    hinata = pteam[0]
+    trigrams = hinata.source.main_abilities[1]
+
+    hinata.used_ability = trigrams
+    hinata.current_targets.append(pteam[0])
+    hinata.current_targets.append(pteam[1])
+    hinata.current_targets.append(pteam[2])
+
+    hinata.used_ability.execute(hinata, pteam, eteam)
+
+    assert pteam[2].check_for_dmg_reduction() == 10
+
+def test_trigrams_dmg(hinata_test_scene:BattleScene):
+    pteam = hinata_test_scene.player_display.team.character_managers
+    eteam = hinata_test_scene.enemy_display.team.character_managers
+    hinata = pteam[0]
+    trigrams = hinata.source.main_abilities[1]
+
+    hinata.used_ability = trigrams
+    hinata.current_targets.append(pteam[0])
+    hinata.current_targets.append(pteam[1])
+    hinata.current_targets.append(pteam[2])
+
+    hinata.used_ability.execute(hinata, pteam, eteam)
+
+    hinata.current_targets.clear()
+
+    hinata.used_ability.target(hinata, pteam, eteam)
+    hinata_test_scene.acting_character = hinata
+    hinata_test_scene.selected_ability = hinata.used_ability
+    hinata_test_scene.apply_targeting(eteam[0])
+    
+
+    hinata.used_ability.execute(hinata, pteam, eteam)
+
+    assert eteam[1].source.hp == 85
+
+def test_lionfist_byakugan_drain(hinata_test_scene:BattleScene):
+    pteam = hinata_test_scene.player_display.team.character_managers
+    eteam = hinata_test_scene.enemy_display.team.character_managers
+    hinata = pteam[0]
+    lionfist = hinata.source.main_abilities[0]
+    byakugan = hinata.source.main_abilities[2]
+
+    ally_use_ability(hinata_test_scene, hinata, hinata, byakugan)
+
+    assert hinata.has_effect(EffectType.MARK, "Byakugan")
+    
+    ally_use_ability(hinata_test_scene, hinata, eteam[0], lionfist)
+
+    assert eteam[0].source.hp == 50
+    assert eteam[0].source.energy_contribution == -1
+
+def test_trigrams_byakugan_drain(hinata_test_scene:BattleScene):
+    pteam = hinata_test_scene.player_display.team.character_managers
+    eteam = hinata_test_scene.enemy_display.team.character_managers
+    hinata = pteam[0]
+    lionfist = hinata.source.main_abilities[0]
+    trigrams = hinata.source.main_abilities[1]
+    byakugan = hinata.source.main_abilities[2]
+
+    ally_use_ability(hinata_test_scene, hinata, hinata, byakugan)
+
+    ally_use_ability(hinata_test_scene, hinata, hinata, trigrams)        
+    ally_use_ability(hinata_test_scene, hinata, eteam[0], trigrams)
+
+    assert eteam[0].source.hp == 85
+    assert eteam[0].source.energy_contribution == 0
+    assert eteam[1].source.energy_contribution == 1
+
+def test_tensa_zangetsu(ichigo_test_scene:BattleScene):
+    pteam = ichigo_test_scene.player_display.team.character_managers
+    eteam = ichigo_test_scene.enemy_display.team.character_managers
+    ichigo = pteam[0]
+    cmary = eteam[2]
+
+    bankai = ichigo.source.main_abilities[1]
+
+    ally_use_ability(ichigo_test_scene, ichigo, ichigo, bankai)
+
+    enemy_use_ability(ichigo_test_scene, cmary, pteam[1], cmary.source.main_abilities[2])
+
+    assert ichigo.source.hp == 100
+    assert pteam[1].source.hp == 80
+
+def test_tensa_zangetsu_getsuga_tenshou(ichigo_test_scene:BattleScene):
+    pteam = ichigo_test_scene.player_display.team.character_managers
+    eteam = ichigo_test_scene.enemy_display.team.character_managers
+    ichigo = pteam[0]
+    cmary = eteam[2]
+
+    bankai = ichigo.source.main_abilities[1]
+    getsuga = ichigo.source.main_abilities[0]
+
+    ally_use_ability(ichigo_test_scene, ichigo, ichigo, bankai)
+
+    enemy_use_ability(ichigo_test_scene, cmary, cmary, cmary.source.main_abilities[3])
+
+    ally_use_ability(ichigo_test_scene, ichigo, cmary, getsuga)
+
+    assert cmary.source.hp == 60
+
+def test_enemy_use_ability_on_invuln(ichigo_test_scene:BattleScene):
+    pteam = ichigo_test_scene.player_display.team.character_managers
+    eteam = ichigo_test_scene.enemy_display.team.character_managers
+    ichigo = pteam[0]
+    cmary = eteam[2]
+
+    bankai = ichigo.source.main_abilities[1]
+    getsuga = ichigo.source.main_abilities[0]
+
+    enemy_use_ability(ichigo_test_scene, cmary, cmary, cmary.source.main_abilities[3])
+
+    ally_use_ability(ichigo_test_scene, ichigo, cmary, getsuga)
+
+    assert cmary.source.hp == 100
+
+def test_zangetsu_strike(ichigo_test_scene:BattleScene):
+    pteam = ichigo_test_scene.player_display.team.character_managers
+    eteam = ichigo_test_scene.enemy_display.team.character_managers
+    ichigo = pteam[0]
+    cmary = eteam[2]
+
+    zangetsu = ichigo.source.main_abilities[2]
+
+    ally_use_ability(ichigo_test_scene, ichigo, cmary, zangetsu)
+
+    assert cmary.source.hp == 80
+
+    ally_use_ability(ichigo_test_scene, ichigo, cmary, zangetsu)
+
+    assert cmary.source.hp == 55
+
+    ally_use_ability(ichigo_test_scene, ichigo, cmary, zangetsu)
+
+    assert cmary.source.hp == 25
+
+def test_tensa_zangetsu_strike(ichigo_test_scene:BattleScene):
+    pteam = ichigo_test_scene.player_display.team.character_managers
+    eteam = ichigo_test_scene.enemy_display.team.character_managers
+    ichigo = pteam[0]
+    cmary = eteam[2]
+
+    zangetsu = ichigo.source.main_abilities[2]
+    bankai = ichigo.source.main_abilities[1]
+
+    ally_use_ability(ichigo_test_scene, ichigo, ichigo, bankai)
+
+    ichigo.adjust_targeting_types()
+
+    assert zangetsu.target_type == Target.MULTI_ENEMY
+
+    ally_use_ability(ichigo_test_scene, ichigo, eteam[1], zangetsu)
+
+
+    assert cmary.source.hp == 80
+    assert eteam[1].source.hp == 80
+    assert eteam[0].source.hp == 80
+    assert ichigo.get_effect(EffectType.STACK, "Zangetsu Strike").mag == 3
+
+def test_tensa_zangetsu_strike_boost_cancel(ichigo_test_scene:BattleScene):
+    pteam = ichigo_test_scene.player_display.team.character_managers
+    eteam = ichigo_test_scene.enemy_display.team.character_managers
+    ichigo = pteam[0]
+    cmary = eteam[2]
+    astolfo = eteam[0]
+    trap = eteam[0].source.main_abilities[1]
+
+    zangetsu = ichigo.source.main_abilities[2]
+    
+    ally_use_ability(ichigo_test_scene, ichigo, cmary, zangetsu)
+    ally_use_ability(ichigo_test_scene, ichigo, cmary, zangetsu)
+    ally_use_ability(ichigo_test_scene, ichigo, cmary, zangetsu)
+
+
+
+    assert cmary.source.hp == 25
+    assert ichigo.get_effect(EffectType.STACK, "Zangetsu Strike").mag == 3
+
+    enemy_use_ability(ichigo_test_scene, astolfo, ichigo, trap)
+
+    ally_use_ability(ichigo_test_scene, ichigo, cmary, zangetsu)
+
+    assert cmary.source.hp == 5
+
+def test_butou_renjin(ichimaru_test_scene:BattleScene):
+    pteam = ichimaru_test_scene.player_display.team.character_managers
+    eteam = ichimaru_test_scene.enemy_display.team.character_managers
+    ichimaru = pteam[0]
+    butou = ichimaru.source.main_abilities[0]
+    cmary = eteam[2]
+
+    ally_use_ability(ichimaru_test_scene, ichimaru, cmary, butou)
+
+    assert cmary.has_effect(EffectType.CONT_UNIQUE, "Butou Renjin")
+
+    tick_one_turn(ichimaru_test_scene)
+    tick_one_turn(ichimaru_test_scene)
+    
+
+
+    assert cmary.source.hp == 70
+    assert cmary.get_effect(EffectType.STACK, "Kill, Kamishini no Yari").mag == 2
+    
+def test_butou_renjin_into_kill(ichimaru_test_scene:BattleScene):
+    pteam = ichimaru_test_scene.player_display.team.character_managers
+    eteam = ichimaru_test_scene.enemy_display.team.character_managers
+    ichimaru = pteam[0]
+    butou = ichimaru.source.main_abilities[0]
+    kill = ichimaru.source.main_abilities[2]
+    cmary = eteam[2]
+
+    ally_use_ability(ichimaru_test_scene, ichimaru, cmary, butou)
+
+    assert cmary.has_effect(EffectType.CONT_UNIQUE, "Butou Renjin")
+
+    tick_one_turn(ichimaru_test_scene)
+    
+
+
+    assert cmary.source.hp == 70
+    assert cmary.get_effect(EffectType.STACK, "Kill, Kamishini no Yari").mag == 2
+
+    ally_use_ability(ichimaru_test_scene, ichimaru, cmary, kill)
+
+    assert cmary.source.hp == 50
+
+    assert not cmary.has_effect(EffectType.STACK, "Kill, Kamishini no Yari")
+
+    tick_one_turn(ichimaru_test_scene)
+
+    assert cmary.source.hp == 30
+
+def test_13_kilometer(ichimaru_test_scene:BattleScene):
+    pteam = ichimaru_test_scene.player_display.team.character_managers
+    eteam = ichimaru_test_scene.enemy_display.team.character_managers
+    ichimaru = pteam[0]
+    swing = ichimaru.source.main_abilities[1]
+    cmary = eteam[2]
+
+    ally_use_ability(ichimaru_test_scene, ichimaru, cmary, swing)
+
+    for enemy in eteam:
+        assert enemy.source.hp == 75
+        assert enemy.has_effect(EffectType.STACK, "Kill, Kamishini no Yari")
+
+def test_13_kilometer_into_kill(ichimaru_test_scene:BattleScene):
+    pteam = ichimaru_test_scene.player_display.team.character_managers
+    eteam = ichimaru_test_scene.enemy_display.team.character_managers
+    ichimaru = pteam[0]
+    swing = ichimaru.source.main_abilities[1]
+    kill = ichimaru.source.main_abilities[2]
+    cmary = eteam[2]
+
+    ally_use_ability(ichimaru_test_scene, ichimaru, cmary, swing)
+
+    for enemy in eteam:
+        assert enemy.source.hp == 75
+        assert enemy.get_effect(EffectType.STACK, "Kill, Kamishini no Yari").mag == 1
+
+    ally_use_ability(ichimaru_test_scene, ichimaru, cmary, kill)
+    for enemy in eteam:
+        assert enemy.source.hp == 65
+
+    tick_one_turn(ichimaru_test_scene)
+
+    for enemy in eteam:
+        assert enemy.source.hp == 55
+
+def test_repeated_kill(ichimaru_test_scene:BattleScene):
+    pteam = ichimaru_test_scene.player_display.team.character_managers
+    eteam = ichimaru_test_scene.enemy_display.team.character_managers
+    ichimaru = pteam[0]
+    swing = ichimaru.source.main_abilities[1]
+    kill = ichimaru.source.main_abilities[2]
+    cmary = eteam[2]
+
+    ally_use_ability(ichimaru_test_scene, ichimaru, cmary, swing)
+
+    for enemy in eteam:
+        assert enemy.source.hp == 75
+        assert enemy.get_effect(EffectType.STACK, "Kill, Kamishini no Yari").mag == 1
+
+    ally_use_ability(ichimaru_test_scene, ichimaru, cmary, kill)
+    for enemy in eteam:
+        assert enemy.source.hp == 65
+
+    ally_use_ability(ichimaru_test_scene, ichimaru, cmary, swing)
+
+    for enemy in eteam:
+        assert enemy.source.hp == 30
+
+    ally_use_ability(ichimaru_test_scene, ichimaru, cmary, kill)
+
+    for enemy in eteam:
+        assert enemy.source.hp == 10
+        enemy.source.hp = 40
+    
+    tick_one_turn(ichimaru_test_scene)
+
+    for enemy in eteam:
+        assert enemy.source.hp == 20
+
+def test_fog_of_london(jack_test_scene: BattleScene):
+    pteam = jack_test_scene.player_display.team.character_managers
+    eteam = jack_test_scene.enemy_display.team.character_managers
+    jack = pteam[0]
+    fog = jack.source.main_abilities[1]
+    maria = jack.source.main_abilities[0]
+    we_are_jack = jack.source.main_abilities[2]
+    streets = jack.source.alt_abilities[0]
+
+    ally_use_ability(jack_test_scene, jack, eteam[0], fog)
+
+    for enemy in eteam:
+        assert enemy.source.hp == 95
+        assert enemy.has_effect(EffectType.CONT_AFF_DMG, "Fog of London")
+    
+def test_maria_lockout(jack_test_scene: BattleScene):
+    pteam = jack_test_scene.player_display.team.character_managers
+    eteam = jack_test_scene.enemy_display.team.character_managers
+    jack = pteam[0]
+    fog = jack.source.main_abilities[1]
+    maria = jack.source.main_abilities[0]
+    we_are_jack = jack.source.main_abilities[2]
+    streets = jack.source.alt_abilities[0]
+    
+    
+
+    assert maria.target(jack, pteam, eteam, True) == 0
+
+def test_maria_with_fog(jack_test_scene: BattleScene):
+    pteam = jack_test_scene.player_display.team.character_managers
+    eteam = jack_test_scene.enemy_display.team.character_managers
+    jack = pteam[0]
+    fog = jack.source.main_abilities[1]
+    maria = jack.source.main_abilities[0]
+    we_are_jack = jack.source.main_abilities[2]
+    streets = jack.source.alt_abilities[0]
+
+    ally_use_ability(jack_test_scene, jack, eteam[0], fog)
+
+    assert maria.target(jack, pteam, eteam, True) == 3
+
+    ally_use_ability(jack_test_scene, jack, eteam[0], maria)
+
+    assert eteam[0].source.hp == 65
+
+def test_maria_with_boost(jack_test_scene: BattleScene):
+    pteam = jack_test_scene.player_display.team.character_managers
+    eteam = jack_test_scene.enemy_display.team.character_managers
+    jack = pteam[0]
+    fog = jack.source.main_abilities[1]
+    maria = jack.source.main_abilities[0]
+    we_are_jack = jack.source.main_abilities[2]
+    streets = jack.source.alt_abilities[0]
+
+    jack.add_effect(Effect(fog, EffectType.ALL_BOOST, jack, 10, lambda eff: "", mag=10))
+
+    ally_use_ability(jack_test_scene, jack, eteam[0], fog)
+
+    assert maria.target(jack, pteam, eteam, True) == 3
+
+    ally_use_ability(jack_test_scene, jack, eteam[0], maria)
+
+    assert eteam[0].source.hp == 55
+
+def test_streets_of_the_lost_isolation(jack_test_scene: BattleScene):
+    pteam = jack_test_scene.player_display.team.character_managers
+    eteam = jack_test_scene.enemy_display.team.character_managers
+    jack = pteam[0]
+    fog = jack.source.main_abilities[1]
+    maria = jack.source.main_abilities[0]
+    we_are_jack = jack.source.main_abilities[2]
+    streets = jack.source.alt_abilities[0]
+
+    ally_use_ability(jack_test_scene, jack, eteam[0], fog)
+
+    assert streets.target(jack, pteam, eteam, True) == 3
+
+    ally_use_ability(jack_test_scene, jack, eteam[1], streets)
+
+    assert eteam[1].check_isolated()
+
+    assert eteam[0].source.main_abilities[0].target(eteam[0], eteam, pteam, True) == 2
+
+def test_streets_of_the_lost_we_are_jack_targeting(jack_test_scene: BattleScene):
+    pteam = jack_test_scene.player_display.team.character_managers
+    eteam = jack_test_scene.enemy_display.team.character_managers
+    jack = pteam[0]
+    fog = jack.source.main_abilities[1]
+    maria = jack.source.main_abilities[0]
+    we_are_jack = jack.source.main_abilities[2]
+    streets = jack.source.alt_abilities[0]
+
+    ally_use_ability(jack_test_scene, jack, eteam[0], fog)
+
+    assert we_are_jack.target(jack, pteam, eteam, True) == 0
+
+    ally_use_ability(jack_test_scene, jack, eteam[1], streets)
+
+    assert we_are_jack.target(jack, pteam, eteam, True) == 1
+
 

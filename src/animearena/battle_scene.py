@@ -1144,7 +1144,7 @@ class CharacterManager():
 
         def is_harmful(self: "CharacterManager", eteam: list["CharacterManager"]) -> bool:
             for enemy in eteam:
-                if eteam in self.current_targets:
+                if enemy in self.current_targets:
                     return True
             return False
 
@@ -1164,6 +1164,7 @@ class CharacterManager():
                         self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Hear Distress."))
                         self.source.energy_contribution -= 1
                         eff.user.check_on_drain(self)
+                        self.full_remove_effect("Hear Distress", eff.user)
                         if self.has_effect(EffectType.MARK, "Third Dance - Shirafune"):
                             self.full_remove_effect("Third Dance - Shirafune", self)
                             if eff.user.final_can_effect():
@@ -1177,8 +1178,9 @@ class CharacterManager():
 
                     gen = (eff for eff in target.source.current_effects if eff.eff_type == EffectType.COUNTER and not self.scene.is_allied(eff))
                     for eff in gen:
-                        if eff.name == "Zero Point":
+                        if eff.name == "Zero Point Breakthrough":
                             src = Ability("tsunayoshi3")
+                            target.full_remove_effect("Zero Point Breakthrough", eff.user)
                             self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Zero Point Breakthrough."))
                             self.add_effect(Effect(src, EffectType.ALL_STUN, eff.user, 5, lambda eff: "This character is stunned."))
                             eff.user.add_effect(Effect(src, EffectType.ALL_BOOST, eff.user, 4, lambda eff: "X-Burner will deal 10 more damage.", mag = 110))
@@ -1191,6 +1193,7 @@ class CharacterManager():
                             return True
                         if eff.name == "One For All - Shoot Style":
                             src = Ability("midoriya3")
+                            target.full_remove_effect("One For All - Shoot Style", eff.user)
                             self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by One For All - Shoot Style."))
                             if self.has_effect(EffectType.MARK, "Third Dance - Shirafune"):
                                 self.full_remove_effect("Third Dance - Shirafune", self)
@@ -1201,6 +1204,7 @@ class CharacterManager():
                             return True
                         if eff.name == "Minion - Tama":
                             src = Ability("ruler3")
+                            target.full_remove_effect("Minion - Tama", eff.user)
                             self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Minion - Tama."))
                             eff.user.source.main_abilities[2].cooldown_remaining = 2
                             if not self.final_can_effect():
@@ -1216,7 +1220,8 @@ class CharacterManager():
                             src = Ability("astolfo1")
                             if self.used_ability._base_cost[Energy.SPECIAL] > 0 or self.used_ability._base_cost[Energy.MENTAL] > 0:
                                 self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Casseur de Logistille."))
-                                if not self.final_can_effect():
+                                target.full_remove_effect("Casseur de Logistille", eff.user)
+                                if self.final_can_effect():
                                     self.add_effect(Effect(src, EffectType.ALL_STUN, eff.user, 3, lambda eff: "This character is stunned."))
                                     self.add_effect(Effect(src, EffectType.ISOLATE, eff.user, 3, lambda eff: "This character is isolated."))
                                     eff.user.check_on_stun(self)
@@ -1232,12 +1237,12 @@ class CharacterManager():
                     if eff.eff_type == EffectType.REFLECT and not self.scene.is_allied(eff))
                     for eff in gen:
                         if eff.name == "Copy Ninja Kakashi":
+                            target.full_remove_effect("Copy Ninja Kakashi", eff.user)
                             alt_targets = [char for char in self.current_targets if char != target]
                             alt_targets.append(self) 
                             self.current_targets = alt_targets
                             self.used_ability.execute(self, pteam, eteam)
                             return True
-
 
         return False
 
