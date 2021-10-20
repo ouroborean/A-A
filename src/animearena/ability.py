@@ -1809,7 +1809,7 @@ def exe_streets_of_the_lost(user: "CharacterManager", playerTeam: list["Characte
     user.check_on_use()
     user.check_on_harm()
 #endregion
-#region Itachi Execution (Tests)
+#region Itachi Execution
 def exe_amaterasu(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
@@ -1857,7 +1857,7 @@ def exe_yata_mirror(user: "CharacterManager", playerTeam: list["CharacterManager
     user.receive_eff_aff_damage(5)
     user.check_on_use()
 #endregion
-#region Jiro Execution (Tests)
+#region Jiro Execution
 def exe_counter_balance(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     for target in user.current_targets:
         target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 2, lambda eff: "Any enemy that stuns this character will lose one energy.", invisible=True))
@@ -1905,7 +1905,7 @@ def exe_heartbeat_surround(user: "CharacterManager", playerTeam: list["Character
                 base_damage = 10
                 if target.final_can_effect(def_type) and not target.deflecting():
                     user.deal_damage(base_damage, target)
-                    target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 7, lambda eff:"This character will take 10 damage.", mag=5))
+                    target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 7, lambda eff:"This character will take 10 damage.", mag=10))
             user.add_effect(Effect(user.used_ability, EffectType.CONT_USE, user, 7, lambda eff: "Jiro is using Hearbeat Surround. This effect will end if Jiro is stunned."))
             user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 7, lambda eff: "Heartbeat Distortion will ignore invulnerability and deal 15 damage to all enemies."))
             user.add_effect(Effect(user.used_ability, EffectType.COST_ADJUST, user, 7, lambda eff: "Heartbeat Distortion will cost one less random energy.", mag = -251))
@@ -1916,7 +1916,7 @@ def exe_early_detection(user: "CharacterManager", playerTeam: list["CharacterMan
     user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Jiro is invulnerable."))
     user.check_on_use()
 #endregion
-#region Kakashi Execution (Tests)
+#region Kakashi Execution
 def exe_copy_ninja(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(user.used_ability, EffectType.REFLECT, user, 2, lambda eff: "Kakashi will reflect the first hostile ability that targets him.", invisible=True))
     user.check_on_use()
@@ -1958,7 +1958,7 @@ def exe_kamui(user: "CharacterManager", playerTeam: list["CharacterManager"], en
             user.check_on_harm()
 
 #endregion
-#region Kuroko Execution (Tests)
+#region Kuroko Execution
 def exe_teleporting_strike(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
@@ -1972,6 +1972,8 @@ def exe_teleporting_strike(user: "CharacterManager", playerTeam: list["Character
         user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Kuroko is invulnerable."))
         user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Needle Pin will ignore invulnerability and deal 15 piercing damage."))
         user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Judgement Throw will have double effect."))
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_needle_pin(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if not user.check_countered(playerTeam, enemyTeam):
@@ -1986,7 +1988,7 @@ def exe_needle_pin(user: "CharacterManager", playerTeam: list["CharacterManager"
                 target.add_effect(Effect(user.used_ability, EffectType.DEF_NEGATE, user, 3, lambda eff: "This character cannot reduce damage or become invulnerable."))
                 if user.has_effect(EffectType.MARK, "Judgement Throw"):
                     target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                    user.check_on_stun()
+                    user.check_on_stun(target)
         user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Teleporting Strike will have no cooldown."))
         user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Judgement Throw will remove one random energy from its target."))
         user.check_on_use()
@@ -2009,6 +2011,7 @@ def exe_judgement_throw(user: "CharacterManager", playerTeam: list["CharacterMan
                 if user.has_effect(EffectType.MARK, "Needle Pin"):
                     target.source.energy_contribution -= 1
                     user.check_on_drain(target)
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_BOOST, user, 2, lambda eff: f"This character will deal {eff.mag} less damage.", mag = -weaken))
         user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Teleporting Strike will deal 15 more damage."))
         user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Needle Pin will stun its target for one turn."))
         user.check_on_use()
@@ -2018,7 +2021,7 @@ def exe_kuroko_dodge(user: "CharacterManager", playerTeam: list["CharacterManage
     user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Kuroko is invulnerable."))
     user.check_on_use()
 #endregion
-#region Lambo Execution (Tests)
+#region Lambo Execution
 def exe_ten_year_bazooka(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.full_remove_effect("Summon Gyudon", user)
     for p in playerTeam:
@@ -2029,20 +2032,20 @@ def exe_ten_year_bazooka(user: "CharacterManager", playerTeam: list["CharacterMa
         user.full_remove_effect("Ten-Year Bazooka", user)
         user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 5, lambda eff: "Lambo has used the Ten-Year Bazooka."))
         user.add_effect(Effect(user.used_ability, EffectType.PROF_SWAP, user, 5, lambda eff: "Teen Lambo has been replaced by Adult Lambo.", mag = 2))
-        user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 5, lambda eff: "Thunder, Set, Charge! has been replaced by Elettrico Cornata.", mag = 32))
+        user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 5, lambda eff: "Thunder, Set, Charge! has been replaced by Elettrico Cornata.", mag = 22))
     elif user.has_effect(EffectType.UNIQUE, "Ten-Year Bazooka"):
         user.full_remove_effect("Ten-Year Bazooka", user)
     else:
-        user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 7, lambda eff: "Lambo has used the Ten-Year Bazooka."))
+        user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 7, lambda eff: "Lambo has used the Ten-Year Bazooka."))
         user.add_effect(Effect(user.used_ability, EffectType.PROF_SWAP, user, 7, lambda eff: "Lambo has been replaced by Teen Lambo.", mag = 1))
-        user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 7, lambda eff: "Summon Gyudon has been replaced by Thunder, Set, Charge!", mag= 31))
+        user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 7, lambda eff: "Summon Gyudon has been replaced by Thunder, Set, Charge!", mag= 21))
     user.check_on_use()
 
 def exe_conductivity(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     for target in user.current_targets:
         if target != user:
             if target.helpful_target(user, user.check_bypass_effects()):
-                target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 4, lambda eff: "This character has 20 points of damage reduction. If they receive a new damaging ability during this time, Lambo will take 10 damage.", mag = 10))
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 4, lambda eff: "This character has 20 points of damage reduction. If they receive a new damaging ability during this time, Lambo will take 10 damage.", mag = 20))
         else:
             user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 4, lambda eff: "If an ally affected by Conductivity receives a new harmful ability, Lambo will take 10 damage."))
     user.check_on_use()
@@ -2089,7 +2092,7 @@ def exe_elettrico_cornata(user: "CharacterManager", playerTeam: list["CharacterM
         user.check_on_use()
         user.check_on_harm()
 #endregion
-#region La Pucelle Execution (Tests)
+#region La Pucelle Execution
 def exe_knights_sword(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
@@ -2099,7 +2102,7 @@ def exe_knights_sword(user: "CharacterManager", playerTeam: list["CharacterManag
         user.check_on_harm()
 
 def exe_magic_sword(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    user.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff: f"Knight's Sword deals {eff.mag * 20} bonus damage, costs {eff.mag} more random energy, and has its cooldown increased by {eff.mag}.", mag=1))
+    user.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff: f"Knight's Sword deals {eff.mag * 20} bonus damage, costs {eff.mag} more random energy, and has its cooldown increased by {eff.mag}.", mag=1), user)
     user.check_on_use()
 
 def exe_ideal_strike(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):

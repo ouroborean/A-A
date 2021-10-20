@@ -1502,19 +1502,18 @@ class CharacterManager():
         mod_damage = damage
         no_boost = False
         which = 0
-        for i, ability in enumerate(self.source.current_abilities):
-            if self.used_ability == ability:
-                which = i + 1
-                if ability.name == "Knight's Sword" and self.has_effect(EffectType.STACK, "Magic Sword"):
-                    mod_damage += (20 * self.get_effect(EffectType.STACK, "Magic Sword").mag)
-                if ability.name == "Maximum Cannon" and self.has_effect(EffectType.STACK, "To The Extreme!"):
-                    mod_damage += (15 * self.get_effect(EffectType.STACK, "To The Extreme!").mag)
-        
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.BOOST_NEGATE)
         for eff in gen:
             no_boost = True
             break
+        for i, ability in enumerate(self.source.current_abilities):
+            if self.used_ability == ability and not no_boost:
+                which = i + 1
+                if ability.name == "Knight's Sword" and self.has_effect(EffectType.STACK, "Magic Sword"):
+                    mod_damage += (20 * self.get_effect(EffectType.STACK, "Magic Sword").mag)
+                if ability.name == "Maximum Cannon" and self.has_effect(EffectType.STACK, "To The Extreme!"):
+                    mod_damage += (15 * self.get_effect(EffectType.STACK, "To The Extreme!").mag)
 
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.ALL_BOOST)

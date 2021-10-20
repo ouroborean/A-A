@@ -67,6 +67,15 @@ def enemy_apply_targeting(scene: BattleScene, primary_target: CharacterManager):
         scene.selected_ability = None
         scene.acting_character.acted = True
 
+def ally_use_ability_with_response(scene: BattleScene, targeter: CharacterManager, primary_target: CharacterManager, ability: Ability):
+    targeter.used_ability = ability
+    targeter.used_ability.target(targeter, scene.player_display.team.character_managers, scene.enemy_display.team.character_managers)
+    do_targeting(scene, targeter, primary_target)
+    targeter.used_ability.execute(targeter, scene.player_display.team.character_managers, scene.enemy_display.team.character_managers)
+    targeter.current_targets.clear()
+    scene.resolve_ticking_ability()
+    scene.tick_effect_duration()
+
 def ally_use_ability(scene: BattleScene, targeter: CharacterManager, primary_target: CharacterManager, ability: Ability):
     targeter.used_ability = ability
     targeter.used_ability.target(targeter, scene.player_display.team.character_managers, scene.enemy_display.team.character_managers)
@@ -232,6 +241,50 @@ def jack_test_scene(test_scene: BattleScene) -> engine.Scene:
     enemy_team = [Character("astolfo"), Character("naruto"), Character("cmary")]
     test_scene.setup_scene(ally_team, enemy_team)
     return test_scene
+
+@pytest.fixture
+def itachi_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("itachi"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("astolfo"), Character("naruto"), Character("itachi")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+@pytest.fixture
+def jiro_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("jiro"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("hinata"), Character("naruto"), Character("itachi")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+@pytest.fixture
+def kakashi_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("kakashi"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("hinata"), Character("naruto"), Character("kakashi")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+@pytest.fixture
+def kuroko_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("kuroko"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("hinata"), Character("naruto"), Character("kakashi")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+@pytest.fixture
+def lambo_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("lambo"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("hinata"), Character("naruto"), Character("kakashi")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+@pytest.fixture
+def lapucelle_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("pucelle"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("astolfo"), Character("naruto"), Character("kakashi")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+
 
 def test_detail_unpack():
     details_package = ["Justice Kick", "Shiro deals 20 damage to target enemy. If they damaged one of Shiro's allies the previous turn, this ability deals double damage.", [1,0,0,0,0,1], Target.SINGLE]
@@ -2583,4 +2636,584 @@ def test_streets_of_the_lost_we_are_jack_targeting(jack_test_scene: BattleScene)
 
     assert we_are_jack.target(jack, pteam, eteam, True) == 1
 
+def test_amaterasu(itachi_test_scene: BattleScene):
+    pteam = itachi_test_scene.player_display.team.character_managers
+    eteam = itachi_test_scene.enemy_display.team.character_managers
+    itachi = pteam[0]
+    amaterasu = itachi.source.main_abilities[0]
+    tsukuyomi = itachi.source.main_abilities[1]
+    susanoo = itachi.source.main_abilities[2]
+    totsuka = itachi.source.alt_abilities[0]
+    yata = itachi.source.alt_abilities[1]
 
+    ally_use_ability(itachi_test_scene, itachi, eteam[0], amaterasu)
+
+    tick_one_turn(itachi_test_scene)
+    tick_one_turn(itachi_test_scene)
+
+    assert eteam[0].source.hp == 70
+
+    assert amaterasu.target(itachi, pteam, eteam, True) == 2
+
+def test_tsukuyomi(itachi_test_scene: BattleScene):
+    pteam = itachi_test_scene.player_display.team.character_managers
+    eteam = itachi_test_scene.enemy_display.team.character_managers
+    itachi = pteam[0]
+    amaterasu = itachi.source.main_abilities[0]
+    tsukuyomi = itachi.source.main_abilities[1]
+    susanoo = itachi.source.main_abilities[2]
+    totsuka = itachi.source.alt_abilities[0]
+    yata = itachi.source.alt_abilities[1]
+
+    ally_use_ability(itachi_test_scene, itachi, eteam[1], tsukuyomi)
+
+    assert eteam[1].is_stunned()
+
+    enemy_use_ability(itachi_test_scene, eteam[0], eteam[1], eteam[0].source.main_abilities[0])
+
+    assert not eteam[1].is_stunned()
+    assert not eteam[1].has_effect(EffectType.ALL_STUN, "Tsukuyomi")
+
+def test_susanoo_switch(itachi_test_scene: BattleScene):
+    pteam = itachi_test_scene.player_display.team.character_managers
+    eteam = itachi_test_scene.enemy_display.team.character_managers
+    itachi = pteam[0]
+    amaterasu = itachi.source.main_abilities[0]
+    tsukuyomi = itachi.source.main_abilities[1]
+    susanoo = itachi.source.main_abilities[2]
+    totsuka = itachi.source.alt_abilities[0]
+    yata = itachi.source.alt_abilities[1]
+
+    ally_use_ability(itachi_test_scene, itachi, itachi, susanoo)
+
+    itachi.check_ability_swaps()
+
+    assert itachi.source.current_abilities[0].name == "Totsuka Blade"
+    assert itachi.source.current_abilities[1].name == "Yata Mirror"
+
+def test_susanoo_yata_DD(itachi_test_scene: BattleScene):
+    pteam = itachi_test_scene.player_display.team.character_managers
+    eteam = itachi_test_scene.enemy_display.team.character_managers
+    itachi = pteam[0]
+    amaterasu = itachi.source.main_abilities[0]
+    tsukuyomi = itachi.source.main_abilities[1]
+    susanoo = itachi.source.main_abilities[2]
+    totsuka = itachi.source.alt_abilities[0]
+    yata = itachi.source.alt_abilities[1]
+
+    ally_use_ability(itachi_test_scene, itachi, itachi, susanoo)
+
+    itachi.check_ability_swaps()
+
+    ally_use_ability(itachi_test_scene, itachi, itachi, yata)
+
+    assert itachi.get_effect(EffectType.DEST_DEF, "Susano'o").mag == 65
+
+def test_susanoo_DD_ending(itachi_test_scene: BattleScene):
+    pteam = itachi_test_scene.player_display.team.character_managers
+    eteam = itachi_test_scene.enemy_display.team.character_managers
+    itachi = pteam[0]
+    amaterasu = itachi.source.main_abilities[0]
+    tsukuyomi = itachi.source.main_abilities[1]
+    susanoo = itachi.source.main_abilities[2]
+    totsuka = itachi.source.alt_abilities[0]
+    yata = itachi.source.alt_abilities[1]
+
+    ally_use_ability(itachi_test_scene, itachi, itachi, susanoo)
+
+    itachi.check_ability_swaps()
+
+    hit = eteam[1].source.main_abilities[2]
+
+    enemy_use_ability(itachi_test_scene, eteam[1], itachi, hit)
+    enemy_use_ability(itachi_test_scene, eteam[1], itachi, hit)
+
+    itachi.check_ability_swaps()
+
+    assert not itachi.has_effect(EffectType.DEST_DEF, "Susano'o")
+
+def test_susannoo_low_health_ending(itachi_test_scene: BattleScene):
+    pteam = itachi_test_scene.player_display.team.character_managers
+    eteam = itachi_test_scene.enemy_display.team.character_managers
+    itachi = pteam[0]
+    amaterasu = itachi.source.main_abilities[0]
+    tsukuyomi = itachi.source.main_abilities[1]
+    susanoo = itachi.source.main_abilities[2]
+    totsuka = itachi.source.alt_abilities[0]
+    yata = itachi.source.alt_abilities[1]
+
+    ally_use_ability(itachi_test_scene, itachi, itachi, susanoo)
+
+    itachi.check_ability_swaps()
+
+    tick_one_turn(itachi_test_scene)
+    tick_one_turn(itachi_test_scene)
+    tick_one_turn(itachi_test_scene)
+    tick_one_turn(itachi_test_scene)
+    tick_one_turn(itachi_test_scene)
+    tick_one_turn(itachi_test_scene)
+    tick_one_turn(itachi_test_scene)
+    tick_one_turn(itachi_test_scene)
+
+    assert not itachi.has_effect(EffectType.DEST_DEF, "Susano'o")
+
+def test_counter_balance_drain_response(jiro_test_scene: BattleScene):
+    pteam = jiro_test_scene.player_display.team.character_managers
+    eteam = jiro_test_scene.enemy_display.team.character_managers
+    jiro = pteam[0]
+    hinata = eteam[0]
+    naruto = eteam[1]
+
+    counterbalance = jiro.source.main_abilities[0]
+    distortion = jiro.source.main_abilities[1]
+    surround = jiro.source.main_abilities[2]
+
+    ally_use_ability_with_response(jiro_test_scene, jiro, jiro, counterbalance)
+
+    for ally in pteam:
+        assert ally.has_effect(EffectType.MARK, "Counter-Balance")
+
+    enemy_use_ability(jiro_test_scene, hinata, hinata, hinata.source.main_abilities[2])
+    enemy_use_ability(jiro_test_scene, hinata, jiro, hinata.source.main_abilities[0])
+
+    assert hinata.is_stunned()
+
+def test_counter_balance_stun_response(jiro_test_scene: BattleScene):
+    pteam = jiro_test_scene.player_display.team.character_managers
+    eteam = jiro_test_scene.enemy_display.team.character_managers
+    jiro = pteam[0]
+    hinata = eteam[0]
+    naruto = eteam[1]
+
+    counterbalance = jiro.source.main_abilities[0]
+    distortion = jiro.source.main_abilities[1]
+    surround = jiro.source.main_abilities[2]
+
+    ally_use_ability_with_response(jiro_test_scene, jiro, jiro, counterbalance)
+
+    for ally in pteam:
+        assert ally.has_effect(EffectType.MARK, "Counter-Balance")
+
+    ally_use_ability_with_response(jiro_test_scene, naruto, jiro, naruto.source.main_abilities[1])
+
+    assert naruto.source.energy_contribution == 0
+
+def test_distortion(jiro_test_scene: BattleScene):
+    pteam = jiro_test_scene.player_display.team.character_managers
+    eteam = jiro_test_scene.enemy_display.team.character_managers
+    jiro = pteam[0]
+    hinata = eteam[0]
+    naruto = eteam[1]
+
+    counterbalance = jiro.source.main_abilities[0]
+    distortion = jiro.source.main_abilities[1]
+    surround = jiro.source.main_abilities[2]
+
+    ally_use_ability(jiro_test_scene, jiro, hinata, distortion)
+
+    for enemy in eteam:
+        assert enemy.source.hp == 95
+
+def test_surround_in_distortion(jiro_test_scene: BattleScene):
+    pteam = jiro_test_scene.player_display.team.character_managers
+    eteam = jiro_test_scene.enemy_display.team.character_managers
+    jiro = pteam[0]
+    hinata = eteam[0]
+    naruto = eteam[1]
+
+    counterbalance = jiro.source.main_abilities[0]
+    distortion = jiro.source.main_abilities[1]
+    surround = jiro.source.main_abilities[2]
+
+    ally_use_ability(jiro_test_scene, jiro, hinata, distortion)
+    
+    jiro.adjust_ability_costs()
+
+    assert surround.total_cost == 1
+
+    ally_use_ability(jiro_test_scene, jiro, hinata, surround)
+
+    assert naruto.source.hp == 90
+    assert eteam[2].source.hp == 90
+    assert hinata.source.hp == 70
+
+def test_surround(jiro_test_scene: BattleScene):
+    pteam = jiro_test_scene.player_display.team.character_managers
+    eteam = jiro_test_scene.enemy_display.team.character_managers
+    jiro = pteam[0]
+    hinata = eteam[0]
+    naruto = eteam[1]
+
+    counterbalance = jiro.source.main_abilities[0]
+    distortion = jiro.source.main_abilities[1]
+    surround = jiro.source.main_abilities[2]
+
+    ally_use_ability(jiro_test_scene, jiro, hinata, surround)
+
+    jiro.adjust_ability_costs()
+
+    assert distortion.total_cost == 1
+    tick_one_turn(jiro_test_scene)
+    assert hinata.source.hp == 80
+
+def test_distortion_with_surround(jiro_test_scene: BattleScene):
+    pteam = jiro_test_scene.player_display.team.character_managers
+    eteam = jiro_test_scene.enemy_display.team.character_managers
+    jiro = pteam[0]
+    hinata = eteam[0]
+    naruto = eteam[1]
+
+    counterbalance = jiro.source.main_abilities[0]
+    distortion = jiro.source.main_abilities[1]
+    surround = jiro.source.main_abilities[2]
+
+    ally_use_ability(jiro_test_scene, jiro, hinata, surround)
+
+    jiro.adjust_ability_costs()
+
+    ally_use_ability(jiro_test_scene, jiro, hinata, distortion)
+
+    assert eteam[1].source.hp == 85
+    assert eteam[2].source.hp == 85
+    assert hinata.source.hp == 65
+
+def test_surround_self_lockout(jiro_test_scene: BattleScene):
+    pteam = jiro_test_scene.player_display.team.character_managers
+    eteam = jiro_test_scene.enemy_display.team.character_managers
+    jiro = pteam[0]
+    hinata = eteam[0]
+    naruto = eteam[1]
+
+    counterbalance = jiro.source.main_abilities[0]
+    distortion = jiro.source.main_abilities[1]
+    surround = jiro.source.main_abilities[2]
+
+    ally_use_ability(jiro_test_scene, jiro, hinata, surround)
+
+    jiro.adjust_ability_costs()
+
+    assert surround.target(jiro, pteam, eteam, True) == 0
+
+def test_distortion_self_lockout(jiro_test_scene: BattleScene):
+    pteam = jiro_test_scene.player_display.team.character_managers
+    eteam = jiro_test_scene.enemy_display.team.character_managers
+    jiro = pteam[0]
+    hinata = eteam[0]
+    naruto = eteam[1]
+
+    counterbalance = jiro.source.main_abilities[0]
+    distortion = jiro.source.main_abilities[1]
+    surround = jiro.source.main_abilities[2]
+
+    ally_use_ability(jiro_test_scene, jiro, hinata, distortion)
+
+    assert distortion.target(jiro, pteam, eteam, True) == 0
+
+def test_copy_ninja_single_target(kakashi_test_scene: BattleScene):
+    pteam = kakashi_test_scene.player_display.team.character_managers
+    eteam = kakashi_test_scene.enemy_display.team.character_managers
+    kakashi = pteam[0]
+    hinata = eteam[0]
+    naruto = eteam[1]
+    e_kakashi = eteam[2]
+    copy = kakashi.source.main_abilities[0]
+    nindogs = kakashi.source.main_abilities[1]
+    raikiri = kakashi.source.main_abilities[2]
+
+    enemy_use_ability(kakashi_test_scene, e_kakashi, e_kakashi, e_kakashi.source.main_abilities[0])
+
+    ally_use_ability(kakashi_test_scene, kakashi, e_kakashi, raikiri)
+    assert kakashi.source.hp == 60
+
+def test_nin_dogs_raikiri(kakashi_test_scene: BattleScene):
+    pteam = kakashi_test_scene.player_display.team.character_managers
+    eteam = kakashi_test_scene.enemy_display.team.character_managers
+    kakashi = pteam[0]
+    hinata = eteam[0]
+    naruto = eteam[1]
+    e_kakashi = eteam[2]
+    copy = kakashi.source.main_abilities[0]
+    nindogs = kakashi.source.main_abilities[1]
+    raikiri = kakashi.source.main_abilities[2]
+
+    ally_use_ability(kakashi_test_scene, kakashi, hinata, nindogs)
+
+    ally_use_ability(kakashi_test_scene, kakashi, hinata, raikiri)
+
+    assert hinata.source.hp == 0
+
+def test_teleporting_strike(kuroko_test_scene: BattleScene):
+    pteam = kuroko_test_scene.player_display.team.character_managers
+    eteam = kuroko_test_scene.enemy_display.team.character_managers
+    kuroko = pteam[0]
+    
+    judgement_throw = kuroko.source.main_abilities[0]
+    teleport = kuroko.source.main_abilities[1]
+    needle = kuroko.source.main_abilities[2]
+
+    ally_use_ability_with_response(kuroko_test_scene, kuroko, eteam[0], teleport)
+
+    assert eteam[0].source.hp == 90
+    assert kuroko.check_invuln()
+
+def test_teleport_pin(kuroko_test_scene: BattleScene):
+    pteam = kuroko_test_scene.player_display.team.character_managers
+    eteam = kuroko_test_scene.enemy_display.team.character_managers
+    kuroko = pteam[0]
+    
+    judgement_throw = kuroko.source.main_abilities[0]
+    teleport = kuroko.source.main_abilities[1]
+    needle = kuroko.source.main_abilities[2]
+
+    ally_use_ability(kuroko_test_scene, kuroko, eteam[0], teleport)
+    
+    ally_use_ability(kuroko_test_scene, kuroko, eteam[0], needle)
+
+    assert eteam[0].source.hp == 75
+
+def test_teleport_throw(kuroko_test_scene: BattleScene):
+    pteam = kuroko_test_scene.player_display.team.character_managers
+    eteam = kuroko_test_scene.enemy_display.team.character_managers
+    kuroko = pteam[0]
+    
+    judgement_throw = kuroko.source.main_abilities[0]
+    teleport = kuroko.source.main_abilities[1]
+    needle = kuroko.source.main_abilities[2]
+
+    ally_use_ability(kuroko_test_scene, kuroko, eteam[0], teleport)
+
+    ally_use_ability_with_response(kuroko_test_scene, kuroko, eteam[0], judgement_throw)
+    assert eteam[0].source.hp == 60
+    assert eteam[0].check_damage_drain() == -20
+    
+def test_judgement_throw(kuroko_test_scene: BattleScene):
+    pteam = kuroko_test_scene.player_display.team.character_managers
+    eteam = kuroko_test_scene.enemy_display.team.character_managers
+    kuroko = pteam[0]
+    
+    judgement_throw = kuroko.source.main_abilities[0]
+    teleport = kuroko.source.main_abilities[1]
+    needle = kuroko.source.main_abilities[2]
+
+    ally_use_ability_with_response(kuroko_test_scene, kuroko, eteam[0], judgement_throw)
+    assert eteam[0].source.hp == 85
+    assert eteam[0].check_damage_drain() == -10
+
+def test_teleport_after_judgement(kuroko_test_scene: BattleScene):
+    pteam = kuroko_test_scene.player_display.team.character_managers
+    eteam = kuroko_test_scene.enemy_display.team.character_managers
+    kuroko = pteam[0]
+    
+    judgement_throw = kuroko.source.main_abilities[0]
+    teleport = kuroko.source.main_abilities[1]
+    needle = kuroko.source.main_abilities[2]
+
+    ally_use_ability(kuroko_test_scene, kuroko, eteam[0], judgement_throw)
+    ally_use_ability(kuroko_test_scene, kuroko, eteam[0], teleport)
+    assert eteam[0].source.hp == 60
+
+def test_pin_after_judgement(kuroko_test_scene: BattleScene):
+    pteam = kuroko_test_scene.player_display.team.character_managers
+    eteam = kuroko_test_scene.enemy_display.team.character_managers
+    kuroko = pteam[0]
+    
+    judgement_throw = kuroko.source.main_abilities[0]
+    teleport = kuroko.source.main_abilities[1]
+    needle = kuroko.source.main_abilities[2]
+
+    ally_use_ability(kuroko_test_scene, kuroko, eteam[0], judgement_throw)
+    ally_use_ability_with_response(kuroko_test_scene, kuroko, eteam[0], needle)
+
+    assert eteam[0].is_stunned()
+
+def test_needle_pin(kuroko_test_scene: BattleScene):
+    pteam = kuroko_test_scene.player_display.team.character_managers
+    eteam = kuroko_test_scene.enemy_display.team.character_managers
+    kuroko = pteam[0]
+    
+    judgement_throw = kuroko.source.main_abilities[0]
+    teleport = kuroko.source.main_abilities[1]
+    needle = kuroko.source.main_abilities[2]
+
+    ally_use_ability(kuroko_test_scene, kuroko, eteam[0], needle)
+    
+    enemy_use_ability(kuroko_test_scene, eteam[0], eteam[0], eteam[0].source.main_abilities[3])
+
+    assert not eteam[0].check_invuln()
+
+def test_teleport_on_needle(kuroko_test_scene: BattleScene):
+    pteam = kuroko_test_scene.player_display.team.character_managers
+    eteam = kuroko_test_scene.enemy_display.team.character_managers
+    kuroko = pteam[0]
+    
+    judgement_throw = kuroko.source.main_abilities[0]
+    teleport = kuroko.source.main_abilities[1]
+    needle = kuroko.source.main_abilities[2]
+
+    ally_use_ability(kuroko_test_scene, kuroko, eteam[0], needle)
+    ally_use_ability_with_response(kuroko_test_scene, kuroko, eteam[0], teleport)
+
+    assert teleport.cooldown_remaining == 0
+
+def test_throw_on_needle(kuroko_test_scene: BattleScene):
+    pteam = kuroko_test_scene.player_display.team.character_managers
+    eteam = kuroko_test_scene.enemy_display.team.character_managers
+    kuroko = pteam[0]
+    
+    judgement_throw = kuroko.source.main_abilities[0]
+    teleport = kuroko.source.main_abilities[1]
+    needle = kuroko.source.main_abilities[2]
+
+    ally_use_ability(kuroko_test_scene, kuroko, eteam[0], needle)
+    ally_use_ability(kuroko_test_scene, kuroko, eteam[0], judgement_throw)
+
+    assert eteam[0].source.energy_contribution == 0
+
+def test_ten_year_teen(lambo_test_scene: BattleScene):
+    pteam = lambo_test_scene.player_display.team.character_managers
+    eteam = lambo_test_scene.enemy_display.team.character_managers
+    lambo = pteam[0]
+    hinata = eteam[0]
+
+    bazooka = lambo.source.main_abilities[0]
+    conductivity = lambo.source.main_abilities[1]
+    gyudon = lambo.source.main_abilities[2]
+    thunderset = lambo.source.alt_abilities[0]
+    cornatta = lambo.source.alt_abilities[1]
+
+    ally_use_ability(lambo_test_scene, lambo, lambo, bazooka)
+
+    lambo.check_ability_swaps()
+
+    assert lambo.has_effect(EffectType.ABILITY_SWAP, "Ten-Year Bazooka")
+    assert lambo.source.current_abilities[1].name == "Thunder, Set, Charge!"
+
+def test_ten_year_adult(lambo_test_scene: BattleScene):
+    pteam = lambo_test_scene.player_display.team.character_managers
+    eteam = lambo_test_scene.enemy_display.team.character_managers
+    lambo = pteam[0]
+    hinata = eteam[0]
+
+    bazooka = lambo.source.main_abilities[0]
+    conductivity = lambo.source.main_abilities[1]
+    gyudon = lambo.source.main_abilities[2]
+    thunderset = lambo.source.alt_abilities[0]
+    cornatta = lambo.source.alt_abilities[1]
+
+    ally_use_ability(lambo_test_scene, lambo, lambo, bazooka)
+
+    lambo.check_ability_swaps()
+
+    ally_use_ability(lambo_test_scene, lambo, lambo, bazooka)
+
+    lambo.check_ability_swaps()
+
+    assert lambo.has_effect(EffectType.UNIQUE, "Ten-Year Bazooka")
+    assert lambo.get_effect(EffectType.ABILITY_SWAP, "Ten-Year Bazooka").mag == 22
+    assert lambo.source.current_abilities[1].name == "Elettrico Cornata"
+
+def test_conductivity_redirect(lambo_test_scene: BattleScene):
+    pteam = lambo_test_scene.player_display.team.character_managers
+    eteam = lambo_test_scene.enemy_display.team.character_managers
+    lambo = pteam[0]
+    naruto = eteam[1]
+
+    bazooka = lambo.source.main_abilities[0]
+    conductivity = lambo.source.main_abilities[1]
+    gyudon = lambo.source.main_abilities[2]
+    thunderset = lambo.source.alt_abilities[0]
+    cornatta = lambo.source.alt_abilities[1]
+
+    ally_use_ability(lambo_test_scene, lambo, lambo, conductivity)
+
+    enemy_use_ability(lambo_test_scene, naruto, pteam[1], eteam[1].source.main_abilities[2])
+    enemy_use_ability(lambo_test_scene, naruto, pteam[1], eteam[1].source.main_abilities[2])
+    enemy_use_ability(lambo_test_scene, naruto, pteam[1], eteam[1].source.main_abilities[2])
+    enemy_use_ability(lambo_test_scene, naruto, pteam[1], eteam[1].source.main_abilities[2])
+
+    assert pteam[1].source.hp > 0
+
+    assert lambo.source.hp == 60
+
+def test_gyudon_lockout(lambo_test_scene: BattleScene):
+    pteam = lambo_test_scene.player_display.team.character_managers
+    eteam = lambo_test_scene.enemy_display.team.character_managers
+    lambo = pteam[0]
+    naruto = eteam[1]
+
+    bazooka = lambo.source.main_abilities[0]
+    conductivity = lambo.source.main_abilities[1]
+    gyudon = lambo.source.main_abilities[2]
+    thunderset = lambo.source.alt_abilities[0]
+    cornatta = lambo.source.alt_abilities[1]
+
+    ally_use_ability(lambo_test_scene, lambo, pteam[1], gyudon)
+
+    for p in pteam:
+        assert p.has_effect(EffectType.ALL_DR, "Summon Gyudon")
+    
+    for e in eteam:
+        assert e.has_effect(EffectType.CONT_DMG, "Summon Gyudon")
+    
+    ally_use_ability(lambo_test_scene, lambo, lambo, bazooka)
+
+    for p in pteam:
+        assert not p.has_effect(EffectType.ALL_DR, "Summon Gyudon")
+    
+    for e in eteam:
+        assert not e.has_effect(EffectType.CONT_DMG, "Summon Gyudon")
+    
+def test_magic_sword_stacking(lapucelle_test_scene: BattleScene):
+    pteam = lapucelle_test_scene.player_display.team.character_managers
+    eteam = lapucelle_test_scene.enemy_display.team.character_managers
+    lapucelle = pteam[0]
+
+    knightsword = lapucelle.source.main_abilities[0]
+    magicsword = lapucelle.source.main_abilities[1]
+    idealstrike = lapucelle.source.main_abilities[2]
+
+    ally_use_ability(lapucelle_test_scene, lapucelle, lapucelle, magicsword)
+    ally_use_ability(lapucelle_test_scene, lapucelle, lapucelle, magicsword)
+    ally_use_ability(lapucelle_test_scene, lapucelle, lapucelle, magicsword)
+    
+    lapucelle.adjust_ability_costs()
+
+    assert knightsword.total_cost == 4
+
+    ally_use_ability(lapucelle_test_scene, lapucelle, eteam[0], knightsword)
+
+    assert eteam[0].source.hp == 20
+
+def test_magic_sword_with_boost_negate(lapucelle_test_scene: BattleScene):
+    pteam = lapucelle_test_scene.player_display.team.character_managers
+    eteam = lapucelle_test_scene.enemy_display.team.character_managers
+    lapucelle = pteam[0]
+    astolfo = eteam[0]
+
+    knightsword = lapucelle.source.main_abilities[0]
+    magicsword = lapucelle.source.main_abilities[1]
+    idealstrike = lapucelle.source.main_abilities[2]
+
+    ally_use_ability(lapucelle_test_scene, lapucelle, lapucelle, magicsword)
+    ally_use_ability(lapucelle_test_scene, lapucelle, lapucelle, magicsword)
+    ally_use_ability(lapucelle_test_scene, lapucelle, lapucelle, magicsword)
+    
+    enemy_use_ability(lapucelle_test_scene, astolfo, lapucelle, astolfo.source.main_abilities[1])
+
+    assert lapucelle.has_effect(EffectType.BOOST_NEGATE, "Trap of Argalia - Down With A Touch!")
+
+    ally_use_ability(lapucelle_test_scene, lapucelle, astolfo, knightsword)
+
+    assert astolfo.source.hp == 80
+
+def test_ideal_strike_lockout(lapucelle_test_scene: BattleScene):
+    pteam = lapucelle_test_scene.player_display.team.character_managers
+    eteam = lapucelle_test_scene.enemy_display.team.character_managers
+    lapucelle = pteam[0]
+    astolfo = eteam[0]
+
+    knightsword = lapucelle.source.main_abilities[0]
+    magicsword = lapucelle.source.main_abilities[1]
+    idealstrike = lapucelle.source.main_abilities[2]
+
+    assert idealstrike.target(lapucelle, pteam, eteam, True) == 0
