@@ -284,6 +284,41 @@ def lapucelle_test_scene(test_scene: BattleScene) -> engine.Scene:
     test_scene.setup_scene(ally_team, enemy_team)
     return test_scene
 
+@pytest.fixture
+def laxus_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("laxus"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("astolfo"), Character("naruto"), Character("kakashi")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+@pytest.fixture
+def leone_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("leone"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("astolfo"), Character("naruto"), Character("kakashi")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+@pytest.fixture
+def levy_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("levy"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("astolfo"), Character("naruto"), Character("toga")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+
+@pytest.fixture
+def lubbock_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("raba"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("astolfo"), Character("naruto"), Character("toga")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+@pytest.fixture
+def lucy_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("lucy"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("astolfo"), Character("naruto"), Character("toga")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
 
 
 def test_detail_unpack():
@@ -3217,3 +3252,271 @@ def test_ideal_strike_lockout(lapucelle_test_scene: BattleScene):
     idealstrike = lapucelle.source.main_abilities[2]
 
     assert idealstrike.target(lapucelle, pteam, eteam, True) == 0
+
+def test_lightning_roar(laxus_test_scene: BattleScene):
+    pteam = laxus_test_scene.player_display.team.character_managers
+    eteam = laxus_test_scene.enemy_display.team.character_managers
+    laxus = pteam[0]
+
+    lightningroar = laxus.source.main_abilities[1]
+    thunder_palace = laxus.source.main_abilities[2]
+
+    ally_use_ability(laxus_test_scene, laxus, pteam[0], lightningroar)
+
+
+    assert pteam[0].check_for_dmg_reduction() == -10
+
+def test_thunder_palace(laxus_test_scene: BattleScene):
+    pteam = laxus_test_scene.player_display.team.character_managers
+    eteam = laxus_test_scene.enemy_display.team.character_managers
+    laxus = pteam[0]
+
+    lightningroar = laxus.source.main_abilities[1]
+    thunder_palace = laxus.source.main_abilities[2]
+
+    ally_use_ability(laxus_test_scene, laxus, laxus, thunder_palace)
+
+    tick_one_turn(laxus_test_scene)
+    tick_one_turn(laxus_test_scene)
+
+    for e in eteam:
+        assert e.source.hp == 60
+
+def test_thunder_palace_cancel(laxus_test_scene: BattleScene):
+    pteam = laxus_test_scene.player_display.team.character_managers
+    eteam = laxus_test_scene.enemy_display.team.character_managers
+    laxus = pteam[0]
+
+    lightningroar = laxus.source.main_abilities[1]
+    thunder_palace = laxus.source.main_abilities[2]
+
+    ally_use_ability(laxus_test_scene, laxus, laxus, thunder_palace)
+
+    enemy_use_ability(laxus_test_scene, eteam[1], laxus, eteam[1].source.main_abilities[2])
+
+    assert laxus.source.hp == 70
+    assert eteam[1].source.hp == 70
+    assert len(laxus.source.current_effects) == 0
+
+def test_lionel_lockout(leone_test_scene: BattleScene):
+    pteam = leone_test_scene.player_display.team.character_managers
+    eteam = leone_test_scene.enemy_display.team.character_managers
+    leone = pteam[0]
+    lionel = leone.source.main_abilities[0]
+    instinct = leone.source.main_abilities[1]
+    lionfist = leone.source.main_abilities[2]
+
+    assert instinct.target(leone, pteam, eteam, True) == 0
+    assert lionfist.target(leone, pteam, eteam, True) == 0
+
+def test_lionel_lionfist_kill_on_instinct(leone_test_scene: BattleScene):
+    pteam = leone_test_scene.player_display.team.character_managers
+    eteam = leone_test_scene.enemy_display.team.character_managers
+    leone = pteam[0]
+    lionel = leone.source.main_abilities[0]
+    instinct = leone.source.main_abilities[1]
+    lionfist = leone.source.main_abilities[2]
+
+    ally_use_ability(leone_test_scene, leone, leone, lionel)
+    ally_use_ability(leone_test_scene, leone, eteam[0], instinct)
+    leone.source.hp = 50
+    eteam[0].source.hp = 10
+
+    ally_use_ability(leone_test_scene, leone, eteam[0], lionfist)
+
+    assert leone.source.hp == 80
+
+def test_lionel_lionfist_kill_on_self_instinct(leone_test_scene: BattleScene):
+    pteam = leone_test_scene.player_display.team.character_managers
+    eteam = leone_test_scene.enemy_display.team.character_managers
+    leone = pteam[0]
+    lionel = leone.source.main_abilities[0]
+    instinct = leone.source.main_abilities[1]
+    lionfist = leone.source.main_abilities[2]
+
+    ally_use_ability(leone_test_scene, leone, leone, lionel)
+    ally_use_ability(leone_test_scene, leone, leone, instinct)
+    leone.source.hp = 50
+    eteam[0].source.hp = 10
+
+    ally_use_ability_with_response(leone_test_scene, leone, eteam[0], lionfist)
+
+    assert leone.source.hp == 60
+    assert leone.get_effect(EffectType.STUN_IMMUNE, "Beast Instinct").duration == 4
+
+def test_script_fire(levy_test_scene: BattleScene):
+    pteam = levy_test_scene.player_display.team.character_managers
+    eteam = levy_test_scene.enemy_display.team.character_managers
+    levy = pteam[0]
+    fire = levy.source.main_abilities[0]
+    silent = levy.source.main_abilities[1]
+    mask = levy.source.main_abilities[2]
+
+    ally_use_ability_with_response(levy_test_scene, levy, eteam[0], fire)
+
+    enemy_use_ability(levy_test_scene, eteam[1], levy, eteam[1].source.main_abilities[2])
+    tick_one_turn(levy_test_scene)
+
+    assert eteam[0].source.hp == 90
+    assert eteam[1].source.hp == 80
+    assert eteam[2].source.hp == 90
+
+def test_script_silent(levy_test_scene: BattleScene):
+    pteam = levy_test_scene.player_display.team.character_managers
+    eteam = levy_test_scene.enemy_display.team.character_managers
+    levy = pteam[0]
+    fire = levy.source.main_abilities[0]
+    silent = levy.source.main_abilities[1]
+    mask = levy.source.main_abilities[2]
+
+    ally_use_ability(levy_test_scene, levy, levy, silent)
+
+    assert eteam[0].source.main_abilities[0].target(eteam[0], eteam, pteam, True) == 0
+
+def test_script_mask(levy_test_scene: BattleScene):
+    pteam = levy_test_scene.player_display.team.character_managers
+    eteam = levy_test_scene.enemy_display.team.character_managers
+    levy = pteam[0]
+    fire = levy.source.main_abilities[0]
+    silent = levy.source.main_abilities[1]
+    mask = levy.source.main_abilities[2]
+
+    ally_use_ability_with_response(levy_test_scene, levy, pteam[1], mask)
+
+    enemy_use_ability(levy_test_scene, eteam[1], pteam[1], eteam[1].source.main_abilities[1])
+    enemy_use_ability(levy_test_scene, eteam[2], pteam[1], eteam[2].source.main_abilities[1])
+
+    assert not pteam[1].is_stunned()
+    assert pteam[1].source.hp == 75
+
+def test_crosstail_strike(lubbock_test_scene: BattleScene):
+    pteam = lubbock_test_scene.player_display.team.character_managers
+    eteam = lubbock_test_scene.enemy_display.team.character_managers
+    raba = pteam[0]
+
+    crosstail = raba.source.main_abilities[0]
+    wireshield = raba.source.main_abilities[1]
+    thrust = raba.source.main_abilities[2]
+
+    ally_use_ability(lubbock_test_scene, raba, eteam[0], crosstail)
+
+    raba.adjust_ability_costs()
+
+    assert eteam[0].source.hp == 85
+    assert eteam[0].has_effect(EffectType.MARK, "Cross-Tail Strike")
+    assert crosstail.total_cost == 0
+
+def test_crosstail_strike_failure(lubbock_test_scene: BattleScene):
+    pteam = lubbock_test_scene.player_display.team.character_managers
+    eteam = lubbock_test_scene.enemy_display.team.character_managers
+    raba = pteam[0]
+
+    crosstail = raba.source.main_abilities[0]
+    wireshield = raba.source.main_abilities[1]
+    thrust = raba.source.main_abilities[2]
+
+    
+    ally_use_ability(lubbock_test_scene, raba, eteam[0], crosstail)
+    ally_use_ability(lubbock_test_scene, raba, eteam[0], crosstail)    
+
+    raba.adjust_ability_costs()
+
+    assert crosstail.total_cost == 1
+
+def test_wireshield(lubbock_test_scene: BattleScene):
+    pteam = lubbock_test_scene.player_display.team.character_managers
+    eteam = lubbock_test_scene.enemy_display.team.character_managers
+    raba = pteam[0]
+
+    crosstail = raba.source.main_abilities[0]
+    wireshield = raba.source.main_abilities[1]
+    thrust = raba.source.main_abilities[2]
+
+    ally_use_ability(lubbock_test_scene, raba, pteam[1], wireshield)
+
+    raba.adjust_ability_costs()
+
+    assert wireshield.total_cost == 0
+
+def test_wireshield_cancel(lubbock_test_scene: BattleScene):
+    pteam = lubbock_test_scene.player_display.team.character_managers
+    eteam = lubbock_test_scene.enemy_display.team.character_managers
+    raba = pteam[0]
+
+    crosstail = raba.source.main_abilities[0]
+    wireshield = raba.source.main_abilities[1]
+    thrust = raba.source.main_abilities[2]
+
+    ally_use_ability(lubbock_test_scene, raba, pteam[1], wireshield)
+    ally_use_ability(lubbock_test_scene, raba, pteam[1], wireshield)
+
+    assert not raba.has_effect(EffectType.COST_ADJUST, "Wire Shield")
+
+def test_aoe_crosstail(lubbock_test_scene: BattleScene):
+    pteam = lubbock_test_scene.player_display.team.character_managers
+    eteam = lubbock_test_scene.enemy_display.team.character_managers
+    raba = pteam[0]
+
+    crosstail = raba.source.main_abilities[0]
+    wireshield = raba.source.main_abilities[1]
+    thrust = raba.source.main_abilities[2]
+
+    for e in eteam:
+        ally_use_ability(lubbock_test_scene, raba, e, crosstail)
+    
+    ally_use_ability(lubbock_test_scene, raba, eteam[0], crosstail)
+
+    for e in eteam:
+        assert not e.has_effect(EffectType.MARK, "Cross-Tail Strike")
+        assert e.source.hp == 65
+
+def test_aoe_wireshield(lubbock_test_scene: BattleScene):
+    pteam = lubbock_test_scene.player_display.team.character_managers
+    eteam = lubbock_test_scene.enemy_display.team.character_managers
+    raba = pteam[0]
+
+    crosstail = raba.source.main_abilities[0]
+    wireshield = raba.source.main_abilities[1]
+    thrust = raba.source.main_abilities[2]
+
+    for p in pteam:
+        ally_use_ability(lubbock_test_scene, raba, p, wireshield)
+    
+    ally_use_ability_with_response(lubbock_test_scene, raba, raba, wireshield)
+
+    for p in pteam:
+        assert not p.has_effect(EffectType.MARK, "Wire Shield")
+        assert p.check_invuln()
+        assert p.has_effect(EffectType.DEST_DEF, "Wire Shield")
+
+def test_thrust_on_crosstail(lubbock_test_scene: BattleScene):
+    pteam = lubbock_test_scene.player_display.team.character_managers
+    eteam = lubbock_test_scene.enemy_display.team.character_managers
+    raba = pteam[0]
+
+    crosstail = raba.source.main_abilities[0]
+    wireshield = raba.source.main_abilities[1]
+    thrust = raba.source.main_abilities[2]
+
+    ally_use_ability(lubbock_test_scene, raba, eteam[0], crosstail)
+    ally_use_ability_with_response(lubbock_test_scene, raba, eteam[0], thrust)
+
+    
+    assert eteam[0].is_stunned()
+    assert eteam[0].source.hp == 55
+
+def test_thrust_through_wireshield(lubbock_test_scene: BattleScene):
+    pteam = lubbock_test_scene.player_display.team.character_managers
+    eteam = lubbock_test_scene.enemy_display.team.character_managers
+    raba = pteam[0]
+
+    crosstail = raba.source.main_abilities[0]
+    wireshield = raba.source.main_abilities[1]
+    thrust = raba.source.main_abilities[2]
+
+    ally_use_ability(lubbock_test_scene, raba, raba, wireshield)
+    ally_use_ability(lubbock_test_scene, raba, eteam[0], thrust)
+
+    tick_one_turn(lubbock_test_scene)
+
+    assert eteam[0].source.hp == 55

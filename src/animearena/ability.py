@@ -1835,7 +1835,7 @@ def exe_susanoo(user: "CharacterManager", playerTeam: list["CharacterManager"], 
     user.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 280000, lambda eff: "Itachi will take 10 affliction damage. If his health falls below 20, Susano'o will end.", mag=10))
     user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Amaterasu has been replaced by Totsuka Blade.", mag=11))
     user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Tsukuyomi has been replaced by Yata Mirror.", mag=22))
-    user.receive_eff_aff_damage(10)
+    user.receive_eff_aff_damage(10, user)
     user.check_on_use()
 
 def exe_crow_genjutsu(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
@@ -1854,7 +1854,7 @@ def exe_totsuka_blade(user: "CharacterManager", playerTeam: list["CharacterManag
 
 def exe_yata_mirror(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.get_effect(EffectType.DEST_DEF, "Susano'o").alter_dest_def(20)
-    user.receive_eff_aff_damage(5)
+    user.receive_eff_aff_damage(5, user)
     user.check_on_use()
 #endregion
 #region Jiro Execution
@@ -2117,7 +2117,7 @@ def exe_knights_guard(user: "CharacterManager", playerTeam: list["CharacterManag
     user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "La Pucelle is invulnerable."))
     user.check_on_use()
 #endregion
-#region Laxus Execution (Tests)
+#region Laxus Execution
 def exe_fairy_law(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     helped = False
     harmed = False
@@ -2153,7 +2153,7 @@ def exe_laxus_block(user: "CharacterManager", playerTeam: list["CharacterManager
     user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Laxus is invulnerable."))
     user.check_on_use()
 #endregion
-#region Leone Execution (Tests)
+#region Leone Execution
 def exe_lionel(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "Leone can use her abilities."))
     user.add_effect(Effect(user.used_ability, EffectType.CONT_HEAL, user, 280000, lambda eff:"Leone will heal 10 health."))
@@ -2162,7 +2162,7 @@ def exe_lionel(user: "CharacterManager", playerTeam: list["CharacterManager"], e
 
 def exe_beast_instinct(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     harmed = False
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target != user:
                 if target.final_can_effect(user.check_bypass_effects()):
@@ -2175,7 +2175,7 @@ def exe_beast_instinct(user: "CharacterManager", playerTeam: list["CharacterMana
             user.check_on_harm()
 
 def exe_lion_fist(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if user.has_effect(EffectType.STUN_IMMUNE, "Beast Instinct") or not user.check_countered():
+    if user.has_effect(EffectType.STUN_IMMUNE, "Beast Instinct") or not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.has_effect(EffectType.MARK, "Beast Instinct"):
                 def_type = "BYPASS"
@@ -2195,7 +2195,7 @@ def exe_instinctual_dodge(user: "CharacterManager", playerTeam: list["CharacterM
     user.receive_eff_healing(10)
     user.check_on_use()
 #endregion
-#region Levy Execution (Tests)
+#region Levy Execution
 def exe_solidscript_fire(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
@@ -2223,7 +2223,7 @@ def exe_solidscript_guard(user: "CharacterManager", playerTeam: list["CharacterM
     user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Levy is invulnerable."))
     user.check_on_use()
 #endregion
-#region Raba Execution (Tests)
+#region Raba Execution
 
 def all_marked(team: list["CharacterManager"], mark_name: str):
     for char in team:
@@ -2232,7 +2232,7 @@ def all_marked(team: list["CharacterManager"], mark_name: str):
     return True
 
 def exe_crosstail_strike(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         if all_marked(enemyTeam, "Cross-Tail Strike"):
             user.current_targets.clear()
             for enemy in enemyTeam:
@@ -2241,29 +2241,33 @@ def exe_crosstail_strike(user: "CharacterManager", playerTeam: list["CharacterMa
                     user.deal_pierce_damage(20, enemy)
         else:
             for target in user.current_targets:
+                if not user.has_effect(EffectType.COST_ADJUST, "Cross-Tail Strike"):
+                    user.add_effect(Effect(user.used_ability, EffectType.COST_ADJUST, user, 280000, lambda eff: "Until Lubbock uses Cross-Tail Strike on a marked enemy, it costs one less weapon energy.", mag = -141))
                 if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                     user.deal_damage(15, target)
                     if target.has_effect(EffectType.MARK, "Cross-Tail Strike"):
                         user.remove_effect(user.get_effect(EffectType.COST_ADJUST, "Cross-Tail Strike"))
                     else:
                         target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "This character has been marked by Cross-Tail Strike."))
-            if not user.has_effect(EffectType.COST_ADJUST, "Cross-Tail Strike"):
-                user.add_effect(Effect(user.used_ability, EffectType.COST_ADJUST, user, 280000, lambda eff: "Until Lubbock uses Cross-Tail Strike on a marked enemy, it costs one less weapon energy.", mag = -141))
+            
         user.check_on_use()
         user.check_on_harm()
 
 
 
 def exe_wire_shield(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered():
+    if not user.check_countered(playerTeam, enemyTeam):
         if all_marked(playerTeam, "Wire Shield"):
             user.current_targets.clear()
             for player in playerTeam:
-                if player.helpful_target():
+                if player.helpful_target(user, user.check_bypass_effects()):
                     player.remove_effect(player.get_effect(EffectType.MARK, "Wire Shield"))
                     player.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "This character is invulnerable."))
         else:
             for target in user.current_targets:
+                if not user.has_effect(EffectType.COST_ADJUST, "Wire Shield"):
+                    user.add_effect(Effect(user.used_ability, EffectType.COST_ADJUST, user, 280000, lambda eff: "Until Lubbock uses Wire Shield on a marked ally, it costs one less weapon energy.", mag = -241))
+       
                 if target.helpful_target(user, user.check_bypass_effects()):
                     if target.has_effect(EffectType.DEST_DEF, "Wire Shield"):
                         target.get_effect(EffectType.DEST_DEF, "Wire Shield").alter_dest_def(15)
@@ -2273,8 +2277,6 @@ def exe_wire_shield(user: "CharacterManager", playerTeam: list["CharacterManager
                         user.remove_effect(user.get_effect(EffectType.COST_ADJUST, "Wire Shield"))
                     else:
                         target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "This character has been marked by Wire Shield."))
-            if not user.has_effect(EffectType.COST_ADJUST, "Wire Shield"):
-                user.add_effect(Effect(user.used_ability, EffectType.COST_ADJUST, user, 280000, lambda eff: "Until Lubbock uses Wire Shield on a marked ally, it costs one less weapon energy.", mag = -241))
         user.check_on_use()
         user.check_on_harm()
 
@@ -2358,7 +2360,7 @@ def exe_smash(user: "CharacterManager", playerTeam: list["CharacterManager"], en
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(45, target)
-                user.receive_eff_aff_damage(20)
+                user.receive_eff_aff_damage(20, user)
                 user.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 3, lambda eff: "This character is stunned."))
         user.check_on_use()
         user.check_on_harm()
@@ -2468,7 +2470,7 @@ def exe_blood_suppression_removal(user: "CharacterManager", playerTeam: list["Ch
     user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 5, lambda eff: "Mirai's abilities cause their target to receive 10 affliction damage for 2 turns."))
     user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 5, lambda eff: "Blood Suppression Removal has been replaced by Blood Bullet.", mag = 11))
     user.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 5, lambda eff: "Mirai will take 10 affliction damage.", mag=10))
-    user.receive_eff_aff_damage(10)
+    user.receive_eff_aff_damage(10, user)
     user.check_on_use()
 
 def exe_blood_sword_combat(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
@@ -2486,7 +2488,7 @@ def exe_blood_shield(user: "CharacterManager", playerTeam: list["CharacterManage
     user.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 2, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag = 20))
     user.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 2, lambda eff: f"This character has {eff.mag} points of damage reduction.", mag = 20))
     if user.has_effect(EffectType.MARK, "Blood Suppression Removal"):
-        user.receive_eff_aff_damage(10)
+        user.receive_eff_aff_damage(10, user)
         user.add_effect(Effect(Ability("mirai1"), EffectType.CONT_AFF_DMG, user, 3, lambda eff: "This character will take 10 affliction damage.", mag = 10))
     user.check_on_use()
     
@@ -3366,7 +3368,7 @@ def exe_mental_out(user: "CharacterManager", playerTeam: list["CharacterManager"
 
 
 def exe_exterior(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    user.receive_eff_aff_damage(25)
+    user.receive_eff_aff_damage(25, user)
     user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 9, lambda eff: "Mental Out lasts 1 more turn."))
     user.add_effect(Effect(user.used_ability, EffectType.COST_ADJUST, user, 9, lambda eff: "Mental Out costs 1 less mental energy.", mag = -131))
     user.check_on_use()
@@ -3695,7 +3697,7 @@ def exe_meteor_storm(user: "CharacterManager", playerTeam: list["CharacterManage
                     target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
                     user.check_on_stun(target)
                 for ally in playerTeam:
-                    if ally.has_effect(EffectType.UNIQUE, "Quirk - Zero Gravity") and ally.helpful_target():
+                    if ally.has_effect(EffectType.UNIQUE, "Quirk - Zero Gravity") and ally.helpful_target(user, user.check_bypass_effects()):
                         ally.add_effect(Effect(user.used_ability, EffectType.ALL_BOOST, user, 3, lambda eff: "This character will deal 5 more non-affliction damage.", mag=5))
         user.check_on_use()
         user.check_on_harm()
@@ -3709,7 +3711,7 @@ def exe_comet_home_run(user: "CharacterManager", playerTeam: list["CharacterMana
                     target.source.energy_contribution -= 1
                     user.check_on_drain(target)
                 for ally in playerTeam:
-                    if ally.has_effect(EffectType.UNIQUE, "Quirk - Zero Gravity") and ally.helpful_target():
+                    if ally.has_effect(EffectType.UNIQUE, "Quirk - Zero Gravity") and ally.helpful_target(user, user.check_bypass_effects()):
                         ally.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 3, lambda eff: "This character is invulnerable."))
         user.check_on_use()
         user.check_on_harm()
