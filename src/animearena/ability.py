@@ -2297,7 +2297,7 @@ def exe_defensive_netting(user: "CharacterManager", playerTeam: list["CharacterM
     user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Lubbock is invulnerable."))
     user.check_on_use()
 #endregion
-#region Lucy Execution (Tests)
+#region Lucy Execution
 def exe_aquarius(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     helped = False
     harmed = False

@@ -321,6 +321,16 @@ def lucy_test_scene(test_scene: BattleScene) -> engine.Scene:
     return test_scene
 
 
+@pytest.fixture
+def midoriya_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("midoriya"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("astolfo"), Character("naruto"), Character("toga")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+
+
+
 def test_detail_unpack():
     details_package = ["Justice Kick", "Shiro deals 20 damage to target enemy. If they damaged one of Shiro's allies the previous turn, this ability deals double damage.", [1,0,0,0,0,1], Target.SINGLE]
 
@@ -3520,3 +3530,110 @@ def test_thrust_through_wireshield(lubbock_test_scene: BattleScene):
     tick_one_turn(lubbock_test_scene)
 
     assert eteam[0].source.hp == 55
+
+def test_gemini_aquarius(lucy_test_scene:BattleScene):
+    pteam = lucy_test_scene.player_display.team.character_managers
+    eteam = lucy_test_scene.enemy_display.team.character_managers
+    lucy = pteam[0]
+
+    aquarius = lucy.source.main_abilities[0]
+    gemini = lucy.source.main_abilities[1]
+    urano = lucy.source.alt_abilities[0]
+    capricorn = lucy.source.main_abilities[2]
+    leo = lucy.source.main_abilities[3]
+
+    ally_use_ability(lucy_test_scene, lucy, lucy, gemini)
+    ally_use_ability(lucy_test_scene, lucy, lucy, aquarius)
+
+    for p in pteam:
+        assert p.check_for_dmg_reduction() == 10
+    
+    tick_one_turn(lucy_test_scene)
+
+    for e in eteam:
+        assert e.source.hp == 70
+
+def test_gemini_capricorn(lucy_test_scene:BattleScene):
+    pteam = lucy_test_scene.player_display.team.character_managers
+    eteam = lucy_test_scene.enemy_display.team.character_managers
+    lucy = pteam[0]
+
+    aquarius = lucy.source.main_abilities[0]
+    gemini = lucy.source.main_abilities[1]
+    urano = lucy.source.alt_abilities[0]
+    capricorn = lucy.source.main_abilities[2]
+    leo = lucy.source.main_abilities[3]
+
+    ally_use_ability(lucy_test_scene, lucy, lucy, gemini)
+    ally_use_ability(lucy_test_scene, lucy, eteam[0], capricorn)
+    
+    tick_one_turn(lucy_test_scene)
+
+    assert eteam[0].source.hp == 60
+
+def test_gemini_urano(lucy_test_scene:BattleScene):
+    pteam = lucy_test_scene.player_display.team.character_managers
+    eteam = lucy_test_scene.enemy_display.team.character_managers
+    lucy = pteam[0]
+
+    aquarius = lucy.source.main_abilities[0]
+    gemini = lucy.source.main_abilities[1]
+    urano = lucy.source.alt_abilities[0]
+    capricorn = lucy.source.main_abilities[2]
+    leo = lucy.source.main_abilities[3]
+
+    ally_use_ability(lucy_test_scene, lucy, lucy, gemini)
+    ally_use_ability(lucy_test_scene, lucy, eteam[0], urano)
+
+    tick_one_turn(lucy_test_scene)
+
+    for e in eteam:
+        assert e.source.hp == 60
+    
+def test_gemini_leo(lucy_test_scene:BattleScene):
+    pteam = lucy_test_scene.player_display.team.character_managers
+    eteam = lucy_test_scene.enemy_display.team.character_managers
+    lucy = pteam[0]
+
+    aquarius = lucy.source.main_abilities[0]
+    gemini = lucy.source.main_abilities[1]
+    urano = lucy.source.alt_abilities[0]
+    capricorn = lucy.source.main_abilities[2]
+    leo = lucy.source.main_abilities[3]
+
+    ally_use_ability(lucy_test_scene, lucy, lucy, gemini)
+    ally_use_ability(lucy_test_scene, lucy, lucy, leo)
+
+    assert lucy.check_invuln()
+
+def test_smash(midoriya_test_scene: BattleScene):
+    pteam = midoriya_test_scene.player_display.team.character_managers
+    eteam = midoriya_test_scene.enemy_display.team.character_managers
+    midoriya = pteam[0]
+
+    smash = midoriya.source.main_abilities[0]
+    shootstyle = midoriya.source.main_abilities[2]
+    airforcegloves = midoriya.source.main_abilities[1]
+
+    ally_use_ability_with_response(midoriya_test_scene, midoriya, eteam[0], smash)
+
+    assert midoriya.source.hp == 80
+    assert midoriya.is_stunned()
+
+def test_airforcegloves(midoriya_test_scene: BattleScene):
+    pteam = midoriya_test_scene.player_display.team.character_managers
+    eteam = midoriya_test_scene.enemy_display.team.character_managers
+    midoriya = pteam[0]
+
+    smash = midoriya.source.main_abilities[0]
+    shootstyle = midoriya.source.main_abilities[2]
+    airforcegloves = midoriya.source.main_abilities[1]
+
+    
+
+    ally_use_ability_with_response(midoriya_test_scene, midoriya, eteam[1], airforcegloves)
+    enemy_use_ability(midoriya_test_scene, eteam[1], midoriya, eteam[1].source.main_abilities[2])
+
+    eteam[1].source.main_abilities[2].cooldown_remaining == eteam[1].source.main_abilities[2].cooldown + eteam[1].check_for_cooldown_mod()
+    assert eteam[1].source.main_abilities[2].cooldown_remaining == 1
+
