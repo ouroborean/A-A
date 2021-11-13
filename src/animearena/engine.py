@@ -5,6 +5,7 @@ import logging
 import operator
 import textwrap
 import importlib.resources
+import gc
 from typing import Iterator
 from typing import Literal
 from typing import MutableMapping
@@ -55,6 +56,8 @@ class Scene:
         self.ui_factory = sdl2.ext.UIFactory(self.sprite_factory, free=False)
         self.resource_manager = resource_manager
         self.surfaces = dict()
+        self.window_closing = False
+        self.window_up = False
         self.triggered_event = False
 
     def load_assets(self, **kwargs: str):
@@ -135,11 +138,26 @@ class Scene:
                                      sdl2.SDL_Rect(0, 0, 0, 0))
         return new_sprite
 
+    def add_sprite_with_border(self, region: "Region", sprite: sdl2.ext.Sprite, border_sprite, x:int, y:int, depth: int=0):
+        region.add_sprite(border_sprite, x - 2, y - 2, depth=depth)
+        region.add_sprite(sprite, x, y, depth)
+
     def add_bordered_sprite(self, region: "Region", sprite: sdl2.ext.Sprite, color: sdl2.SDL_Color, x:int, y:int, depth: int=0):
         width, height = sprite.size
         border_sprite = self.sprite_factory.from_color(color, (width+4, height+4))
         region.add_sprite(border_sprite, x - 2, y - 2, depth=depth)
         region.add_sprite(sprite, x, y, depth)
+
+    def update_text_display(self, font, text, text_color, display, blotter, x, y):
+        max_width = display.size[0] - (x * 2)
+        char_width = 7.3
+        chars_per_line = max_width // char_width
+
+        lines = textwrap.wrap(text, chars_per_line)
+        sdl2.surface.SDL_BlitSurface(self.get_scaled_surface(blotter), sdl2.SDL_Rect(0, 0, blotter.size[0], blotter.size[1]), display.surface, sdl2.SDL_Rect(0, 0, 0, 0))
+        for row, line in enumerate(lines):
+            sdl2.surface.SDL_BlitSurface(sdl2.sdlttf.TTF_RenderText_Blended(font, str.encode(line), text_color), None, display.surface,
+                                         sdl2.SDL_Rect(x, y + (row * 15), 0, 0))
 
     def create_text_display(  # pylint: disable=too-many-arguments
             self,
@@ -180,6 +198,7 @@ class Scene:
             text_surface = sdl2.sdlttf.TTF_RenderText_Blended(font, str.encode(line), text_color)
             sdl2.surface.SDL_BlitSurface(text_surface, None, new_sprite.surface,
                                          sdl2.SDL_Rect(x, y + (row * y_offset), 0, 0))
+            sdl2.SDL_FreeSurface(text_surface)
 
         return new_sprite
 
@@ -236,7 +255,7 @@ class Region:
     def clear(self):
         """Removes all sprites from this region and all sub-regions"""
         self._sprites.clear()
-
+        
         for subregion in self._regions:
             subregion.clear()
 

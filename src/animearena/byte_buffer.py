@@ -27,6 +27,10 @@ class ByteBuffer():
     def clear(self):
         self.buff.clear()
     
+    def write_byte(self, input: bytes):
+        self.buff.extend(input)
+        self.buff_updated = True
+
     def write_bytes(self, input: list[bytes]):
         self.buff.extend(input)
         self.buff_updated = True

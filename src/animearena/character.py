@@ -1,6 +1,5 @@
 import pathlib
 import PIL
-from PIL import Image
 from pathlib import Path
 import sdl2
 import sdl2.ext
@@ -9,6 +8,7 @@ import typing
 import os
 import sys
 import importlib.resources
+from PIL import Image
 from animearena.ability import Ability
 if typing.TYPE_CHECKING:
     from animearena.effects import Effect
@@ -28,6 +28,7 @@ class Character:
     current_abilities: list[Ability] = []
     altprof1: Image
     altprof2: Image
+    banner: Image
     main_prof: Image
     desc: str = ""
     selected: bool
@@ -45,11 +46,13 @@ class Character:
     damage_reduction: int
     sistema_CAI_stage: int
     current_effects: list["Effect"]
+    
 
     def __init__(self, name:str, desc:str = None):
         self.name = name
         if desc:
             self.desc = desc
+        self.char_select_desc = None
         self.sistema_CAI_stage = 1
         self.energy_contribution = 1
         self.hp = 100
@@ -64,14 +67,7 @@ class Character:
         self.selected = False
         self.damage_reduction = 0
         self.current_effects = []
-        self.profile_image = get_image_from_path(name + "prof.png")
-        self.main_prof = get_image_from_path(name + "prof.png")
-        try:
-            self.altprof1 = get_image_from_path(name + "altprof1.png")
-            self.altprof2 = get_image_from_path(name + "altprof2.png")
-        except:
-            pass
-
+        self.current_hp = 100
         self.main_abilities = [Ability(f"{name}{i + 1}") for i in range(4)]
         self.current_abilities = self.main_abilities
         self.alt_abilities = []
@@ -186,6 +182,8 @@ character_db = {"naruto": Character("naruto", "Uzumaki Naruto, a former outcast 
                 "raba": Character("raba", "Lubbock, an assassin working for Night Raid. With his wire Teigu 'Cross Tail', Lubbock is a versatile killer that can use razor-sharp threads to deliver lethal blows or defend his allies."),
                 "seiryu": Character("seiryu", "Seiryu Ubiquitous, former member of the Imperial Guard. After Esdeath forms the Jaegers to hunt down Night Raid, Seiryu joins the group to get vengeance on the" +
                 " criminals who killed her mentor. Twisted by the darkness in the capitol, and her own sense of justice, Seiryu uses her living Teigu 'Koro' to slay evil wherever she finds it."),
+                "kurome": Character("kurome", "Kurome, the younger sister of Akame. Seperated during their youth to be trained as assassins, Kurome and Akame's paths led them to opposite sides of the battlefield. Armed with " + 
+                "the corpse-animating blade Yatsufusa and bolstered by experimental medication that is slowly killing her, Kurome wants nothing more than to kill her sister so that, through Yatsufusa's power, they can be together forever."),
                 "esdeath": Character("esdeath", "Esdeath, the strongest Teigu wielder in the Empire. The leader of the Empire's anti-Night Raid task force known as the Jaegers, Esdeath's ice-wielding powers " +
                 "and bloodthirsty, unparalleled strength are the ultimate obstacle standing between the Revolutionary Army and peace."),
                 "snowwhite": Character("snowwhite", "Himekawa Koyuki, the magical girl Snow White. A loving, selfless girl who " +
@@ -200,14 +198,15 @@ character_db = {"naruto": Character("naruto", "Uzumaki Naruto, a former outcast 
                 "manipulated magical girls to her side."),
                 "swimswim": Character("swimswim", "Sakanagi Ayana, the Magical Girl Swim Swim. One of Ruler's subordinates, Swim Swim is a very young girl who idolizes princesses. She has the ability to become insubstantial and to dive through the ground like water which, when combined with her natural ruthlessness, makes her a terrifying foe."),
                 "cmary": Character("cmary", "Yamamoto Naoko, the Magical Girl known as Calamity Mary. Unlike the other Magical Girls in N-City, Calamity Mary has no interest in working to help its citizens, instead lending her aid to the criminal Kannawa Association. Her magic lets her increase the capabilities of any weapon she wields."),
-                "cranberry": Character("cranberry", "Cranberry, the Musician of the Forest. The first Magical Girl of N-City, Cranberry is a battle-hungry fanatic, trained by the world of magic into a fighter of nearly unparalleled skill. With the help of Fav, a mascot from the world of magic, she travels the world to orchestrate cruel death matches between Magical Girls, in the hopes of finding the strongest among them to fight."),
+                "cranberry": Character("cranberry", "Cranberry, the Musician of the Forest. The first Magical Girl of N-City, Cranberry is a battle-hungry fanatic, trained by the world of magic into a fighter of unmatchable bloodlust. With the help of Fav, a mascot from the world of magic, she travels the world to orchestrate cruel death matches between Magical Girls, in the hopes of finding the strongest among them to fight."),
                 "saitama": Character("saitama", "Saitama, the most powerful hero in the world. After a chance encounter forces him to come face to face with his own weakness, " +
                 "Saitama trained with a singular purpose, to gain strength. Now, after having achieved his goal, he now forced to face an enemy more resilient than he could have imagined: his own overwhelming power."),
                 "tatsumaki": Character("tatsumaki", "Tatsumaki, the Tornado of Terror, is the Hero Associations Rank 2 hero, and the most powerful esper in the world. She prefers to work alone, using her unparalleled psychic powers and " +
                 "caustic personality to ward off both threats and allies."),
                 "chachamaru": Character("chachamaru", "Chachamaru is a robot designed in the image of a high school girl. She serves as the combat partner to Evangeline A.K. McDowell, and serves her" +
                 " loyally with a wide variety of versatile functions."),
-                "mirai": Character("mirai", "Kuriyama Mirai, an isolated Spirit World Warrior. Mirai is the last of her clan, who were feared and reviled due to their ability to manipulate their cursed blood to use in battle.")
-                
+                "mirai": Character("mirai", "Kuriyama Mirai, an isolated Spirit World Warrior. Mirai is the last of her clan, who were feared and reviled due to their ability to manipulate their cursed blood to use in battle."),
+                "touka": Character("touka", "Toudou Touka, Student Council President of Hagun Academy and its strongest Blazer. While wielding her Device, Narukami, Touka is a deadly swordswoman, utilizing lightning and electromagnetism in conjunction with her unrivaled blade."),
+                "killua": Character("killua", "Killua Zoldyck, second son of the infamous Zoldyck family. An assassin by birth, Killua's childhood was an endless procession of torturous punishment and even harsher training. After tiring of the life of a killer, Killua meets and joins Gon on his quest to become a licensed Hunter, utilizing his quick wit and his Nen lightning powers to dismantle his foes.")
                 
                 }

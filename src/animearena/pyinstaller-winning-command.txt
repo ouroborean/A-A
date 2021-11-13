@@ -1,1 +1,1 @@
-pyinstaller --collect-binaries sdl2dll --collect-all sdl2 --collect-all animearena --onefile --noconsole __main__.py
+pyinstaller --icon=AAicon.ico --collect-binaries sdl2dll --collect-all sdl2 --collect-all animearena --onefile --noconsole __main__.py

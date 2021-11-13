@@ -12,11 +12,12 @@ import importlib.resources
 from animearena import engine
 from animearena import character
 from animearena.character import Character, character_db
-from animearena.ability import Ability, Target
+from animearena.ability import Ability, Target, one, two, three
 from animearena.energy import Energy
 from animearena.effects import Effect, EffectType
+from animearena.player import Player
 from random import randint
-
+from playsound import playsound
 from pathlib import Path
 from typing import Optional
 
@@ -27,6 +28,11 @@ COOLDOWN_FONTSIZE = 100
 def init_font(size: int):
     with importlib.resources.path('animearena.resources', FONT_FILENAME) as path:
         return sdl2.sdlttf.TTF_OpenFont(str.encode(os.fspath(path)), size)
+
+def play_sound(file_name: str):
+    # with importlib.resources.path('animearena.resources', file_name) as path:
+    #     playsound(str(path), False)
+    pass
 
 RESOURCES = Path(__file__).parent.parent.parent / "resources"
 BLUE = sdl2.SDL_Color(0, 0, 255)
@@ -79,9 +85,10 @@ class ActiveTeamDisplay():
 
     def __init__(self, scene: engine.Scene):
         self.scene = scene
-        self.team_region = self.scene.region.subregion(x=5, y=145, width = 670, height = 750)
+        self.team_region = self.scene.region.subregion(x=5, y=108, width = 670, height = 750)
         self.character_regions = [self.team_region.subregion(x = 0, y=i * 250, width=670, height = 230) for i in range(3)]
-        
+        for region in self.character_regions:
+            region.add_sprite(self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["banner"]), 0, 0)
         self.effect_regions: list[engine.Region] = []
         self.targeting_regions: list[engine.Region] = []
         self.text_regions: list[engine.Region] = []
@@ -117,7 +124,7 @@ class EnemyTeamDisplay():
 
     def __init__(self, scene: engine.Scene):
         self.scene = scene
-        self.enemy_region = self.scene.region.subregion(x=795, y = 145, width = 130, height = 750)
+        self.enemy_region = self.scene.region.subregion(x=795, y = 108, width = 130, height = 750)
         self.enemy_regions = [self.enemy_region.subregion(x = 0, y = i * 250, width = 130, height = 230) for i in range(3)]
         
         self.effect_regions: list[engine.Region] = []
@@ -164,11 +171,23 @@ class BattleScene(engine.Scene):
     round_any_cost: int
     waiting_for_turn: bool
     window_up: bool
+    moving_first: bool
+    exchanging_energy: bool
+    has_exchanged: bool
+    traded_away_energy: int
+    traded_for_energy: int
+    player: Player
+    enemy: Player
+    dying_to_doping: bool
+    target_clicked: bool
 
     def __init__(self, scene_manager, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.window_up = False
+        self.window_closing = True
+        self.window_closing = False
         self.waiting_for_turn = False
+        self.first_turn = True
+        self.target_clicked = False
         self.scene_manager = scene_manager
         self.ally_managers = []
         self.enemy_managers = []
@@ -176,11 +195,18 @@ class BattleScene(engine.Scene):
         self.current_button = None
         self.player_display = ActiveTeamDisplay(self)
         self.enemy_display = EnemyTeamDisplay(self)
-        
+        self.moving_first = False
         self.font = init_font(FONTSIZE)
         self.cooldown_font = init_font(COOLDOWN_FONTSIZE)
         self.selected_ability = None
         self.acting_character = None
+        self.exchanging_energy = False
+        self.has_exchanged = False
+        self.clicked_surrender = False
+        self.traded_away_energy = 5
+        self.traded_for_energy = 5
+        self.enemy_detail_character = None
+        self.enemy_detail_ability = None
         self.ally_energy_pool = {
             Energy.PHYSICAL: 0,
             Energy.SPECIAL: 0,
@@ -202,16 +228,149 @@ class BattleScene(engine.Scene):
             Energy.WEAPON: 0,
             Energy.RANDOM: 0
         }
-        self.energy_region = self.region.subregion(x=185, y=5, width=185, height = 53)
+        self.turn_end_button = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["end"], width=150,  height=50), free=True)
+        self.turn_end_button.click += self.turn_end_button_click
+        self.surrender_button = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["quit"], width = 150, height=50))
+        self.surrender_button.click += self.click_surrender_button
+        self.player_panel = self.sprite_factory.from_color(WHITE, (200,100))
+        self.player_panel_border = self.sprite_factory.from_color(BLACK, (204, 104))
+        self.enemy_panel = self.sprite_factory.from_color(WHITE, (200,100))
+        self.enemy_panel_border = self.sprite_factory.from_color(BLACK, (204, 104))
+        self.waiting_label = self.create_text_display(self.font, "Waiting for opponent", WHITE, BLACK, 0, 4, 150)
+        self.turn_label = self.create_text_display(self.font, "It's your turn!", WHITE, BLACK, 20, 4, 150)
+        self.energy_region = self.region.subregion(x=206, y=5, width=150, height = 53)
         self.turn_end_region = self.region.subregion(x=375, y=5, width=150, height = 200)
         self.turn_expend_region = self.region.subregion(x=335, y=5, width=220, height=140)
         self.hover_effect_region = self.region.subregion(0, 0, 0, 0)
+        self.player_region = self.region.subregion(2, 2, 200, 100)
+        self.enemy_region = self.region.subregion(698, 2, 200, 100)
+        self.game_end_region = self.region.subregion(60, 207, 781, 484)
+        self.surrender_button_region = self.region.subregion(725, 925, 0, 0)
+        self.enemy_info_region = self.region.subregion(5, 860, 670, 135)
+
+    def draw_enemy_info_region(self):
+        self.enemy_info_region.clear()
+        if self.enemy_detail_character and not self.enemy_detail_ability:
+            ability_count = len(self.enemy_detail_character.main_abilities) + len(self.enemy_detail_character.alt_abilities)
+            width = 10 + 90 + (65 * ability_count)
+            enemy_info_panel = self.sprite_factory.from_color(WHITE, (width, 135))
+            self.add_bordered_sprite(self.enemy_info_region, enemy_info_panel, BLACK, 0, 0)
+        elif self.enemy_detail_character and self.enemy_detail_ability:
+            enemy_info_panel = self.sprite_factory.from_color(WHITE, (670, 135))
+            self.add_bordered_sprite(self.enemy_info_region, enemy_info_panel, BLACK, 0, 0)
+
+        if self.enemy_detail_character and not self.enemy_detail_ability:
+            profile_sprite = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces[self.enemy_detail_character.name + "allyprof"], width=90, height=90), free=True)
+            self.add_bordered_sprite(self.enemy_info_region, profile_sprite, BLACK, 5, 20)
+            ability_count = 0
+            for ability in self.enemy_detail_character.main_abilities:
+                ability_sprite = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces[ability.db_name], width=60, height=60), free=True)
+                ability_sprite.ability = ability
+                ability_sprite.click += self.enemy_info_ability_click
+                self.add_bordered_sprite(self.enemy_info_region, ability_sprite, BLACK, 100 + (ability_count * 65), 35)
+                ability_count += 1
+            for ability in self.enemy_detail_character.alt_abilities:
+                ability_sprite = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces[ability.db_name], width=60, height=60), free=True)
+                ability_sprite.ability = ability
+                ability_sprite.click += self.enemy_info_ability_click
+                self.add_bordered_sprite(self.enemy_info_region, ability_sprite, BLACK, 100 + (ability_count * 65), 35)
+                ability_count += 1
+
+        elif self.enemy_detail_character and self.enemy_detail_ability:
+            profile_sprite = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces[self.enemy_detail_character.name + "allyprof"], width=90, height=90), free=True)
+            profile_sprite.click += self.enemy_info_profile_click
+            self.add_bordered_sprite(self.enemy_info_region, profile_sprite, BLACK, 5, 20)
+            ability_sprite = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces[self.enemy_detail_ability.db_name], width=60, height=60), free=True)
+            self.add_bordered_sprite(self.enemy_info_region, ability_sprite, BLACK, 100, 35)
+            self.add_ability_details_to_enemy_info(self.enemy_detail_ability)
+            ability_description = self.create_text_display(self.font, self.enemy_detail_ability.name + ": " + self.enemy_detail_ability.desc, BLACK, WHITE, 0, 0, 500)
+            
+            self.enemy_info_region.add_sprite(ability_description, 165, (135 - ability_description.size[1]) // 2)
+    
+    def add_ability_details_to_enemy_info(self, ability):
+        energy_display_region = self.enemy_info_region.subregion(
+                x=105,
+                y=15,
+                width=(4 + 10) * ability.total_cost,
+                height=10)
+        cost_to_display: list[Energy] = sorted(ability.cost_iter())
+        energy_squares = [
+            energy_display_region.subregion(x, y=0, width=10, height=10)
+            for x in itertools.islice(range(0, 1000, 10 + 4),
+                                        ability.total_cost)
+        ]
+        for cost, energy_square in zip(cost_to_display, energy_squares):
+            energy_surface = self.scene_manager.surfaces[cost.name]
+            energy_sprite = self.sprite_factory.from_surface(self.get_scaled_surface(energy_surface), free=True)
+            energy_square.add_sprite(energy_sprite, x=0, y=0)
+        cooldown_text_sprite = self.create_text_display(
+                self.font,
+                "CD: " + str(ability.cooldown),
+                BLACK,
+                WHITE,
+                x=0,
+                y=0,
+                width=48,
+                height=6)
+        self.enemy_info_region.add_sprite(cooldown_text_sprite, 105, 105)
+
+    def enemy_info_profile_click(self, button, sender):
+        play_sound(self.scene_manager.sounds["click"])
+        self.enemy_detail_ability = None
+        self.draw_enemy_info_region()
+
+    def enemy_info_ability_click(self, button, sender):
+        play_sound(self.scene_manager.sounds["click"])
+        self.enemy_detail_ability = button.ability
+        self.draw_enemy_info_region()
+    
+    def draw_surrender_region(self):
+        self.surrender_button_region.clear()
+        self.surrender_button_region.add_sprite(self.surrender_button, 0, 0)
+
+    def click_surrender_button(self, button, sender):
+        if not self.clicked_surrender and ((not self.window_up) or (self.window_up and self.exchanging_energy)):
+            play_sound(self.scene_manager.sounds["click"])
+            self.clicked_surrender = True
+            self.scene_manager.connection.send_surrender()
+            self.lose_game()
+
+    def draw_player_region(self):
+        self.player_region.clear()
+        if self.player:
+            self.add_sprite_with_border(self.player_region, self.player_panel, self.player_panel_border, 0, 0)
+            player_ava = self.sprite_factory.from_surface(self.get_scaled_surface(self.player.avatar))
+            self.add_bordered_sprite(self.player_region, player_ava, BLACK, 0, 0)
+            username_label = self.create_text_display(self.font, self.player.name, BLACK, WHITE, 0, 0, 90)
+            win_label = self.create_text_display(self.font, f"Wins: {self.player.wins}", BLACK, WHITE, 0, 0, 90)
+            loss_label = self.create_text_display(self.font, f"Losses: {self.player.losses}", BLACK, WHITE, 0, 0, 90)
+
+            self.player_region.add_sprite(username_label, x=104, y=5)
+            self.player_region.add_sprite(win_label, x=104, y=30)
+            self.player_region.add_sprite(loss_label, x=104, y=55)
+
+    def draw_enemy_region(self):
+        self.enemy_region.clear()
+        if self.enemy:
+            self.add_sprite_with_border(self.enemy_region, self.enemy_panel, self.enemy_panel_border, 0, 0)
+            enemy_ava = self.sprite_factory.from_surface(self.get_scaled_surface(self.enemy.avatar))
+            self.add_bordered_sprite(self.enemy_region, enemy_ava, BLACK, 100, 0)
+
+            username_label = self.create_text_display(self.font, self.enemy.name, BLACK, WHITE, 0, 0, 90)
+            win_label = self.create_text_display(self.font, f"Wins: {self.enemy.wins}", BLACK, WHITE, 0, 0, 90)
+            loss_label = self.create_text_display(self.font, f"Losses: {self.enemy.losses}", BLACK, WHITE, 0, 0, 90)
+
+            self.enemy_region.add_sprite(username_label, x=4, y=5)
+            self.enemy_region.add_sprite(win_label, x=4, y=30)
+            self.enemy_region.add_sprite(loss_label, x=4, y=55)
 
     def draw_turn_end_region(self):
         self.turn_end_region.clear()
-        turn_end_button = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.surfaces["end"], width=150,  height=50))
-        turn_end_button.click += self.turn_end_button_click
-        self.turn_end_region.add_sprite(turn_end_button, x=0, y=0)
+        self.turn_end_region.add_sprite(self.turn_end_button, 0, 0)
+        if self.waiting_for_turn:
+            self.add_bordered_sprite(self.turn_end_region, self.waiting_label, WHITE, 0, 55)
+        else:
+            self.add_bordered_sprite(self.turn_end_region, self.turn_label, WHITE, 0, 55)
 
     def draw_any_cost_expenditure_window(self):
         self.turn_expend_region.clear()
@@ -269,12 +428,12 @@ class BattleScene(engine.Scene):
         offered_pool_x = 110
 
         region.add_sprite_vertical_center(self.sprite_factory.from_surface(
-            self.get_scaled_surface(self.surfaces[Energy(idx).name])),
+            self.get_scaled_surface(self.scene_manager.surfaces[Energy(idx).name])),
                                           x=0)
-        plus_button = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.surfaces["add"]))
+        plus_button = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["add"]))
         plus_button.energy = Energy(idx)
         plus_button.click += self.plus_button_click
-        minus_button = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.surfaces["remove"]))
+        minus_button = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["remove"]))
         minus_button.energy = Energy(idx)
         minus_button.click += self.minus_button_click
 
@@ -306,10 +465,17 @@ class BattleScene(engine.Scene):
             if manager.acted:
                 manager.used_ability.execute(manager, self.player_display.team.character_managers,
                                              self.enemy_display.team.character_managers)
-                manager.used_ability.cooldown += manager.check_for_cooldown_mod()
-                if manager.used_ability.cooldown < 0:
-                    manager.used_ability.cooldown = 0
-                manager.used_ability.start_cooldown()
+                expected_cd = manager.used_ability.cooldown + manager.check_for_cooldown_mod(manager.used_ability)
+                if expected_cd < 0:
+                    expected_cd = 0
+                for ability in manager.source.main_abilities:
+                    if ability.name == manager.used_ability.name:
+                        ability.cooldown_remaining = expected_cd + 1
+                        break
+                for ability in manager.source.alt_abilities:
+                    if ability.name == manager.used_ability.name:
+                        ability.cooldown_remaining = expected_cd + 1
+                        break
         self.resolve_ticking_ability()
 
     def is_allied(self, effect: Effect) -> bool:
@@ -337,6 +503,8 @@ class BattleScene(engine.Scene):
                    if eff.eff_type == EffectType.CONT_AFF_DMG)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied(eff) and (eff.mag > 15 or not manager.deflecting()):
+                    if eff.name == "Doping Rampage":
+                        self.dying_to_doping = True
                     eff.user.deal_eff_aff_damage(eff.mag, manager)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_HEAL)
@@ -410,7 +578,8 @@ class BattleScene(engine.Scene):
             self.offered_pool[attr] = 0
         self.turn_expend_region.clear()
         self.draw_turn_end_region()
-        self.window_up = False
+        self.window_closing = True
+        play_sound(self.scene_manager.sounds["turnend"])
         self.turn_end()
 
     def tick_ability_cooldown(self):
@@ -426,14 +595,16 @@ class BattleScene(engine.Scene):
         for attr, energy in self.offered_pool.items():
             if energy > 0 and attr != Energy.RANDOM:
                 self.round_any_cost += energy
-                self.ally_energy_pool[attr] += energy
+                self.player_display.team.energy_pool[attr] += energy
                 self.offered_pool[attr] = 0
         self.turn_expend_region.clear()
-        self.window_up = False
+        self.window_closing = True
+        play_sound(self.scene_manager.sounds["undo"])
         self.draw_turn_end_region()
 
     def plus_button_click(self, button, _sender):
         attr = button.energy
+        play_sound(self.scene_manager.sounds["click"])
         if self.player_display.team.energy_pool[attr] > 0 and self.round_any_cost > 0:
             self.player_display.team.energy_pool[attr] -= 1
             self.offered_pool[attr] += 1
@@ -442,6 +613,7 @@ class BattleScene(engine.Scene):
 
     def minus_button_click(self, button, _sender):
         attr = button.energy
+        play_sound(self.scene_manager.sounds["click"])
         if self.offered_pool[attr] > 0:
             self.player_display.team.energy_pool[attr] += 1
             self.offered_pool[attr] -= 1
@@ -449,11 +621,13 @@ class BattleScene(engine.Scene):
         self.draw_any_cost_expenditure_window()
 
     def turn_end_button_click(self, _button, _sender):
-        if not self.waiting_for_turn:
+        if not self.waiting_for_turn and not self.window_up:
             self.reset_targeting()
             self.return_targeting_to_default()
             self.full_update()
+            
             if self.round_any_cost == 0:
+                play_sound(self.scene_manager.sounds["turnend"])
                 self.execution_loop()
                 self.turn_end()
             else:
@@ -464,19 +638,75 @@ class BattleScene(engine.Scene):
     def turn_end(self):
         self.tick_effect_duration()
         self.tick_ability_cooldown()
+        self.has_exchanged = False
         self.waiting_for_turn = True
+        self.traded_away_energy = 5
+        self.traded_for_energy = 5
+        self.exchanging_energy = False
 
+        game_lost = True
         for manager in self.player_display.team.character_managers:
+            manager.refresh_character()
             manager.received_ability.clear()
+            if not manager.source.dead:
+                game_lost = False
+            else:
+                temp_yatsufusa_storage = None
+                if manager.has_effect(EffectType.MARK, "Yatsufusa"):
+                    temp_yatsufusa_storage = manager.get_effect(EffectType.MARK, "Yatsufusa")
+                manager.source.current_effects.clear()
+                if temp_yatsufusa_storage:
+                   manager.source.current_effects.append(temp_yatsufusa_storage)
+        game_won = True
         for manager in self.enemy_display.team.character_managers:
+            manager.refresh_character(True)
             manager.received_ability.clear()
+            if not manager.source.dead:
+                game_won = False
+            else:
+                temp_yatsufusa_storage = None
+                if manager.has_effect(EffectType.MARK, "Yatsufusa"):
+                    temp_yatsufusa_storage = manager.get_effect(EffectType.MARK, "Yatsufusa")
+                manager.source.current_effects.clear()
+                if temp_yatsufusa_storage:
+                   manager.source.current_effects.append(temp_yatsufusa_storage)
+
+        #Yatsufusa Resurrection handling
+        for manager in self.enemy_display.team.character_managers:
+            if manager.source.dead and manager.has_effect(EffectType.MARK, "Yatsufusa"):
+                yatsu = manager.get_effect(EffectType.MARK, "Yatsufusa")
+                manager.source.dead = False
+                manager.source.hp = 40
+                manager.remove_effect(manager.get_effect(EffectType.MARK, "Yatsufusa"))
+                manager.add_effect(Effect(yatsu.source, EffectType.UNIQUE, yatsu.user, 280000, lambda eff: "This character has been animated by Kurome."))
+                manager.add_effect(Effect(yatsu.source, EffectType.DEF_NEGATE, yatsu.user, 280000, lambda eff: "This character cannot reduce damage or become invulnerable."))
+                manager.add_effect(Effect(yatsu.source, EffectType.COST_ADJUST, yatsu.user, 280000, lambda eff: "This character's abilities costs have been increased by one random energy.", mag=51))
+                
+        #endregion
 
         self.full_update()
+        if game_lost:
+            self.lose_game()
+        if game_won and not game_lost:
+            self.win_game()
         pouch1, pouch2 = self.pickle_match(self.player_display.team, self.enemy_display.team)
-
         match = MatchPouch(pouch1, pouch2)
         msg = pickle.dumps(match)
-        self.scene_manager.connection.send_match_communication(msg)
+        self.scene_manager.connection.send_match_communication(self.get_energy_pool(), self.get_enemy_energy_cont(), msg)
+
+    def get_energy_pool(self) -> list:
+        output = []
+        for i in range(4):
+            output.append(self.player_display.team.energy_pool[i])
+        return output
+
+    def get_enemy_energy_cont(self) -> list:
+        total_pool = [0,0,0,0,0]
+        for manager in self.enemy_display.team.character_managers:
+            pool = manager.check_energy_contribution()
+            for i, v in enumerate(pool):
+                total_pool[i] += v
+        return total_pool
 
     def pickle_match(self, team1: Team, team2: Team):
         team1_pouch = []
@@ -519,11 +749,14 @@ class BattleScene(engine.Scene):
             team2_pouch.append(character_pouch)
         return (team1_pouch, team2_pouch)
     
-    def unpickle_match(self, data: bytes):
+    def unpickle_match(self, data: bytes, rejoin=False, my_pickle=False):
         match = pickle.loads(data)
-        
-        team1pouch = match.team2_pouch
-        team2pouch = match.team1_pouch
+        if not my_pickle:
+            team1pouch = match.team2_pouch
+            team2pouch = match.team1_pouch
+        else:
+            team1pouch = match.team1_pouch
+            team2pouch = match.team2_pouch
         for i, character_pouch in enumerate(team1pouch):
             self.player_display.team.character_managers[i].source.hp = character_pouch[0]
             self.player_display.team.character_managers[i].source.energy_contribution = character_pouch[1]
@@ -550,7 +783,8 @@ class BattleScene(engine.Scene):
                 effect = Effect(Ability(effect_pouch[4]), EffectType(effect_pouch[0]), user, effect_pouch[2], effect_pouch[3], effect_pouch[1], effect_pouch[6])
                 effect.waiting = effect_pouch[7]
                 self.enemy_display.team.character_managers[i].source.current_effects.append(effect)
-        self.turn_start()
+        if not rejoin:
+            self.turn_start()
         
 
 
@@ -566,9 +800,16 @@ class BattleScene(engine.Scene):
                         swap_hp = manager.source.hp
                         swap_effects = manager.source.current_effects
                         manager.source = Character("toga")
+                        for i, sprite in enumerate(manager.main_ability_sprites):
+                            sprite.surface = manager.scene.get_scaled_surface(manager.scene.scene_manager.surfaces[manager.source.main_abilities[i].db_name])
+                            sprite.ability = manager.source.main_abilities[i]
+                            sprite.null_pane.ability = manager.source.main_abilities[i]
+                            sprite.null_pane.in_battle_desc = manager.scene.create_text_display(self.font, sprite.null_pane.ability.name + ": " + sprite.null_pane.ability.desc, BLACK, WHITE, 5, 0, 520, 110)
+                            sprite.in_battle_desc = manager.scene.create_text_display(self.font, sprite.ability.name + ": " + sprite.ability.desc, BLACK, WHITE, 5, 0, 520, 110)
+                        manager.alt_ability_sprites.clear()
                         manager.source.hp = swap_hp
                         manager.source.current_effects = swap_effects
-                    if eff.name == "Bunny Assault":
+                    if eff.name == "Bunny Assault" and eff.eff_type == EffectType.CONT_USE:
                         if manager.has_effect(EffectType.DEST_DEF, "Perfect Paper - Rampage Suit"):
                             manager.get_effect(EffectType.DEST_DEF, "Perfect Paper - Rampage Suit").alter_dest_def(20)
                     if eff.name == "Thunder Palace":
@@ -607,6 +848,8 @@ class BattleScene(engine.Scene):
                                 manager.deal_eff_damage(25, emanager)
                                 emanager.add_effect(Effect(Ability("chromealt2"), EffectType.ALL_STUN, manager, 2, lambda eff: "This character is stunned."))
                                 manager.check_on_stun(emanager)
+                    if not manager.has_effect(EffectType.INVIS_END, eff.name) and eff.invisible == True:
+                        manager.add_effect(Effect(eff.source, EffectType.INVIS_END, eff.user, 2, lambda eff: f"{eff.name} has ended."))
             new_list = [eff for eff in manager.source.current_effects if eff.duration > 0]                
             manager.source.current_effects = new_list
 
@@ -614,8 +857,8 @@ class BattleScene(engine.Scene):
             for eff in manager.source.current_effects:
                 eff.tick_duration()
                 if eff.duration == 0:
-                    if eff.invisible:
-                        manager.add_effect(Effect(eff.source, EffectType.UNIQUE, eff.user, 2, lambda eff: f"{eff.name} has ended."))
+                    if eff.invisible and not manager.has_effect(EffectType.INVIS_END, eff.name):
+                        manager.add_effect(Effect(eff.source, EffectType.INVIS_END, eff.user, 2, lambda eff: f"{eff.name} has ended."))
             new_list = [eff for eff in manager.source.current_effects if eff.duration > 0]
             manager.source.current_effects = new_list
 
@@ -624,14 +867,68 @@ class BattleScene(engine.Scene):
         self.waiting_for_turn = False
         self.round_any_cost = 0
         self.acting_character = None
-        self.generate_energy()
+        play_sound(self.scene_manager.sounds["turnstart"])
+        game_lost = True
         for manager in self.player_display.team.character_managers:
-            manager.refresh_character()
-        for manager in self.enemy_display.team.character_managers:
-            manager.refresh_character(True)
-        self.full_update()
+            if manager.source.hp <= 0:
+                manager.source.dead = True
 
+            manager.refresh_character()
+            if not manager.source.dead:
+                game_lost = False
+        
+        game_won = True
+        for manager in self.enemy_display.team.character_managers:
+            if manager.source.hp <= 0:
+                manager.source.dead = True
+            manager.refresh_character(True)
+            if not manager.source.dead:
+                game_won = False
+        #region Yatsufusa resurrection handling
+        for manager in self.player_display.team.character_managers:
+            if manager.source.dead and manager.has_effect(EffectType.MARK, "Yatsufusa"):
+                yatsu = manager.get_effect(EffectType.MARK, "Yatsufusa")
+                manager.source.dead = False
+                manager.source.hp = 40
+                manager.remove_effect(manager.get_effect(EffectType.MARK, "Yatsufusa"))
+                manager.add_effect(Effect(yatsu.source, EffectType.UNIQUE, yatsu.user, 280000, lambda eff: "This character has been animated by Kurome."))
+                manager.add_effect(Effect(yatsu.source, EffectType.DEF_NEGATE, yatsu.user, 280000, lambda eff: "This character cannot reduce damage or become invulnerable."))
+                manager.add_effect(Effect(yatsu.source, EffectType.COST_ADJUST, yatsu.user, 280000, lambda eff: "This character's abilities costs have been increased by one random energy.", mag=51))
+        #endregion
+        self.full_update()
+        if game_lost:
+            self.lose_game()
+        if game_won and not game_lost:
+            self.win_game()
     
+    def lose_game(self):
+        self.player.losses += 1
+        self.scene_manager.connection.send_player_update(self.player)
+        self.scene_manager.connection.send_match_statistics([manager.source.name for manager in self.player_display.team.character_managers], False)
+        self.window_up = True
+        loss_panel = self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces["lost"]))
+        self.add_bordered_sprite(self.game_end_region, loss_panel, BLACK, 0, 0)
+        return_button = self.create_text_display(self.font, "Return To Character Select", WHITE, BLACK, 5, 5, 200)
+        return_button.click += self.return_to_char_select
+        self.add_bordered_sprite(self.game_end_region, return_button, WHITE, 550, 400)
+        
+
+    def return_to_char_select(self, button, sender):
+        play_sound(self.scene_manager.sounds["click"])
+        self.scene_manager.return_to_select(self.player)
+
+    def win_game(self):
+        self.player.wins += 1
+        self.scene_manager.connection.send_player_update(self.player)
+        self.scene_manager.connection.send_match_statistics([manager.source.name for manager in self.player_display.team.character_managers], True)
+        self.window_up = True
+        win_panel = self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces["won"]))
+        self.add_bordered_sprite(self.game_end_region, win_panel, BLACK, 0, 0)
+        return_button = self.create_text_display(self.font, "Return To Character Select", WHITE, BLACK, 5, 5, 200)
+        return_button.click += self.return_to_char_select
+        self.add_bordered_sprite(self.game_end_region, return_button, WHITE, 20, 25)
+        self.scene_manager.connection.send_match_ending()
+
 
     def generate_energy(self):
         total_energy = 0
@@ -640,6 +937,7 @@ class BattleScene(engine.Scene):
             total_energy += pool[Energy.RANDOM.value]
             for i in range(4):
                 self.player_display.team.energy_pool[i] += pool[i]
+                self.player_display.team.energy_pool[4] += pool[i]
             manager.source.energy_contribution = 1
         for _ in range(total_energy):
             self.player_display.team.energy_pool[randint(0, 3)] += 1
@@ -648,11 +946,18 @@ class BattleScene(engine.Scene):
         self.update_energy_region()
 
     def update_energy_region(self):
+        if self.exchanging_energy:
+            self.show_energy_exchange()
+        else:
+            self.show_energy_display()
+
+        
+    def show_energy_display(self):
         self.energy_region.clear()
         self.add_bordered_sprite(self.energy_region, self.sprite_factory.from_color(BLACK, self.energy_region.size()), WHITE, 0, 0)
-        self.energy_region.add_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.surfaces["PHYSICAL"])),
+        self.energy_region.add_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces["PHYSICAL"])),
                                       x=5,
-                                      y=6)
+                                      y=8)
 
         PHYSICAL_counter = self.create_text_display(
             self.font,
@@ -665,9 +970,9 @@ class BattleScene(engine.Scene):
             height=4)
         self.energy_region.add_sprite(PHYSICAL_counter, x=17, y=0)
 
-        self.energy_region.add_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.surfaces["SPECIAL"])),
+        self.energy_region.add_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces["SPECIAL"])),
                                       x=60,
-                                      y=6)
+                                      y=8)
 
         SPECIAL_counter = self.create_text_display(
             self.font,
@@ -680,9 +985,9 @@ class BattleScene(engine.Scene):
             height=4)
         self.energy_region.add_sprite(SPECIAL_counter, x=72, y=0)
 
-        self.energy_region.add_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.surfaces["MENTAL"])),
+        self.energy_region.add_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces["MENTAL"])),
                                       x=5,
-                                      y=26)
+                                      y=32)
 
         MENTAL_counter = self.create_text_display(
             self.font,
@@ -693,11 +998,11 @@ class BattleScene(engine.Scene):
             y=0,
             width=30,
             height=4)
-        self.energy_region.add_sprite(MENTAL_counter, x=17, y=20)
+        self.energy_region.add_sprite(MENTAL_counter, x=17, y=25)
 
-        self.energy_region.add_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.surfaces["WEAPON"])),
+        self.energy_region.add_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces["WEAPON"])),
                                       x=60,
-                                      y=26)
+                                      y=32)
 
         WEAPON_counter = self.create_text_display(
             self.font,
@@ -708,47 +1013,202 @@ class BattleScene(engine.Scene):
             y=0,
             width=30,
             height=4)
-        self.energy_region.add_sprite(WEAPON_counter, x=72, y=20)
+        self.energy_region.add_sprite(WEAPON_counter, x=72, y=25)
 
         total_counter = self.create_text_display(
             self.font,
-            "Total: " + f"{self.player_display.team.energy_pool[Energy.RANDOM]}",
+            "T x " + f"{self.player_display.team.energy_pool[Energy.RANDOM]}",
             WHITE,
             BLACK,
             x=0,
             y=0,
-            width=80,
+            width=47,
             height=4)
-        self.energy_region.add_sprite(total_counter, x=102, y=13)
+        self.energy_region.add_sprite(total_counter, x=102, y=12)
+
+        can_exchange = False
+        for i in range(4):
+            if self.player_display.team.energy_pool[Energy(i)] >= 2:
+                can_exchange = True
+        
+        if can_exchange and not self.has_exchanged and not self.waiting_for_turn:
+            exchange_button = self.create_text_display(self.font, "EXCHANGE", WHITE, BLACK, x=10, y=6, width = 92, height=20)
+            exchange_button.click += self.exchange_button_click
+            self.add_bordered_sprite(self.energy_region, exchange_button, WHITE, 29, 55)
+
+    def show_energy_exchange(self):
+        self.window_up = True
+        self.energy_region.clear()
+        self.add_bordered_sprite(self.energy_region, self.sprite_factory.from_color(BLACK, (150, 120)), WHITE, 0, 0)
+        trade_label = self.create_text_display(self.font, "Trade 2", WHITE, BLACK, x=0, y=0, width= 60, height=10)
+        self.energy_region.add_sprite(trade_label, 5, 2)
+        receive_label = self.create_text_display(self.font, "Receive", WHITE, BLACK, x=0, y=0, width=57, height=10)
+        self.energy_region.add_sprite(receive_label, 92, 2)
+        rows = 0
+        for i in range(4):
+            if self.player_display.team.energy_pool[Energy(i)] >= 2:
+                if i == self.traded_away_energy:
+                    offered_energy_symbol = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces[Energy(i).name]))
+                    offered_energy_symbol.energy_type = i
+                    offered_energy_symbol.click += self.offered_click
+                    self.add_bordered_sprite(self.energy_region, offered_energy_symbol, AQUA, 26, 25 + (rows * 15))
+                else:
+                    offered_energy_symbol = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces[Energy(i).name]))
+                    offered_energy_symbol.energy_type = i
+                    offered_energy_symbol.click += self.offered_click
+                    self.energy_region.add_sprite(offered_energy_symbol, 26, 25 + (rows * 15))
+            
+            if i == self.traded_for_energy:
+                received_energy_symbol = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces[Energy(i).name]))
+                received_energy_symbol.energy_type = i
+                received_energy_symbol.click += self.received_click
+                self.add_bordered_sprite(self.energy_region, received_energy_symbol, AQUA, 114, 25 + (rows * 15))
+            else:
+                received_energy_symbol = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces[Energy(i).name]))
+                received_energy_symbol.energy_type = i
+                received_energy_symbol.click += self.received_click
+                self.energy_region.add_sprite(received_energy_symbol, 114, 25 + (rows * 15))
+            
+            rows += 1
+        
+        cancel_button = self.create_text_display(self.font, "Cancel", WHITE, BLACK, x=6, y=0, width = 60, height = 10)
+        cancel_button.click += self.exchange_cancel_click
+        self.add_bordered_sprite(self.energy_region, cancel_button, RED, 85, 90)
+
+        if self.traded_for_energy != 5 and self.traded_away_energy != 5 and self.traded_for_energy != self.traded_away_energy:
+            accept_button = self.create_text_display(self.font, "Accept", WHITE, BLACK, 6, 0, 60, 10)
+            accept_button.click += self.exchange_accept_click
+            self.add_bordered_sprite(self.energy_region, accept_button, GREEN, 4, 90)
+
+    def exchange_accept_click(self, button, sender):
+        self.has_exchanged = True
+        play_sound(self.scene_manager.sounds["click"])
+        self.player_display.team.energy_pool[Energy(self.traded_away_energy)] -= 2
+        self.player_display.team.energy_pool[Energy(self.traded_for_energy)] += 1
+        self.player_display.team.energy_pool[4] -= 1
+        self.window_closing = True
+        self.exchanging_energy = not self.exchanging_energy
+        self.traded_away_energy = 5
+        self.traded_for_energy = 5
+        self.full_update()
+
+    def exchange_cancel_click(self, button, sender):
+        self.window_closing = True
+        play_sound(self.scene_manager.sounds["undo"])
+        self.exchanging_energy = not self.exchanging_energy
+        self.traded_away_energy = 5
+        self.traded_for_energy = 5
+        self.update_energy_region()
+
+    def received_click(self, button, sender):
+        play_sound(self.scene_manager.sounds["select"])
+        self.traded_for_energy = button.energy_type
+        self.update_energy_region()
+
+    def offered_click(self, button, sender):
+        play_sound(self.scene_manager.sounds["select"])
+        self.traded_away_energy = button.energy_type
+        self.update_energy_region()
+
+    def exchange_button_click(self, button, sender):
+        if not self.waiting_for_turn and not self.window_up:
+            play_sound(self.scene_manager.sounds["click"])
+            self.exchanging_energy = not self.exchanging_energy
+            self.update_energy_region()
 
     def handle_unique_startup(self, character: "CharacterManager"):
         if character.source.name == "gokudera":
             character.add_effect(Effect(Ability("gokudera1"), EffectType.STACK, character, 280000, lambda eff: f"The Sistema C.A.I. is at Stage {eff.mag}.", mag=1))
 
     def setup_scene(self, ally_team: list[Character],
-                                  enemy_team: list[Character]):
-        self.region.add_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.surfaces["background"])), 0, 0)
+                                  enemy_team: list[Character], player: Player=None, enemy: Player=None, energy=[0,0,0,0]):
+        self.window_closing = True
+        self.clicked_surrender = False
+        self.round_any_cost = 0
+        self.has_exchanged = False
+        self.region.clear()
+        self.enemy_detail_ability = None
+        self.enemy_detail_character = None
+        self.background = self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces["in_game_background"]))
+        self.region.add_sprite(self.background, 0, 0)
         self.draw_turn_end_region()
+        self.enemy = enemy
+        self.player = player
         ally_roster: list[CharacterManager] = []
         enemy_roster: list[CharacterManager] = []
         for i, ally in enumerate(ally_team):
             char_manager = CharacterManager(ally, self)
+            char_manager.profile_sprite = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces[char_manager.source.name + "allyprof"]), free=True)
+            char_manager.profile_border = self.ui_factory.from_color(sdl2.ext.BUTTON, BLACK, (104, 104))
+            char_manager.profile_sprite.click += char_manager.detail_click
+            char_manager.selected_filter = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["selected"]), free=True)
+            char_manager.selected_filter.click += char_manager.profile_click
+            char_manager.main_ability_sprites = [self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces[char_manager.source.main_abilities[j].db_name])) for j in range(4)]
+            for j, sprite in enumerate(char_manager.main_ability_sprites):
+                sprite.selected_pane = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["selected"]), free=True)
+                sprite.ability = char_manager.source.main_abilities[j]
+                char_manager.source.main_abilities[j].cooldown_remaining = 0
+                sprite.null_pane = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["locked"]), free=True)
+                sprite.null_pane.ability = char_manager.source.main_abilities[j]
+                sprite.null_pane.in_battle_desc = self.create_text_display(self.font, sprite.null_pane.ability.name + ": " + sprite.null_pane.ability.desc, BLACK, WHITE, 5, 0, 520, 110)
+                sprite.null_pane.text_border = self.ui_factory.from_color(sdl2.ext.BUTTON, BLACK, (524, 129))
+                sprite.border = self.ui_factory.from_color(sdl2.ext.BUTTON, BLACK, (104, 104))
+                sprite.click += char_manager.set_selected_ability
+
+            char_manager.alt_ability_sprites = [self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces[char_manager.source.alt_abilities[j].db_name])) for j in range(len(char_manager.source.alt_abilities))]
+            for j, sprite in enumerate(char_manager.alt_ability_sprites):
+                sprite.selected_pane = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["selected"]), free=True)
+                sprite.ability = char_manager.source.alt_abilities[j]
+                char_manager.source.alt_abilities[j].cooldown_remaining = 0
+                sprite.null_pane = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["locked"]), free=True)
+                sprite.null_pane.ability = char_manager.source.main_abilities[j]
+                sprite.null_pane.in_battle_desc = self.create_text_display(self.font, sprite.null_pane.ability.name + ": " + sprite.null_pane.ability.desc, BLACK, WHITE, 5, 0, 520, 110)
+                sprite.null_pane.text_border = self.ui_factory.from_color(sdl2.ext.BUTTON, BLACK, (524, 129))
+                sprite.border = self.ui_factory.from_color(sdl2.ext.BUTTON, BLACK, (104, 104))
+                sprite.click += char_manager.set_selected_ability
+
+            char_manager.current_ability_sprites = [ability for ability in char_manager.main_ability_sprites]
+            for j, sprite in enumerate(char_manager.current_ability_sprites):
+                sprite.ability = char_manager.source.current_abilities[j]
+            
+            char_manager.in_battle_desc = self.create_text_display(self.font, char_manager.source.desc, BLACK, WHITE, 5, 0, 520, 110)
+            char_manager.text_border = self.ui_factory.from_color(sdl2.ext.BUTTON, BLACK, (524, 129))
+            for sprite in char_manager.main_ability_sprites:
+                sprite.in_battle_desc = self.create_text_display(self.font, sprite.ability.name + ": " + sprite.ability.desc, BLACK, WHITE, 5, 0, 520, 110)
+                sprite.text_border = self.ui_factory.from_color(sdl2.ext.BUTTON, BLACK, (524, 129))
+            for sprite in char_manager.alt_ability_sprites:
+                sprite.in_battle_desc = self.create_text_display(self.font, sprite.ability.name + ": " + sprite.ability.desc, BLACK, WHITE, 5, 0, 520, 110)
+                sprite.text_border = self.ui_factory.from_color(sdl2.ext.BUTTON, BLACK, (524, 129))
+
             char_manager.id = i
             self.handle_unique_startup(char_manager)
             ally_roster.append(char_manager)
         for i, enemy in enumerate(enemy_team):
-            char_manager = CharacterManager(enemy, self)
-            char_manager.id = i + 3
-            self.handle_unique_startup(char_manager)
-            enemy_roster.append(char_manager)
-
+            e_char_manager = CharacterManager(enemy, self)
+            e_char_manager.profile_sprite = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces[e_char_manager.source.name + "enemyprof"]), free=True)
+            e_char_manager.profile_border = self.ui_factory.from_color(sdl2.ext.BUTTON, BLACK, (104, 104))
+            e_char_manager.profile_sprite.click += e_char_manager.detail_click
+            e_char_manager.selected_filter = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["selected"]), free=True)
+            e_char_manager.selected_filter.click += e_char_manager.profile_click
+            e_char_manager.id = i + 3
+            self.handle_unique_startup(e_char_manager)
+            enemy_roster.append(e_char_manager)
+            
+            
         scene_ally_team = Team(ally_roster)
         scene_enemy_team = Team(enemy_roster)
 
         self.player_display.assign_team(scene_ally_team)
         self.enemy_display.assign_team(scene_enemy_team)
 
-        self.generate_energy()
+        for i, v in enumerate(energy):
+            self.player_display.team.energy_pool[i] += v
+            self.player_display.team.energy_pool[4] += v
+        
+        if self.moving_first:
+            self.first_turn = False
+        
+
         self.update_energy_region()
 
         for manager in self.player_display.team.character_managers:
@@ -756,14 +1216,22 @@ class BattleScene(engine.Scene):
 
         for manager in self.enemy_display.team.character_managers:
             manager.update_limited()
+        self.draw_player_region()
+        self.draw_enemy_region()
+        self.draw_surrender_region()
 
     def full_update(self):
-        self.region.add_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.surfaces["background"])), 0, 0)
+        self.region.clear()
+        self.region.add_sprite(self.background, 0, 0)
         self.player_display.update_display()
         self.enemy_display.update_display()
         self.update_energy_region()
         self.draw_turn_end_region()
         self.draw_effect_hover()
+        self.draw_player_region()
+        self.draw_enemy_region()
+        self.draw_surrender_region()
+        self.draw_enemy_info_region()
 
     def draw_effect_hover(self):
         self.hover_effect_region.clear()
@@ -886,6 +1354,7 @@ class CharacterManager():
         self.source = source
         self.scene = scene
         self.selected_ability = None
+        self.selected_button = None
         self.used_ability = None
         self.targeted = False
         self.acted = False
@@ -901,17 +1370,9 @@ class CharacterManager():
     def update_text(self):
         
         self.text_region.clear()
-        if self.selected_ability is not None:
-            text_to_display = self.selected_ability.name + ": " + self.selected_ability.desc
-            text_sprite = self.scene.create_text_display(self.scene.font,
-                                                            text_to_display,
-                                                            BLACK,
-                                                            WHITE,
-                                                            x=5,
-                                                            y=0,
-                                                            width=520,
-                                                            height=110)
-            self.scene.add_bordered_sprite(self.text_region, text_sprite, BLACK, 0, 0)
+        if self.selected_ability is not None and self.selected_button is not None:
+            self.scene.add_sprite_with_border(self.text_region, self.selected_button.in_battle_desc, self.selected_button.text_border, 0, 0)
+            self.text_region.add_sprite(self.selected_button.in_battle_desc, 0, 0)
             energy_display_region = self.text_region.subregion(
                 x=10,
                 y=self.text_region.from_bottom(2),
@@ -924,8 +1385,8 @@ class CharacterManager():
                                             self.selected_ability.total_cost)
             ]
             for cost, energy_square in zip(cost_to_display, energy_squares):
-                energy_surface = self.scene.surfaces[cost.name]
-                energy_sprite = self.scene.sprite_factory.from_surface(self.scene.get_scaled_surface(energy_surface))
+                energy_surface = self.scene.scene_manager.surfaces[cost.name]
+                energy_sprite = self.scene.sprite_factory.from_surface(self.scene.get_scaled_surface(energy_surface), free=True)
                 energy_square.add_sprite(energy_sprite, x=0, y=0)
             cooldown_text_sprite = self.scene.create_text_display(
                 self.scene.font,
@@ -940,29 +1401,25 @@ class CharacterManager():
                                             x=self.text_region.from_right(53),
                                             y=self.text_region.from_bottom(8))
         else:
-            text_to_display = self.source.desc
-            text_sprite = self.scene.create_text_display(self.scene.font,
-                                                            text_to_display,
-                                                            BLACK,
-                                                            WHITE,
-                                                            x=5,
-                                                            y=0,
-                                                            width=520,
-                                                            height=110)
-            self.scene.add_bordered_sprite(self.text_region, text_sprite, BLACK, 0, 0)
+            self.scene.add_sprite_with_border(self.text_region, self.in_battle_desc, self.text_border, 0, 0)
 
     def adjust_targeting_types(self):
-        for i, ability in enumerate(self.source.current_abilities):
-            ability.target_type = Target(ability._base_target_type.value)
+        for i, abi in enumerate(self.source.current_abilities):
+            abi.target_type = Target(abi._base_target_type.value)
             gen = (eff for eff in self.source.current_effects
                    if eff.eff_type == EffectType.TARGET_SWAP)
             for eff in gen:
                 ability_target = eff.mag // 10
                 target_type = eff.mag - (ability_target * 10)
                 if ability_target - 1 == i:
-                    ability.target_type = Target(target_type)
-            if ability.name == "Hyper Eccentric Ultra Great Giga Extreme Hyper Again Awesome Punch" and self.has_effect(EffectType.STACK, "Guts") and self.get_effect(EffectType.STACK, "Guts").mag >= 3:
-                ability.target_type = Target.MULTI_ENEMY
+                    abi.target_type = Target(target_type)
+            if abi.name == "Hyper Eccentric Ultra Great Giga Extreme Hyper Again Awesome Punch" and self.has_effect(EffectType.STACK, "Guts") and self.get_effect(EffectType.STACK, "Guts").mag >= 3:
+                abi.target_type = Target.MULTI_ENEMY
+            if abi.name == "I Reject!" and one(self) and two(self) and three(self):
+                abi.target_type = Target.ALL_TARGET
+            if abi.name == "I Reject!" and two(self) and three(self):
+                abi.target_type = Target.MULTI_ALLY
+
 
     def adjust_ability_costs(self):
         for i, ability in enumerate(self.source.current_abilities):
@@ -973,12 +1430,12 @@ class CharacterManager():
                 ability.modify_ability_cost(Energy(4), self.get_effect(EffectType.STACK, "Magic Sword").mag)
             if ability.name == "Roman Artillery - Pumpkin" and self.source.hp < 30:
                 ability.modify_ability_cost(Energy(3), -1)
-            if ability.name == "Kangaryu" and self.has_effect(EffectType.STACK, "To The Extreme!"):
+            if ability.name == "Kangaryu" and self.has_effect(EffectType.STACK, "Kangaryu"):
                 if not self.has_effect(EffectType.MARK, "Vongola Headgear"):
-                    ability.modify_ability_cost(Energy(4), self.get_effect(EffectType.STACK, "To The Extreme!").mag)
-            if ability.name == "Maximum Cannon" and self.has_effect(EffectType.STACK, "To The Extreme!"):
+                    ability.modify_ability_cost(Energy(4), self.get_effect(EffectType.STACK, "Kangaryu").mag)
+            if ability.name == "Maximum Cannon" and self.has_effect(EffectType.STACK, "Maximum Cannon"):
                 if not self.has_effect(EffectType.MARK, "Vongola Headgear"):
-                    ability.modify_ability_cost(Energy(4), self.get_effect(EffectType.STACK, "To The Extreme!").mag)
+                    ability.modify_ability_cost(Energy(4), self.get_effect(EffectType.STACK, "Maximum Cannon").mag)
             gen = (eff for eff in self.source.current_effects
                    if eff.eff_type == EffectType.COST_ADJUST)
             for eff in gen:
@@ -1002,9 +1459,9 @@ class CharacterManager():
                 if character.has_effect(EffectType.UNIQUE, "Iron Shadow Dragon") and not character.is_ignoring():
                     character.add_effect(Effect(Ability("gajeel3"), EffectType.IGNORE, character, 1, lambda eff: ""))
                 if character.has_effect(EffectType.MARK, "Quirk - Permeation"):
-                    character.add_effect(Effect(Ability("mirio2"), EffectType.MARK, character, 2, lambda eff: "This character will take 15 more piercing damage from Phantom Menace, and it will automatically target them."))
+                    self.add_effect(Effect(Ability("mirio2"), EffectType.MARK, character, 2, lambda eff: "This character will take 15 more piercing damage from Phantom Menace, and it will automatically target them."))
                 if character.has_effect(EffectType.MARK, "Protect Ally"):
-                    character.add_effect(Effect(Ability("mirio2"), EffectType.MARK, character, 2, lambda eff: "This character will take 15 more piercing damage from Phantom Menace, and it will automatically target them."))
+                    self.add_effect(Effect(Ability("mirio2"), EffectType.MARK, character, 2, lambda eff: "This character will take 15 more piercing damage from Phantom Menace, and it will automatically target them."))
                 if character.has_effect(EffectType.DEST_DEF, "Four-God Resisting Shield"):
                     self.receive_eff_damage(15, character.get_effect(EffectType.DEST_DEF, "Four-God Resisting Shield").user)
         if self.has_effect(EffectType.UNIQUE, "Porcospino Nuvola"):
@@ -1021,9 +1478,12 @@ class CharacterManager():
 
     def check_on_use(self):
         for target in self.current_targets:
-            if (target.has_effect(EffectType.MARK, "Shredding Wedding") and not self.has_effect(EffectType.MARK, "Shredding Wedding")) or (self.has_effect(EffectType.MARK, "Shredding Wedding") and not target.has_effect(EffectType.MARK, "Shredding Wedding")):
+            if target.has_effect(EffectType.MARK, "Shredding Wedding") and not self.has_effect(EffectType.MARK, "Shredding Wedding"):
                 if self.final_can_effect():
-                    self.receive_pierce_damage(20)
+                    self.receive_pierce_damage(20, target.get_effect(EffectType.MARK, "Shredding Wedding").user)
+            if self.has_effect(EffectType.MARK, "Shredding Wedding") and not target.has_effect(EffectType.MARK, "Shredding Wedding"):
+                if self.final_can_effect():
+                    self.receive_pierce_damage(20, self.get_effect(EffectType.MARK, "Shredding Wedding").user)
         if self.has_effect(EffectType.CONT_UNIQUE, "Utsuhi Ame"):
             self.get_effect(EffectType.CONT_UNIQUE, "Utsuhi Ame").alter_mag(1)
             self.get_effect(EffectType.CONT_UNIQUE, "Utsuhi Ame").desc = lambda eff: "This character will take 40 damage and Yamamoto will gain 3 stacks of Asari Ugetsu."
@@ -1093,9 +1553,9 @@ class CharacterManager():
             if self.final_can_effect(eff.user.check_bypass_effects()):
                 self.receive_eff_damage(eff.mag * 20, eff.user)
                 if eff.mag == 1:
-                    eff.user.apply_stack_effect(Effect(Ability("yamamoto3"), EffectType.STACK, eff.user, 280000, lambda eff: f"Yamamoto has {eff.mag} stack(s) of Asari Ugetsu.", mag = 1))
+                    eff.user.apply_stack_effect(Effect(Ability("yamamoto3"), EffectType.STACK, eff.user, 280000, lambda eff: f"Yamamoto has {eff.mag} stack(s) of Asari Ugetsu.", mag = 1), eff.user)
                 else:
-                    eff.user.apply_stack_effect(Effect(Ability("yamamoto3"), EffectType.STACK, eff.user, 280000, lambda eff: f"Yamamoto has {eff.mag} stack(s) of Asari Ugetsu.", mag = 3))
+                    eff.user.apply_stack_effect(Effect(Ability("yamamoto3"), EffectType.STACK, eff.user, 280000, lambda eff: f"Yamamoto has {eff.mag} stack(s) of Asari Ugetsu.", mag = 3), eff.user)
         if eff.name == "Vacuum Syringe":
             if self.final_can_effect(eff.user.check_bypass_effects()):
                 self.receive_eff_aff_damage(10, eff.user)
@@ -1106,14 +1566,14 @@ class CharacterManager():
         if eff.name == "Nemurin Nap":
             eff.alter_mag(1)
             if eff.mag == 2:
-                self.add_effect(Effect(Ability("nemu1"), EffectType.COST_ADJUST, eff.user, 280000, lambda eff:"Nemurin Beam will cost one less random energy.", mag = -251))
-                self.add_effect(Effect(Ability("nemu1"), EffectType.COST_ADJUST, eff.user, 280000, lambda eff:"Dream Manipulation will cost one less random energy.", mag = -351))
+                self.add_effect(Effect(Ability("nemu2"), EffectType.COST_ADJUST, eff.user, 280000, lambda eff:"Nemurin Beam will cost one less random energy.", mag = -251))
+                self.add_effect(Effect(Ability("nemu3"), EffectType.COST_ADJUST, eff.user, 280000, lambda eff:"Dream Manipulation will cost one less random energy.", mag = -351))
             if eff.mag == 3:
-                self.add_effect(Effect(Ability("nemu1"), EffectType.TARGET_SWAP, eff.user, 280000, lambda eff:"Nemurin Beam will target all enemies.", mag = 21))
-                self.add_effect(Effect(Ability("nemu1"), EffectType.TARGET_SWAP, eff.user, 280000, lambda eff:"Dream Manipulation will target all allies.", mag = 31))
+                self.add_effect(Effect(Ability("nemu2"), EffectType.TARGET_SWAP, eff.user, 280000, lambda eff:"Nemurin Beam will target all enemies.", mag = 21))
+                self.add_effect(Effect(Ability("nemu3"), EffectType.TARGET_SWAP, eff.user, 280000, lambda eff:"Dream Manipulation will target all allies.", mag = 32))
         if eff.name == "Eight Trigrams - 128 Palms":
             if self.final_can_effect(eff.user.check_bypass_effects()) and (not self.deflecting() or (2 * (eff.mag ** 2) > 15)):
-                base_damage = (2 * (eff.mag ** 2))
+                base_damage = (2 * (2 ** eff.mag))
                 eff.user.deal_eff_damage(base_damage, self)
                 eff.alter_mag(1)
                 if self.has_effect(EffectType.MARK, "Chakra Point Strike") and base_damage > self.check_for_dmg_reduction():
@@ -1143,6 +1603,18 @@ class CharacterManager():
             if self.final_can_effect(eff.user.check_bypass_effects()) and not self.deflecting():
                 eff.user.deal_eff_damage(15, self)
                 self.apply_stack_effect(Effect(Ability("ichimaru3"), EffectType.STACK, eff.user, 280000, lambda eff: f"This character will take {10 * eff.mag} affliction damage from Kill, Kamishini no Yari.", mag=1), eff.user)
+        if eff.name == "Rubble Barrage":
+            if self.final_can_effect(eff.user.check_bypass_effects()) and not self.deflecting():
+                base_damage = 10
+                if eff.user.has_effect(EffectType.STACK, "Gather Power"):
+                    base_damage += (5 * eff.user.get_effect(EffectType.STACK, "Gather Power").mag)
+                eff.user.deal_eff_damage(base_damage, self)
+
+    def is_counter_immune(self):
+        gen = [eff for eff in self.source.current_effects if eff.eff_type == EffectType.COUNTER_IMMUNE]
+        for eff in gen:
+            return True
+        return False
 
     def check_countered(self, pteam: list["CharacterManager"], eteam: list["CharacterManager"]) -> bool:
 
@@ -1153,7 +1625,8 @@ class CharacterManager():
             return False
 
         if is_harmful(self, eteam):
-            if not self.has_effect(EffectType.MARK, "Mental Radar"):
+
+            if not self.is_counter_immune():
                 #self reflect effects:
                 gen = (eff for eff in self.source.current_effects
                     if eff.eff_type == EffectType.REFLECT and not self.scene.is_allied(eff))
@@ -1165,10 +1638,10 @@ class CharacterManager():
                 for eff in gen:
                     if eff.name == "Hear Distress":
                         src = Ability("snowwhite2")
+                        self.full_remove_effect("Hear Distress", eff.user)
                         self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Hear Distress."))
                         self.source.energy_contribution -= 1
                         eff.user.check_on_drain(self)
-                        self.full_remove_effect("Hear Distress", eff.user)
                         if self.has_effect(EffectType.MARK, "Third Dance - Shirafune"):
                             self.full_remove_effect("Third Dance - Shirafune", self)
                             if eff.user.final_can_effect():
@@ -1182,6 +1655,19 @@ class CharacterManager():
 
                     gen = (eff for eff in target.source.current_effects if eff.eff_type == EffectType.COUNTER and not self.scene.is_allied(eff))
                     for eff in gen:
+                        if eff.name == "Draw Stance":
+                            src = Ability("touka1")
+                            target.full_remove_effect("Draw Stance", eff.user)
+                            self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Draw Stance."))
+                            if self.final_can_effect() and not self.deflecting():
+                                self.receive_eff_damage(15, eff.user)
+                            if self.has_effect(EffectType.MARK, "Third Dance - Shirafune"):
+                                self.full_remove_effect("Third Dance - Shirafune", self)
+                                if target.final_can_effect():
+                                    target.receive_eff_damage(30, self)
+                                    target.add_effect(Effect(Ability("rukia3"), EffectType.ALL_STUN, self, 2, lambda eff: "This character is stunned."))
+                                    self.check_on_stun(target)
+                            return True
                         if eff.name == "Zero Point Breakthrough":
                             src = Ability("tsunayoshi3")
                             target.full_remove_effect("Zero Point Breakthrough", eff.user)
@@ -1209,16 +1695,17 @@ class CharacterManager():
                         if eff.name == "Minion - Tama":
                             src = Ability("ruler3")
                             target.full_remove_effect("Minion - Tama", eff.user)
+                            eff.user.full_remove_effect("Minion - Tama", eff.user)
                             self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Minion - Tama."))
                             eff.user.source.main_abilities[2].cooldown_remaining = 2
                             if not self.final_can_effect():
                                 self.receive_eff_pierce_damage(20, eff.user)
                             if self.has_effect(EffectType.MARK, "Third Dance - Shirafune"):
                                 self.full_remove_effect("Third Dance - Shirafune", self)
-                                if target.final_can_effect():
-                                    target.receive_eff_damage(30, self)
-                                    target.add_effect(Effect(Ability("rukia3"), EffectType.ALL_STUN, self, 2, lambda eff: "This character is stunned."))
-                                    self.check_on_stun(target)
+                                if eff.user.final_can_effect():
+                                    eff.user.receive_eff_damage(30, self)
+                                    eff.user.add_effect(Effect(Ability("rukia3"), EffectType.ALL_STUN, self, 2, lambda eff: "This character is stunned."))
+                                    self.check_on_stun(eff.user)
                             return True
                         if eff.name == "Casseur de Logistille":
                             src = Ability("astolfo1")
@@ -1231,10 +1718,10 @@ class CharacterManager():
                                     eff.user.check_on_stun(self)
                                 if self.has_effect(EffectType.MARK, "Third Dance - Shirafune"):
                                     self.full_remove_effect("Third Dance - Shirafune", self)
-                                    if target.final_can_effect():
-                                        target.receive_eff_damage(30, self)
-                                        target.add_effect(Effect(Ability("rukia3"), EffectType.ALL_STUN, self, 2, lambda eff: "This character is stunned."))
-                                        self.check_on_stun(target)
+                                    if eff.user.final_can_effect():
+                                        eff.user.receive_eff_damage(30, self)
+                                        eff.user.add_effect(Effect(Ability("rukia3"), EffectType.ALL_STUN, self, 2, lambda eff: "This character is stunned."))
+                                        self.check_on_stun(eff.user)
                                 return True
                     
                     gen = (eff for eff in target.source.current_effects
@@ -1254,6 +1741,18 @@ class CharacterManager():
         #TODO check user effects
 
         #TODO check target effects
+        if target.has_effect(EffectType.MARK, "Lightning Palm"):
+            src = target.get_effect(EffectType.MARK, "Lightning Palm")
+            if not self.has_effect(EffectType.STUN_IMMUNE, "Lightning Palm"):
+                self.add_effect(Effect(src.source, EffectType.STUN_IMMUNE, src.user, 3, lambda eff: "This character will ignore stun effects."))
+        if target.has_effect(EffectType.MARK, "Narukami"):
+            src = target.get_effect(EffectType.MARK, "Narukami")
+            if not self.has_effect(EffectType.COUNTER_IMMUNE, "Narukami"):
+                self.add_effect(Effect(src.source, EffectType.COUNTER_IMMUNE, src.user, 3, lambda eff: "This character will ignore counter effects."))
+        if target.has_effect(EffectType.MARK, "Whirlwind Rush"):
+            src = target.get_effect(EffectType.MARK, "Whirlwind Rush")
+            self.add_effect(Effect(src.source, EffectType.ALL_INVULN, src.user, 2, lambda eff: "This character is invulnerable."))
+            
         if target.has_effect(EffectType.ALL_DR, "Arrest Assault"):
             target.get_effect(EffectType.ALL_DR, "Arrest Assault").user.get_effect(EffectType.UNIQUE, "Arrest Assault").alter_mag(1)
         if target.has_effect(EffectType.MARK, "Doll Trap"):
@@ -1269,8 +1768,13 @@ class CharacterManager():
         if target.source.hp <= 0:
             if self.has_effect(EffectType.STUN_IMMUNE, "Beast Instinct"):
                 self.get_effect(EffectType.STUN_IMMUNE, "Beast Instinct").duration = 5
-            if target.has_effect(EffectType.MARK, "Beast Instinct"):
-                self.receive_eff_healing(20)
+                self.get_effect(EffectType.COUNTER_IMMUNE, "Beast Instinct").duration = 5
+            if self.used_ability != None and self.used_ability.name == "Yatsufusa":
+                if target in self.scene.player_display.team.character_managers:
+                    target.add_effect(Effect(self.used_ability, EffectType.MARK, self, 3, lambda eff: "At the beginning of her next turn, Kurome will animate this character."))
+                else:
+                    self.apply_stack_effect(Effect(self.used_ability, EffectType.STACK, self, 280000, lambda eff: f"Mass Animation will deal {eff.mag * 10} more damage.", mag=1), self)
+            
 
     def apply_stack_effect(self, effect: Effect, user: "CharacterManager"):
         gen = [eff for eff in self.source.current_effects if (eff.eff_type == effect.eff_type and eff.name == effect.name and eff.user == user)]
@@ -1324,17 +1828,22 @@ class CharacterManager():
                 self.add_effect(Effect(Ability("neji3"), EffectType.ALL_BOOST, self.get_effect(EffectType.MARK, "Selfless Genius").user, 2, lambda eff: "This character will deal 10 more damage with non-affliction abilities.", mag = 10))
                 self.get_effect(EffectType.MARK, "Selfless Genius").user.source.hp = 0
                 self.get_effect(EffectType.MARK, "Selfless Genius").user.source.dead = True
+                temp_yatsufusa_storage = None
+                if self.get_effect(EffectType.MARK, "Selfless Genius").user.has_effect(EffectType.MARK, "Yatsufusa"):
+                    temp_yatsufusa_storage = self.get_effect(EffectType.MARK, "Yatsufusa")
+                self.get_effect(EffectType.MARK, "Selfless Genius").user.source.current_effects.clear()
+                if temp_yatsufusa_storage:
+                    self.get_effect(EffectType.MARK, "Selfless Genius").user.source.current_effects.append(temp_yatsufusa_storage)
 
         mod_damage = self.pass_through_dest_def(mod_damage)
-        
+        if mod_damage < 0:
+            mod_damage = 0
         
         self.source.hp -= mod_damage
         
         if mod_damage > 0:
             self.damage_taken_check(mod_damage)
-            if self.has_effect(EffectType.MARK, "Electric Rage"):
-                self.scene.player_display.team.energy_pool[Energy.SPECIAL] += 1
-
+            
         self.death_check(dealer)
 
     def deal_eff_damage(self, damage: int, target: "CharacterManager"):
@@ -1354,8 +1863,16 @@ class CharacterManager():
                 self.add_effect(Effect(Ability("neji3"), EffectType.ALL_BOOST, self.get_effect(EffectType.MARK, "Selfless Genius").user, 2, lambda eff: "This character will deal 10 more damage with non-affliction abilities.", mag = 10))
                 self.get_effect(EffectType.MARK, "Selfless Genius").user.source.hp = 0
                 self.get_effect(EffectType.MARK, "Selfless Genius").user.source.dead = True
+                temp_yatsufusa_storage = None
+                if self.get_effect(EffectType.MARK, "Selfless Genius").user.has_effect(EffectType.MARK, "Yatsufusa"):
+                    temp_yatsufusa_storage = self.get_effect(EffectType.MARK, "Yatsufusa")
+                self.get_effect(EffectType.MARK, "Selfless Genius").user.source.current_effects.clear()
+                if temp_yatsufusa_storage:
+                    self.get_effect(EffectType.MARK, "Selfless Genius").user.source.current_effects.append(temp_yatsufusa_storage)
 
         mod_damage = self.pass_through_dest_def(mod_damage)
+        if mod_damage < 0:
+            mod_damage = 0
         self.source.hp -= mod_damage
         if mod_damage > 0:
             self.damage_taken_check(mod_damage)
@@ -1392,15 +1909,23 @@ class CharacterManager():
                 self.add_effect(Effect(Ability("neji3"), EffectType.ALL_BOOST, self.get_effect(EffectType.MARK, "Selfless Genius").user, 2, lambda eff: "This character will deal 10 more damage with non-affliction abilities.", mag = 10))
                 self.get_effect(EffectType.MARK, "Selfless Genius").user.source.hp = 0
                 self.get_effect(EffectType.MARK, "Selfless Genius").user.source.dead = True
+                temp_yatsufusa_storage = None
+                if self.get_effect(EffectType.MARK, "Selfless Genius").user.has_effect(EffectType.MARK, "Yatsufusa"):
+                    temp_yatsufusa_storage = self.get_effect(EffectType.MARK, "Yatsufusa")
+                self.get_effect(EffectType.MARK, "Selfless Genius").user.source.current_effects.clear()
+                if temp_yatsufusa_storage:
+                    self.get_effect(EffectType.MARK, "Selfless Genius").user.source.current_effects.append(temp_yatsufusa_storage)
 
         
 
         mod_damage = self.pass_through_dest_def(mod_damage)
+
+        if mod_damage < 0:
+            mod_damage = 0
+
         self.source.hp -= mod_damage
         if mod_damage > 0:
             self.damage_taken_check(mod_damage)
-            if self.has_effect(EffectType.MARK, "Electric Rage"):
-                self.scene.player_display.team.energy_pool[Energy.SPECIAL] += 1
         
         self.death_check(dealer)
 
@@ -1425,7 +1950,15 @@ class CharacterManager():
                 self.add_effect(Effect(Ability("neji3"), EffectType.ALL_BOOST, self.get_effect(EffectType.MARK, "Selfless Genius").user, 2, lambda eff: "This character will deal 10 more damage with non-affliction abilities.", mag = 10))
                 self.get_effect(EffectType.MARK, "Selfless Genius").user.source.hp = 0
                 self.get_effect(EffectType.MARK, "Selfless Genius").user.source.dead = True
+                temp_yatsufusa_storage = None
+                if self.get_effect(EffectType.MARK, "Selfless Genius").user.has_effect(EffectType.MARK, "Yatsufusa"):
+                    temp_yatsufusa_storage = self.get_effect(EffectType.MARK, "Yatsufusa")
+                self.get_effect(EffectType.MARK, "Selfless Genius").user.source.current_effects.clear()
+                if temp_yatsufusa_storage:
+                    self.get_effect(EffectType.MARK, "Selfless Genius").user.source.current_effects.append(temp_yatsufusa_storage)
         mod_damage = self.pass_through_dest_def(mod_damage)
+        if mod_damage < 0:
+            mod_damage = 0
         self.source.hp -= mod_damage
         if mod_damage > 0:
             self.damage_taken_check(mod_damage)
@@ -1467,12 +2000,19 @@ class CharacterManager():
                 self.add_effect(Effect(Ability("neji3"), EffectType.ALL_BOOST, self.get_effect(EffectType.MARK, "Selfless Genius").user, 2, lambda eff: "This character will deal 10 more damage with non-affliction abilities.", mag = 10))
                 self.get_effect(EffectType.MARK, "Selfless Genius").user.source.hp = 0
                 self.get_effect(EffectType.MARK, "Selfless Genius").user.source.dead = True
+                temp_yatsufusa_storage = None
+                if self.get_effect(EffectType.MARK, "Selfless Genius").user.has_effect(EffectType.MARK, "Yatsufusa"):
+                    temp_yatsufusa_storage = self.get_effect(EffectType.MARK, "Yatsufusa")
+                self.get_effect(EffectType.MARK, "Selfless Genius").user.source.current_effects.clear()
+                if temp_yatsufusa_storage:
+                    self.get_effect(EffectType.MARK, "Selfless Genius").user.source.current_effects.append(temp_yatsufusa_storage)
+        
+        if mod_damage < 0:
+            mod_damage = 0
         self.source.hp -= mod_damage
 
         if mod_damage > 0:
             self.damage_taken_check(mod_damage)
-            if self.has_effect(EffectType.MARK, "Electric Rage"):
-                self.scene.player_display.team.energy_pool[Energy.SPECIAL] += 1
             
 
         self.death_check(dealer)
@@ -1495,6 +2035,15 @@ class CharacterManager():
                 self.add_effect(Effect(Ability("neji3"), EffectType.ALL_BOOST, self.get_effect(EffectType.MARK, "Selfless Genius").user, 2, lambda eff: "This character will deal 10 more damage with non-affliction abilities.", mag = 10))
                 self.get_effect(EffectType.MARK, "Selfless Genius").user.source.hp = 0
                 self.get_effect(EffectType.MARK, "Selfless Genius").user.source.dead = True
+                temp_yatsufusa_storage = None
+                if self.get_effect(EffectType.MARK, "Selfless Genius").user.has_effect(EffectType.MARK, "Yatsufusa"):
+                    temp_yatsufusa_storage = self.get_effect(EffectType.MARK, "Yatsufusa")
+                self.get_effect(EffectType.MARK, "Selfless Genius").user.source.current_effects.clear()
+                if temp_yatsufusa_storage:
+                    self.get_effect(EffectType.MARK, "Selfless Genius").user.source.current_effects.append(temp_yatsufusa_storage)
+        
+        if mod_damage < 0:
+            mod_damage = 0
         self.source.hp -= mod_damage
 
         if mod_damage > 0:
@@ -1516,8 +2065,8 @@ class CharacterManager():
                 which = i + 1
                 if ability.name == "Knight's Sword" and self.has_effect(EffectType.STACK, "Magic Sword"):
                     mod_damage += (20 * self.get_effect(EffectType.STACK, "Magic Sword").mag)
-                if ability.name == "Maximum Cannon" and self.has_effect(EffectType.STACK, "To The Extreme!"):
-                    mod_damage += (15 * self.get_effect(EffectType.STACK, "To The Extreme!").mag)
+                if ability.name == "Maximum Cannon" and self.has_effect(EffectType.STACK, "Maximum Cannon"):
+                    mod_damage += (15 * self.get_effect(EffectType.STACK, "Maximum Cannon").mag)
 
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.ALL_BOOST)
@@ -1562,6 +2111,10 @@ class CharacterManager():
             return True
         if self.has_effect(EffectType.STACK, "Magic Sword"):
             return True
+        if self.has_effect(EffectType.STACK, "Yatsufusa"):
+            return True
+        if self.has_effect(EffectType.STACK, "Maximum Cannon"):
+            return True
         return False
 
     def check_for_dmg_reduction(self) -> int:
@@ -1585,14 +2138,14 @@ class CharacterManager():
         
         return dr
 
-    def check_for_cooldown_mod(self) -> int:
+    def check_for_cooldown_mod(self, ability: Ability) -> int:
         cd_mod = 0
         which = 0
         
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.COOLDOWN_MOD)
-        for i, ability in enumerate(self.source.current_abilities):
-            if self.used_ability == ability:
+        for i, abi in enumerate(self.source.current_abilities):
+            if ability == abi:
                 if ability.name == "Knight's Sword" and self.has_effect(EffectType.STACK, "Magic Sword"):
                     cd_mod += self.get_effect(EffectType.STACK, "Magic Sword").mag
                 which = i + 1
@@ -1659,6 +2212,7 @@ class CharacterManager():
                 self.full_remove_effect("Three-God Linking Shield", eff.user)
             if eff.name == "Perfect Paper - Rampage Suit":
                 self.full_remove_effect("Perfect Paper - Rampage Suit", eff.user)
+                self.add_effect(Effect(eff.source, EffectType.UNIQUE, self, 280000, lambda eff: "Naruha cannot use Perfect Paper - Rampage Suit."))
             if eff.name == "Illusory Breakdown":
                 self.full_remove_effect("Illusory Breakdown", self)
                 for manager in self.scene.enemy_display.team.character_managers:
@@ -1722,24 +2276,31 @@ class CharacterManager():
         return output
 
     def damage_taken_check(self, damage: int):
+        if self.has_effect(EffectType.UNIQUE, "In The Name Of Ruler!"):
+            for manager in self.scene.player_display.team.character_managers:
+                if manager.has_effect_with_user(EffectType.ALL_STUN, "In The Name Of Ruler!", self):
+                    manager.full_remove_effect("In The Name Of Ruler!", self)
+            self.full_remove_effect("In The Name Of Ruler!", self)
+        if self.has_effect(EffectType.MARK, "Electric Rage"):
+            self.add_effect(Effect(Ability("misaka3"), EffectType.ENERGY_GAIN, self, 2, lambda eff:"Misaka will gain 1 special energy.", mag=21, system=True))
         if self.source.name == "seiryu" and self.source.hp < 30:
             self.add_effect(Effect(Ability("seiryualt1"), EffectType.ABILITY_SWAP, self, 280000, lambda eff: "Body Modification - Arm Gun has been replaced by Body Modification - Self Destruct.", mag = 11))
         if self.has_effect(EffectType.MARK, "To The Extreme!"):
             extreme = self.get_effect(EffectType.MARK, "To The Extreme!")
             extreme.alter_mag(damage)
-            if extreme.mag > 20:
+            if extreme.mag >= 20:
                 stacks = extreme.mag // 20
                 extreme.alter_mag(-(stacks * 20))
-                self.apply_stack_effect(Effect(Ability("ryohei4"), EffectType.STACK, self, 280000, lambda eff: f"Maximum Cannon will deal {eff.mag * 15} more damage and cost {eff.mag} more random energy.", mag=stacks))
-                self.apply_stack_effect(Effect(Ability("ryohei4"), EffectType.STACK, self, 280000, lambda eff: f"Kangaryu will heal {eff.mag * 20} more health and cost {eff.mag} more random energy.", mag=stacks))
+                self.apply_stack_effect(Effect(Ability("ryohei1"), EffectType.STACK, self, 280000, lambda eff: f"Maximum Cannon will deal {eff.mag * 15} more damage and cost {eff.mag} more random energy.", mag=stacks), self)
+                self.apply_stack_effect(Effect(Ability("ryohei2"), EffectType.STACK, self, 280000, lambda eff: f"Kangaryu will heal {eff.mag * 20} more health and cost {eff.mag} more random energy.", mag=stacks), self)
         if self.has_effect(EffectType.CONT_UNIQUE, "Nemurin Nap"):
             self.get_effect(EffectType.CONT_UNIQUE, "Nemurin Nap").alter_mag(-1)
             if self.get_effect(EffectType.CONT_UNIQUE, "Nemurin Nap").mag == 2:
-                self.remove_effect(self.get_effect(EffectType.TARGET_SWAP, "Nemurin Nap"))
-                self.remove_effect(self.get_effect(EffectType.TARGET_SWAP, "Nemurin Nap"))
+                self.remove_effect(self.get_effect(EffectType.TARGET_SWAP, "Nemurin Beam"))
+                self.remove_effect(self.get_effect(EffectType.TARGET_SWAP, "Dream Manipulation"))
             if self.get_effect(EffectType.CONT_UNIQUE, "Nemurin Nap").mag == 1:
-                self.remove_effect(self.get_effect(EffectType.COST_ADJUST, "Nemurin Nap"))
-                self.remove_effect(self.get_effect(EffectType.COST_ADJUST, "Nemurin Nap"))
+                self.remove_effect(self.get_effect(EffectType.COST_ADJUST, "Nemurin Beam"))
+                self.remove_effect(self.get_effect(EffectType.COST_ADJUST, "Dream Manipulation"))
         if self.has_effect(EffectType.MARK, "You Are Needed") and self.source.hp < 30:
             self.full_remove_effect("You Are Needed", self)
             src = Ability("chrome1")
@@ -1770,21 +2331,26 @@ class CharacterManager():
     def death_check(self, targeter: "CharacterManager"):
 
         if self.source.hp <= 0:
-            if self.has_effect(EffectType.MARK, "Electric Rage"):
+            if self.has_effect(EffectType.MARK, "Doping Rampage") and not self.scene.dying_to_doping:
+                self.source.hp = 1
+            elif self.has_effect(EffectType.MARK, "Electric Rage"):
                 self.source.hp = 1
             elif self.has_effect(EffectType.MARK, "Lucky Rabbit's Foot"):
                 self.source.hp = 35
             else:
-
-                if targeter.has_effect(EffectType.STUN_IMMUNE, "Beast Instinct"):
-                    targeter.get_effect(EffectType.STUN_IMMUNE, "Beast Instinct").duration == 5
                 if self.has_effect(EffectType.MARK, "Beast Instinct"):
                     if targeter == self.get_effect(EffectType.MARK, "Beast Instinct").user:
                         targeter.receive_healing(20)
-
                 self.source.hp = 0
                 self.source.dead = True
+                temp_yatsufusa_storage = None
+                if self.has_effect(EffectType.MARK, "Yatsufusa"):
+                    temp_yatsufusa_storage = self.get_effect(EffectType.MARK, "Yatsufusa")
                 self.source.current_effects.clear()
+                self.update_effect_region()
+                if temp_yatsufusa_storage:
+                    self.source.current_effects.append(temp_yatsufusa_storage)
+        self.scene.dying_to_doping = False
 
 
     def check_energy_contribution(self) -> list[int]:
@@ -1795,11 +2361,11 @@ class CharacterManager():
             negative = False
             if eff.mag < 0:
                 negative = True
-            energy_type = math.trunc(eff.mag / 10) - 1
+            energy_type = math.trunc(eff.mag / 10)
             if negative:
                 energy_type = energy_type * -1
             mod_value = eff.mag - (energy_type * 10)
-            output[energy_type] += mod_value
+            output[energy_type - 1] += mod_value
         return output
 
     def give_healing(self, healing: int, target: "CharacterManager"):
@@ -1807,8 +2373,8 @@ class CharacterManager():
         mod_healing = healing
 
         if self.used_ability.name == "Kangaryu":
-            if self.has_effect(EffectType.STACK, "To The Extreme!"):
-                mod_healing += (20 * self.get_effect(EffectType.STACK, "To The Extreme!").mag)
+            if self.has_effect(EffectType.STACK, "Kangaryu"):
+                mod_healing += (20 * self.get_effect(EffectType.STACK, "Kangaryu").mag)
 
         target.receive_healing(mod_healing)
 
@@ -1860,15 +2426,15 @@ class CharacterManager():
             return True
         if not targeter.has_effect(EffectType.UNIQUE, "Frozen Castle") and target.has_effect(EffectType.MARK, "Frozen Castle"):
             return True
-        if targeter.has_effect(EffectType.UNIQUE, "Streets of the Lost") and targeter != targeter.get_effect(EffectType.UNIQUE, "Streets of the Lost").user:
+        if targeter.has_effect(EffectType.UNIQUE, "Streets of the Lost") and self != targeter.get_effect(EffectType.UNIQUE, "Streets of the Lost").user:
             return True
         return False
 
     def hostile_target(self, targeter: "CharacterManager", def_type = "NORMAL") -> bool:
         if def_type == "NORMAL":
-            return not (self.check_invuln() or self.has_effect(EffectType.UNIQUE, "Shadow Pin") or self.source.dead or self.source.untargetable or self.special_targeting_exemptions(targeter))
+            return not (self.check_invuln() or targeter.has_effect(EffectType.UNIQUE, "Shadow Pin") or self.source.dead or self.source.untargetable or self.special_targeting_exemptions(targeter))
         elif def_type == "BYPASS":
-            return not (self.source.dead or self.has_effect(EffectType.UNIQUE, "Shadow Pin") or self.source.untargetable or self.special_targeting_exemptions(targeter))
+            return not (self.source.dead or targeter.has_effect(EffectType.UNIQUE, "Shadow Pin") or self.source.untargetable or self.special_targeting_exemptions(targeter))
 
     def final_can_effect(self, def_type = "NORMAL") -> bool:
         if def_type == "NORMAL":
@@ -1922,7 +2488,7 @@ class CharacterManager():
         for idx, effect_set in enumerate(self.make_effect_clusters().values()):
             (column, row) = (idx // max_columns, idx % max_columns)
             effect_sprite = self.scene.ui_factory.from_surface(sdl2.ext.BUTTON,
-                                                               self.scene.get_scaled_surface(effect_set[0].eff_img, 25, 25))
+                                                               self.scene.get_scaled_surface(effect_set[0].eff_img, 25, 25), free=True)
             effect_sprite.effects = effect_set
             effect_sprite.ID = f"{idx}/{self.id}"
             effect_sprite.is_enemy = self.is_enemy()
@@ -1930,6 +2496,7 @@ class CharacterManager():
             self.scene.add_bordered_sprite(self.effect_region, effect_sprite, BLACK, row * x_offset, column * y_offset)
 
     def set_current_effect(self, button, _sender):
+        play_sound(self.scene.scene_manager.sounds["click"])
         if self.scene.current_button == None or self.scene.current_button.ID != button.ID:
             self.scene.current_button = button
         else:
@@ -2022,6 +2589,8 @@ class CharacterManager():
                 continue
             if effect.invisible == True and effect.user.is_enemy():
                 continue
+            if effect.system:
+                continue
             if effect.name in output.keys() and effect.user == output[effect.name][0].user:
                 output[effect.name].append(effect)
             else:
@@ -2041,31 +2610,40 @@ class CharacterManager():
             self.targeted = False
 
     def draw_hp_bar(self):
-        if self.source.hp == 100:
+        increment = -1
+        if self.source.current_hp != self.source.hp:
+            if self.source.current_hp - self.source.hp < 0:
+                increment = 1
+        else:
+            increment = 0
+        self.source.current_hp += increment    
+        if self.source.current_hp == 100:
             hp_bar = self.scene.sprite_factory.from_color(GREEN, size=(100, 20))
-        elif self.source.hp == 0:
+        elif self.source.current_hp == 0:
             hp_bar = self.scene.sprite_factory.from_color(RED, size=(100, 20))
         else:
             hp_bar = self.scene.sprite_factory.from_color(BLACK, size=(100, 20))
-            green_bar = self.scene.sprite_factory.from_color(GREEN, size=(self.source.hp, 20))
-            red_bar = self.scene.sprite_factory.from_color(RED, size=(100 - self.source.hp, 20))
+            green_bar = self.scene.sprite_factory.from_color(GREEN, size=(self.source.current_hp, 20))
             sdl2.surface.SDL_BlitSurface(green_bar.surface, None, hp_bar.surface,
-                                         sdl2.SDL_Rect(0, 0, 0, 0))
-            sdl2.surface.SDL_BlitSurface(red_bar.surface, None, hp_bar.surface,
-                                         sdl2.SDL_Rect(self.source.hp + 1, 0, 0, 0))
+                                        sdl2.SDL_Rect(0, 0, 0, 0))
+            if self.source.current_hp <= 100:
+                red_bar = self.scene.sprite_factory.from_color(RED, size=(100 - self.source.current_hp, 20))
+                sdl2.surface.SDL_BlitSurface(red_bar.surface, None, hp_bar.surface,
+                                        sdl2.SDL_Rect(self.source.current_hp + 1, 0, 0, 0))
         hp_text = sdl2.sdlttf.TTF_RenderText_Blended(self.scene.font,
-                                                     str.encode(f"{self.source.hp}"), BLACK)
+                                                    str.encode(f"{self.source.current_hp}"), BLACK)
 
-        if self.source.hp == 100:
+        if self.source.current_hp == 100:
             hp_text_x = 38
-        elif self.source.hp > 9:
+        elif self.source.current_hp > 9:
             hp_text_x = 42
         else:
             hp_text_x = 46
 
         sdl2.surface.SDL_BlitSurface(hp_text, None, hp_bar.surface,
-                                     sdl2.SDL_Rect(hp_text_x, 0, 0, 0))
+                                    sdl2.SDL_Rect(hp_text_x, 0, 0, 0))
         self.scene.add_bordered_sprite(self.hp_bar_region, hp_bar, BLACK, 0, 0)
+        
 
     def refresh_character(self, enemy=False):
         if self.source.hp <= 0:
@@ -2128,37 +2706,38 @@ class CharacterManager():
                if eff.eff_type == EffectType.PROF_SWAP)
         for eff in gen:
             if eff.mag == 1:
-                self.source.profile_image = self.source.altprof1
+                self.profile_sprite.surface = self.scene.get_scaled_surface(self.scene.scene_manager.surfaces[self.source.name + "altprof1"])
             elif eff.mag == 2:
-                self.source.profile_image = self.source.altprof2
+                self.profile_sprite.surface = self.scene.get_scaled_surface(self.scene.scene_manager.surfaces[self.source.name + "altprof2"])
+
+    def check_enemy_profile_swaps(self):
+        gen = (eff for eff in self.source.current_effects
+               if eff.eff_type == EffectType.PROF_SWAP)
+        for eff in gen:
+            if eff.mag == 1:
+                self.profile_sprite.surface = self.scene.get_scaled_surface(self.scene.scene_manager.surfaces[self.source.name + "enemyaltprof1"])
+            elif eff.mag == 2:
+                self.profile_sprite.surface = self.scene.get_scaled_surface(self.scene.scene_manager.surfaces[self.source.name + "enemyaltprof2"])
 
     def update_profile(self):
-
-        self.source.profile_image = self.source.main_prof
+        self.character_region.add_sprite(self.scene.sprite_factory.from_surface(self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["banner"], width=640, height=150), free=True), 100, -27)
+        self.profile_sprite.surface = self.scene.get_scaled_surface(self.scene.scene_manager.surfaces[self.source.name + "allyprof"])
         self.check_profile_swaps()
-
+        self.scene.add_sprite_with_border(self.character_region, self.profile_sprite, self.profile_border, 0, 0)
         if self.targeted:
-            profile_sprite = self.scene.create_selected_version(self.scene.get_scaled_surface(self.source.profile_image),
-                                                                engine.FilterType.SELECTED)
-        else:
-            profile_sprite = self.scene.ui_factory.from_surface(sdl2.ext.BUTTON,
-                                                                self.scene.get_scaled_surface(self.source.profile_image))
-        profile_sprite.click += self.profile_click
-        self.scene.add_bordered_sprite(self.character_region, profile_sprite, BLACK, 0, 0)
+            self.character_region.add_sprite(self.selected_filter, 0, 0)
+        
+        
 
     def update_enemy_profile(self):
 
-        self.source.profile_image = self.source.main_prof
-        self.check_profile_swaps()
+        self.profile_sprite.surface = self.scene.get_scaled_surface(self.scene.scene_manager.surfaces[self.source.name + "enemyprof"])
+        self.check_enemy_profile_swaps()
 
+        self.scene.add_bordered_sprite(self.character_region, self.profile_sprite, BLACK, 0, 0)
         if self.targeted:
-            profile_sprite = self.scene.create_selected_version(self.scene.get_scaled_surface(self.source.profile_image, flipped = True),
-                                                                engine.FilterType.SELECTED)
-        else:
-            profile_sprite = self.scene.ui_factory.from_surface(sdl2.ext.BUTTON,
-                                                                self.scene.get_scaled_surface(self.source.profile_image, flipped = True))
-        profile_sprite.click += self.profile_click
-        self.scene.add_bordered_sprite(self.character_region, profile_sprite, BLACK, 0, 0)
+            self.character_region.add_sprite(self.selected_filter, 0, 0)
+        
 
     def update_targeted_sprites(self):
         vertical_offset = 12
@@ -2169,28 +2748,42 @@ class CharacterManager():
             self.scene.add_bordered_sprite(self.targeting_region, target_sprite, BLACK, 0, (vertical_offset * idx) + (idx * 25))
 
     def target_sprite_click(self, button, _sender):
+        play_sound(self.scene.scene_manager.sounds["undo"])
         self.scene.remove_targets(self.received_ability[button.idx])
 
     def profile_click(self, _button, _sender):
         if self.scene.selected_ability is not None and self.targeted:
+            play_sound(self.scene.scene_manager.sounds["select"])
+            self.scene.target_clicked = True
             self.scene.expend_energy(self.scene.selected_ability)
             self.scene.apply_targeting(self)
             self.scene.return_targeting_to_default()
         self.scene.full_update()
 
+    def detail_click(self, _button, _sender):
+        if self.character_region.x > 400 and not self.scene.target_clicked:
+            play_sound(self.scene.scene_manager.sounds["select"])
+            self.scene.enemy_detail_character = self.source
+            self.scene.enemy_detail_ability = None
+            self.scene.full_update()
+
     def set_selected_ability(self, button, _sender):
-        self.selected_ability = button.ability
-        self.scene.reset_targeting()
-        if button.ability.can_use(self.scene,
-                                  self) and not self.acted:
-            self.scene.selected_ability = button.ability
-            self.scene.acting_character = self
-            button.ability.target(self, self.scene.player_display.team.character_managers,
-                                  self.scene.enemy_display.team.character_managers)
-        else:
-            self.scene.selected_ability = None
-            self.scene.acting_character = None
-        self.scene.full_update()
+        if not self.scene.window_up:
+            play_sound(self.scene.scene_manager.sounds["click"])
+            self.selected_ability = button.ability
+            self.selected_button = button
+            self.scene.reset_targeting()
+            if button.ability.can_use(self.scene,
+                                    self) and not self.acted:
+                self.scene.selected_ability = button.ability
+                self.scene.acting_character = self
+                button.ability.target(self, self.scene.player_display.team.character_managers,
+                                    self.scene.enemy_display.team.character_managers)
+            else:
+                self.scene.selected_ability = None
+                self.scene.acting_character = None
+            self.scene.full_update()
+
             
     
     
@@ -2198,43 +2791,37 @@ class CharacterManager():
 
 
     def check_ability_swaps(self):
-        self.source.current_abilities = copy.copy(self.source.main_abilities)
+        self.source.current_abilities = [ability for ability in self.source.main_abilities]
+        self.current_ability_sprites = [sprite for sprite in self.main_ability_sprites]
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.ABILITY_SWAP)
         for eff in gen:
             swap_from = eff.mag // 10
             swap_to = eff.mag - (swap_from * 10)
-            self.source.current_abilities[swap_from - 1] = copy.copy(self.source.alt_abilities[swap_to - 1])
+            self.current_ability_sprites[swap_from - 1] = self.alt_ability_sprites[swap_to - 1]
+            self.source.current_abilities[swap_from - 1] = self.source.alt_abilities[swap_to - 1]
+        for i, sprite in enumerate(self.current_ability_sprites):
+            sprite.ability = self.source.current_abilities[i]
 
     def update_ability(self):
 
-        
-        
         self.check_ability_swaps()
         self.adjust_targeting_types()
-        
 
-        for i, chosen_ability in enumerate(self.source.current_abilities):
+        for i, button in enumerate(self.current_ability_sprites):
+            self.scene.add_sprite_with_border(self.character_region, button, button.border, 150 + (i * 140), 0)
 
-            if chosen_ability == self.scene.selected_ability:
-                ability_button = self.scene.create_selected_version(self.scene.get_scaled_surface(chosen_ability.image),
-                                                                    engine.FilterType.SELECTED)
+            if self.scene.selected_ability and button.ability.name == self.scene.selected_ability.name:
+                self.character_region.add_sprite(button.selected_pane, 150 + (i * 140), 0)
             else:
-                if chosen_ability.can_use(self.scene, self) and not self.acted:
-                    ability_button = self.scene.ui_factory.from_surface(
-                        sdl2.ext.BUTTON, self.scene.get_scaled_surface(chosen_ability.image))
-                else:
-                    if chosen_ability.cooldown_remaining > 0:
-                        ability_button = self.scene.create_selected_version(
-                            self.stamp_cooldown(chosen_ability.cooldown_remaining, self.scene.get_scaled_surface(chosen_ability.image)),
-                            engine.FilterType.LOCKED)
+                if not button.ability.can_use(self.scene, self) or self.acted:
+                    if button.ability.cooldown_remaining > 0:
+                        button.null_pane.surface = self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["locked"])
+                        button.null_pane.surface = self.stamp_cooldown(button.ability.cooldown_remaining, button.null_pane.surface)
+                        self.character_region.add_sprite(button.null_pane, 150 + (i * 140), 0)
                     else:
-                        ability_button = self.scene.create_selected_version(
-                            self.scene.get_scaled_surface(chosen_ability.image), engine.FilterType.LOCKED)
-
-            ability_button.ability = chosen_ability
-            ability_button.click += self.set_selected_ability
-            self.scene.add_bordered_sprite(self.character_region, ability_button, BLACK, 150 + (i * 140), 0)
+                        button.null_pane.surface = self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["locked"])
+                        self.character_region.add_sprite(button.null_pane, 150 + (i * 140), 0)
 
     def stamp_cooldown(self, cooldown: int, surface: sdl2.SDL_Surface) -> sdl2.SDL_Surface:
         text_surface = sdl2.sdlttf.TTF_RenderText_Blended(self.scene.cooldown_font,
@@ -2246,25 +2833,5 @@ class CharacterManager():
 def make_battle_scene(scene_manager) -> BattleScene:
 
     scene = BattleScene(scene_manager, sdl2.ext.SOFTWARE, RESOURCES)
-
-    assets = {
-        "background": "bright_background.png",
-        "PHYSICAL": "physicalEnergy.png",
-        "SPECIAL": "specialEnergy.png",
-        "MENTAL": "mentalEnergy.png",
-        "WEAPON": "weaponEnergy.png",
-        "RANDOM": "randomEnergy.png",
-        "selected": "selected_pane.png",
-        "ally": "ally_pane.png",
-        "locked": "null_pane.png",
-        "enemy": "enemy_pane.png",
-        "start": "start_button.png",
-        "end": "end_button.png",
-        "add": "add_button.png",
-        "remove": "remove_button.png"
-    }
-
-    
-    scene.load_assets(**assets)
 
     return scene

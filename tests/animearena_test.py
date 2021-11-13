@@ -1,7 +1,7 @@
 from pickle import PUT
 
 from animearena import battle_scene, character_select_scene
-from animearena.ability import Ability, ability_info_db, Target
+from animearena.ability import Ability, ability_info_db, Target, mental_out_ability_switch
 from animearena.energy import Energy
 from animearena.scene_manager import SceneManager
 from animearena.character import Character, character_db
@@ -328,8 +328,19 @@ def midoriya_test_scene(test_scene: BattleScene) -> engine.Scene:
     test_scene.setup_scene(ally_team, enemy_team)
     return test_scene
 
+@pytest.fixture
+def minato_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("minato"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("astolfo"), Character("naruto"), Character("toga")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
 
-
+@pytest.fixture
+def mine_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("mine"), Character("toga"), Character("nemu")]
+    enemy_team = [Character("astolfo"), Character("naruto"), Character("toga")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
 
 def test_detail_unpack():
     details_package = ["Justice Kick", "Shiro deals 20 damage to target enemy. If they damaged one of Shiro's allies the previous turn, this ability deals double damage.", [1,0,0,0,0,1], Target.SINGLE]
@@ -1000,27 +1011,6 @@ def test_combat_mode(chachamaru_test_scene: BattleScene):
 
     assert chacha.source.hp == 85
 
-def test_you_are_needed(chrome_test_scene: BattleScene):
-    chrome = chrome_test_scene.player_display.team.character_managers[0]
-    eteam = chrome_test_scene.enemy_display.team.character_managers
-    pteam = chrome_test_scene.player_display.team.character_managers
-    needed = chrome.source.main_abilities[0]
-    breakdown = chrome.source.main_abilities[1]
-    immolation = chrome.source.main_abilities[2]
-    trident = chrome.source.alt_abilities[0]
-    world_destruction = chrome.source.alt_abilities[1]
-    annihilation = chrome.source.alt_abilities[2]
-    ruler = eteam[0]
-
-    assert breakdown.target(chrome, pteam, eteam, True) == 0
-    assert immolation.target(chrome, pteam, eteam, True) == 0
-    chrome.current_targets.append(chrome)
-
-    chrome.used_ability = needed
-    needed.execute(chrome, pteam, eteam)
-
-    assert chrome.has_effect(EffectType.MARK, "You Are Needed")
-
 def test_breakdown(chrome_test_scene: BattleScene):
     chrome = chrome_test_scene.player_display.team.character_managers[0]
     eteam = chrome_test_scene.enemy_display.team.character_managers
@@ -1100,36 +1090,6 @@ def test_immolation(chrome_test_scene: BattleScene):
     chrome_test_scene.tick_effect_duration()
 
     assert naruto.source.hp == 80
-
-def test_you_are_needed_swap(chrome_test_scene: BattleScene):
-    chrome = chrome_test_scene.player_display.team.character_managers[0]
-    eteam = chrome_test_scene.enemy_display.team.character_managers
-    pteam = chrome_test_scene.player_display.team.character_managers
-    needed = chrome.source.main_abilities[0]
-    breakdown = chrome.source.main_abilities[1]
-    immolation = chrome.source.main_abilities[2]
-    trident = chrome.source.alt_abilities[0]
-    world_destruction = chrome.source.alt_abilities[1]
-    annihilation = chrome.source.alt_abilities[2]
-    naruto = eteam[1]
-
-    chrome.used_ability = needed
-    needed.execute(chrome, pteam, eteam)
-
-    chrome.source.hp = 50
-    
-    naruto.used_ability = naruto.source.current_abilities[2]
-    naruto.current_targets.append(chrome)
-    naruto.used_ability.execute(naruto, eteam, pteam)
-
-    chrome.check_profile_swaps()
-    chrome.update_ability()
-
-    assert chrome.source.current_abilities[0].name == "Trident Combat"
-    assert chrome.source.current_abilities[1].name == "Illusory World Destruction"
-    assert chrome.source.current_abilities[2].name == "Mental Annihilation"
-    assert chrome.source.current_abilities[3].name == "Trident Deflection"
-    assert chrome.source.profile_image == chrome.source.altprof1
 
 def test_world_destruction(chrome_test_scene: BattleScene):
     chrome = chrome_test_scene.player_display.team.character_managers[0]
@@ -1828,21 +1788,6 @@ def test_multi_explosive_detonation(frenda_test_scene: BattleScene):
     assert astolfo.source.hp == 45
 
     assert toga.source.hp == 80
-
-def test_shadow_swap(gajeel_test_scene: BattleScene):
-    gajeel = gajeel_test_scene.enemy_display.team.character_managers[0]
-    pteam = gajeel_test_scene.player_display.team.character_managers
-    eteam = gajeel_test_scene.enemy_display.team.character_managers
-    astolfo = eteam[0]
-    naruto = eteam[1]
-    shadowdragon = gajeel.source.main_abilities[2]
-    blacksteel = gajeel.source.alt_abilities[2]
-    gajeel.used_ability = shadowdragon
-    gajeel.used_ability.execute(gajeel, pteam, eteam)
-
-    gajeel.check_ability_swaps()
-
-    assert gajeel.source.current_abilities[0].name == "Iron Shadow Dragon's Roar"
 
 def test_shadow_ignore(gajeel_test_scene: BattleScene):
     pteam = gajeel_test_scene.player_display.team.character_managers
@@ -3620,20 +3565,20 @@ def test_smash(midoriya_test_scene: BattleScene):
     assert midoriya.source.hp == 80
     assert midoriya.is_stunned()
 
-def test_airforcegloves(midoriya_test_scene: BattleScene):
-    pteam = midoriya_test_scene.player_display.team.character_managers
-    eteam = midoriya_test_scene.enemy_display.team.character_managers
-    midoriya = pteam[0]
+def test_shiki_fuujin(minato_test_scene: BattleScene):
+    pteam = minato_test_scene.player_display.team.character_managers
+    eteam = minato_test_scene.enemy_display.team.character_managers
+    minato = pteam[0]
 
-    smash = midoriya.source.main_abilities[0]
-    shootstyle = midoriya.source.main_abilities[2]
-    airforcegloves = midoriya.source.main_abilities[1]
-
+    flyingraijin = minato.source.main_abilities[0]
+    marked_kunai = minato.source.main_abilities[1]
+    shiki_fuujin = minato.source.main_abilities[2]
     
+    ally_use_ability(minato_test_scene, minato, eteam[1], shiki_fuujin)
 
-    ally_use_ability_with_response(midoriya_test_scene, midoriya, eteam[1], airforcegloves)
-    enemy_use_ability(midoriya_test_scene, eteam[1], midoriya, eteam[1].source.main_abilities[2])
+    assert minato.source.dead == True
 
-    eteam[1].source.main_abilities[2].cooldown_remaining == eteam[1].source.main_abilities[2].cooldown + eteam[1].check_for_cooldown_mod()
-    assert eteam[1].source.main_abilities[2].cooldown_remaining == 1
+    eteam[1].adjust_ability_costs()
+
+    assert eteam[1].source.main_abilities[2].total_cost == 3
 

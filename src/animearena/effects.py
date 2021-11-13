@@ -58,6 +58,8 @@ class EffectType(enum.IntEnum):
     CONT_PIERCE_DMG = 43
     BOOST_NEGATE = 44
     AFF_IMMUNE = 45
+    INVIS_END = 46
+    COUNTER_IMMUNE = 47
 
 
 class Effect:
@@ -71,6 +73,7 @@ class Effect:
     waiting: bool
     user_id: int
     invisible: bool
+    system: bool
 
     def __init__(self,
                  source: "Ability",
@@ -79,7 +82,8 @@ class Effect:
                  duration: int,
                  desc,
                  mag: int = 0,
-                 invisible=False):
+                 invisible=False,
+                 system=False):
         self.eff_type = eff_type
         self.mag = mag
         self.duration = duration
@@ -93,6 +97,7 @@ class Effect:
         self.eff_img = source.image
         self.waiting = True
         self.invisible = invisible
+        self.system = system
 
     def get_desc(self) -> str:
         return self.desc(self)
