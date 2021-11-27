@@ -2663,16 +2663,24 @@ def exe_permeation(user: "CharacterManager", playerTeam: list["CharacterManager"
     user.check_on_use()
 
 def exe_phantom_menace(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    for enemy in enemyTeam:
-        if enemy.has_effect(EffectType.MARK, "Phantom Menace") and not (enemy in user.current_targets):
-            user.current_targets.append(enemy)
+    used = False
     if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect("BYPASS"):
                 base_damage = 20
-                if target.has_effect(EffectType.MARK, "Phantom Menace"):
-                    base_damage = 35
                 user.deal_pierce_damage(base_damage, target)
+        used = True
+    
+    for enemy in enemyTeam:
+        if enemy.has_effect(EffectType.MARK, "Phantom Menace") and not (enemy in user.current_targets):
+            user.current_targets.append(enemy)
+    
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect("BYPASS") and target.has_effect(EffectType.MARK, "Phantom Menace"):
+                user.deal_pierce_damage(15, target)
+        used = True
+    if used:
         user.check_on_use()
         user.check_on_harm()
 
@@ -5174,7 +5182,7 @@ ability_info_db = {
     ],
     "mirio2": [
         "Phantom Menace",
-        "Mirio deals 20 piercing damage to one enemy. This ability ignores invulnerability, always damages marked targets, and deals 15 bonus damage to them.",
+        "Mirio deals 20 piercing damage to one enemy. This ability ignores invulnerability, and deals 15 piercing damage to any enemy marked by Phantom Menace.",
         [1, 0, 0, 0, 0, 0], Target.SINGLE, default_target("HOSTILE", def_type="BYPASS"), exe_phantom_menace
     ],
     "mirio3": [
@@ -5588,6 +5596,26 @@ ability_info_db = {
         "Insatiable Justice",
         "Koro instantly kills one enemy that is below 30 health. Effects that prevent death cannot prevent this ability.",
         [0, 0, 0, 0, 2, 5], Target.SINGLE, target_insatiable_justice, exe_insatiable_justice
+    ],
+    "sheele1": [
+        "Extase - Bisector of Creation",
+        "Sheele deals 30 damage to one enemy. This ability cannot be countered, reflected, or ignored, and deals 15 more damage if the target has destructible defense.",
+        [0,0,0,1,1,0], Target.SINGLE
+    ],
+    "sheele2": [
+        "Savior Strike",
+        "Sheele deals 25 damage to one enemy. If that enemy is using a continuous ability, that ability is ended as though that character were stunned.",
+        [0,0,0,1,1,0], Target.SINGLE
+    ],
+    "sheele3": [
+        "Trump Card - Blinding Light",
+        "Target enemy is stunned for two turns. During this time, they cannot reduce damage or become invulnerable and Extase - Bisector of Creation will deal 10 additional damage to them.",
+        [0,0,1,1,0,5], Target.SINGLE
+    ],
+    "sheele4": [
+        "Extase Block",
+        "Sheele becomes invulnerable for one turn.",
+        [0,0,0,0,1,4], Target.SINGLE
     ],
     "shigaraki1": [
         "Decaying Touch",

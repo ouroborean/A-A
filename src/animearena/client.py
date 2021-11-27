@@ -1,13 +1,17 @@
 from asyncio.streams import StreamReader, StreamWriter
 import pickle
 import socket
-from animearena import scene_manager
+import os
+import pathlib
+import sys
+import requests
 from animearena.byte_buffer import ByteBuffer
 from animearena.character import Character, character_db
 from animearena.player import Player
-from time import sleep
 from typing import Callable
 from PIL import Image
+
+VERSION = "0.9.2"
 
 class ConnectionHandler:
 
@@ -28,11 +32,62 @@ class ConnectionHandler:
             3: self.handle_login_success,
             4: self.handle_registration,
             5: self.handle_surrender_notification,
-            6: self.handle_reconnection
+            6: self.handle_reconnection,
+            7: self.handle_version_check
         }
 
+    def handle_version_check(self, data:list[bytes]):
+        buffer = ByteBuffer()
+        buffer.write_bytes(data)
+        buffer.read_int()
+        newest_version = buffer.read_string()
+        print(f"Running on version: {VERSION}. Newest version: {newest_version}")
+        if VERSION != newest_version:
+            s = sys.argv[0]
+            
+            version_tag = newest_version.replace(".", "-")
+
+            file_name = f"AnimeArena{version_tag}.exe"
+
+            abs_path = pathlib.Path().resolve()
+            
+            final_path = abs_path / file_name
+
+            url = "https://storage.googleapis.com/a-a-newest/AnimeArena.exe"
+            file = requests.get(url, stream=True)
+            with open(abs_path / file_name, "wb") as f:
+                for block in file.iter_content(1024):
+                    if not block:
+                        break
+                    f.write(block)
+            s = sys.argv[0]
+            with open("temp.config", "w") as f:
+                f.write(s)
+            new_env = os.environ.copy()
+            new_env.pop("PYSDL2_DLL_PATH")
+            os.execve(final_path, [final_path,], new_env)
+            
+        else:
+            
+            abs_path = pathlib.Path().resolve()
+            if os.path.exists("temp.config"):
+                with open("temp.config", "r") as f:
+                    old_file = f.read().strip()
+                os.remove("temp.config")
+                os.remove(abs_path / old_file)
+            
+
+        buffer.clear()
+
+    def send_version_request(self):
+        buffer = ByteBuffer()
+        buffer.write_int(10)
+        buffer.write_byte(b'\x1f\x1f\x1f')
+        self.writer.write(buffer.get_byte_array())
+        buffer.clear()
+
     def handle_surrender_notification(self, data:list[bytes]):
-        self.scene_manager.battle_scene.win_game()
+        self.scene_manager.battle_scene.win_game(surrendered = True)
 
     def send_message(self, message: str):
         try:
@@ -121,7 +176,8 @@ class ConnectionHandler:
         buffer.write_bytes(data)
         buffer.read_int()
         energy_pool = [buffer.read_int() for i in range(4)]
-        pickle = bytearray(buffer.buff[buffer.read_pos:])
+        pickle_len = buffer.read_int()
+        pickle = bytearray(buffer.read_bytes(pickle_len))
 
         self.scene_manager.battle_scene.player_display.team.energy_pool[4] = 0
         for i, v in enumerate(energy_pool):
@@ -176,14 +232,15 @@ class ConnectionHandler:
             print("Sent start package!")
         buffer.clear()
         
-    def send_match_communication(self, energy_cont: list, enemy_energy_cont: list, data:bytes):
+    def send_match_communication(self, energy_pool: list, enemy_energy_cont: list, data:bytes):
         buffer = ByteBuffer()
         buffer.write_int(1)
 
-        for i in energy_cont:
+        for i in energy_pool:
             buffer.write_int(i)
         for i in enemy_energy_cont:
             buffer.write_int(i)
+        buffer.write_int(len(data))
         buffer.write_bytes(data)
         print(f"Sending match communication of length {len(data)}")
         buffer.write_byte(b'\x1f\x1f\x1f')

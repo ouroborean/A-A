@@ -180,6 +180,7 @@ character_db = {"naruto": Character("naruto", "Uzumaki Naruto, a former outcast 
                 "mine": Character("mine", "Mine, genius sniper of the assassin group Night Raid. Fiercely strong-willed, Mine wields the Teigu known as Pumpkin, a powerful rifle that" +
                 " fires energy blasts which become more dangerous with the situation its wielder finds themselves in."),
                 "raba": Character("raba", "Lubbock, an assassin working for Night Raid. With his wire Teigu 'Cross Tail', Lubbock is a versatile killer that can use razor-sharp threads to deliver lethal blows or defend his allies."),
+                "sheele": Character("sheele", "Sheele, an assassin of Night Raid. A compassionate woman who, in a moment of life-threatening danger, discovered she had a talent for murder. She wields Extase, a pair of giant scissors that can cut through anything."),
                 "seiryu": Character("seiryu", "Seiryu Ubiquitous, former member of the Imperial Guard. After Esdeath forms the Jaegers to hunt down Night Raid, Seiryu joins the group to get vengeance on the" +
                 " criminals who killed her mentor. Twisted by the darkness in the capitol, and her own sense of justice, Seiryu uses her living Teigu 'Koro' to slay evil wherever she finds it."),
                 "kurome": Character("kurome", "Kurome, the younger sister of Akame. Seperated during their youth to be trained as assassins, Kurome and Akame's paths led them to opposite sides of the battlefield. Armed with " + 

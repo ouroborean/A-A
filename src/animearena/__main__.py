@@ -5,13 +5,9 @@ import logging
 import asyncio
 import contextvars
 import time
-import easygui
-import sys
-import os
 import sdl2
 import sdl2.ext
 import sdl2.sdlttf
-import PIL.Image
 from playsound import playsound
 from animearena import character_select_scene
 from animearena import battle_scene
@@ -24,13 +20,12 @@ from pydub.playback import play
 
 
 
-
 WHITE = sdl2.SDL_Color(255, 255, 255)
 
 def main():
     """Main game entry point."""
-    print('getcwd:      ', os.getcwd())
-    
+
+
     logging.basicConfig(level=logging.DEBUG,
                         format="%(levelname)s:%(relativeCreated)d:%(module)s:%(message)s")
     logging.getLogger("PIL").setLevel(69) # turn off PIL logging
@@ -39,9 +34,10 @@ def main():
     sdl2.sdlttf.TTF_Init()
     logging.debug("SDL2 font system initialized")
 
-
+    
     window = sdl2.ext.Window("Anime Arena", size=(800, 700))
     window.show()
+    
     
     uiprocessor = sdl2.ext.UIProcessor()
     scene_manager = SceneManager(window)
@@ -65,7 +61,9 @@ def main():
     
     asyncio.run(game_loop_task)
     
-        
+    
+
+
     sdl2.ext.quit()
     return 0
 
@@ -73,13 +71,14 @@ def main():
 target_fps = contextvars.ContextVar('target_fps', default=60)
 
 async def server_loop(scene_manager):
+    VERSION_CHECKED = False
     max_retries = 5
     timeouts = 0
     cancelled = False
     while not scene_manager.connected:
         try:
             #35.219.128.93
-            reader, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", 5692, limit = 1024 * 256, happy_eyeballs_delay=0.25), 1)
+            reader, writer = await asyncio.wait_for(asyncio.open_connection("35.219.128.93", 5692, limit = 1024 * 256, happy_eyeballs_delay=0.25), 1)
             
             scene_manager.connected = True
             scene_manager.connection.writer = writer
@@ -92,8 +91,11 @@ async def server_loop(scene_manager):
         except asyncio.CancelledError:
             cancelled = True
             break
-
     while True and not cancelled:
+        if not VERSION_CHECKED:
+            print("Checking version")
+            scene_manager.connection.send_version_request()
+            VERSION_CHECKED = True
         try:
             data = await reader.readuntil(b'\x1f\x1f\x1f')
         except CancelledError:

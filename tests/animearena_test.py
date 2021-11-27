@@ -2183,7 +2183,7 @@ def test_twin_lion_fist(hinata_test_scene:BattleScene):
     hinata.current_targets.append(eteam[0])
     hinata.used_ability.execute(hinata, pteam, eteam)
 
-    assert eteam[0].source.hp == 50
+    assert eteam[0].source.hp == 60
 
 def test_twin_lion_fist_with_boost(hinata_test_scene:BattleScene):
     pteam = hinata_test_scene.player_display.team.character_managers
@@ -2198,7 +2198,7 @@ def test_twin_lion_fist_with_boost(hinata_test_scene:BattleScene):
 
     hinata.used_ability.execute(hinata, pteam, eteam)
 
-    assert eteam[0].source.hp == 30
+    assert eteam[0].source.hp == 40
 
 def test_twin_lion_fist_with_counter(hinata_test_scene:BattleScene):
     pteam = hinata_test_scene.player_display.team.character_managers
@@ -2217,7 +2217,7 @@ def test_twin_lion_fist_with_counter(hinata_test_scene:BattleScene):
 
     hinata.used_ability.execute(hinata, pteam, eteam)
 
-    assert eteam[0].source.hp == 75
+    assert eteam[0].source.hp == 80
     assert hinata.is_stunned()
 
 def test_trigrams_dr(hinata_test_scene:BattleScene):
@@ -2273,7 +2273,7 @@ def test_lionfist_byakugan_drain(hinata_test_scene:BattleScene):
     
     ally_use_ability(hinata_test_scene, hinata, eteam[0], lionfist)
 
-    assert eteam[0].source.hp == 50
+    assert eteam[0].source.hp == 60
     assert eteam[0].source.energy_contribution == -1
 
 def test_trigrams_byakugan_drain(hinata_test_scene:BattleScene):
