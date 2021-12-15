@@ -22,6 +22,7 @@ from animearena.character import Character, character_db
 from animearena.ability import Ability
 from animearena.engine import FilterType
 from animearena.player import Player
+from animearena.mission import mission_db
 from playsound import playsound
 
 def get_path(file_name: str) -> Path:
@@ -71,6 +72,7 @@ class CharacterSelectScene(engine.Scene):
     player_name: str
     player_wins: int
     player_losses: int
+    player: Player
     def __init__(self, scene_manager, *args, **kwargs):
         super().__init__(*args, **kwargs)
         #region field initialization
@@ -93,6 +95,7 @@ class CharacterSelectScene(engine.Scene):
         self.start_match_region = self.region.subregion(685, 50, 100, 100)
         self.player_profile_region = self.region.subregion(15, 20, 200, 100)
         self.search_panel_region = self.region.subregion(144, 158, 0, 0)
+        self.mission_region = self.region.subregion(210, 158, 0, 0)
         #endregion
         #region sprite initialization
         self.banner_border = self.sprite_factory.from_color(BLACK, (179, 254))
@@ -145,7 +148,38 @@ class CharacterSelectScene(engine.Scene):
         self.info_text_panel = self.create_text_display(self.font, "", BLACK,
                                                    WHITE, 5, 0, 475, 130)
         self.player_region_panel = self.sprite_factory.from_color(WHITE, self.player_profile_region.size())
+        
         #endregion
+
+
+    #region Render Functions
+
+    def full_render(self):
+        self.region.clear()
+        self.region.add_sprite(
+            self.sprite_factory.from_surface(
+                self.get_scaled_surface(self.scene_manager.surfaces["background"]), free=True), 0, 0)
+        if self.display_character:
+            self.render_main_character_info()
+        self.render_character_selection()
+        self.render_team_display()
+        self.render_start_button()
+        self.render_player_profile()
+        self.render_search_panel()
+        gc.collect()
+
+    def render_mission_panel(self):
+        self.mission_region.clear()
+        self.window_up = True
+        self.add_bordered_sprite(self.mission_region, self.sprite_factory.from_color(BLACK, (512,384)), WHITE, 0, 0)
+        MISSION_MAX_WIDTH = 492
+        MISSION_Y_BUFFER = 10
+        MISSION_MAX_HEIGHT = 72
+        MISSION_X_BUFFER = 10
+        
+        for i in range(5):
+            text_sprite = self.create_text_display(self.font, f"{mission_db[self.display_character.name][i].description} ({self.player.missions[self.display_character.name][i]}/{mission_db[self.display_character.name][i].max})", WHITE, BLACK, 0, 0, MISSION_MAX_WIDTH)
+            self.mission_region.add_sprite(text_sprite, MISSION_X_BUFFER, (MISSION_MAX_HEIGHT * i) + MISSION_Y_BUFFER)
 
 
     def render_search_panel(self):
@@ -155,33 +189,7 @@ class CharacterSelectScene(engine.Scene):
             cancel_search_button = self.create_text_display(self.font, "Cancel", WHITE, BLACK, 5, 5, 80)
             print(f"Search Panel needs size of {cancel_search_button.size}")
             cancel_search_button.click += self.cancel_search_click
-            self.add_bordered_sprite(self.search_panel_region, cancel_search_button, WHITE, 420, 320)
-
-
-    def cancel_search_click(self, button, sender):
-        play_sound(self.scene_manager.sounds["undo"])
-        self.window_up = False
-        self.clicked_search = False
-        self.scene_manager.connection.send_search_cancellation()
-        self.render_search_panel()
-
-
-    def settle_player(self, username: str, wins: int, losses: int, ava_code = None):
-        self.clicked_search = False
-        self.window_up = False
-        self.player_name = username
-        self.player_wins = wins
-        self.player_losses = losses
-
-        self.nametag = self.create_text_display(self.font, self.player_name, BLACK, WHITE, 0, 0, 95)
-        self.wintag = self.create_text_display(self.font, f"Wins: {self.player_wins}", BLACK, WHITE, 0, 0, 95)
-        self.losstag = self.create_text_display(self.font, f"Losses: {self.player_losses}", BLACK, WHITE, 0, 0, 95)
-
-        if ava_code:
-            new_image = pickle.loads(ava_code)
-
-            self.player_profile = Image.frombytes(mode = new_image["mode"], size = new_image["size"], data=new_image["pixels"])
-        self.full_render()
+            
 
     def render_player_profile(self):
         self.player_profile_region.clear()
@@ -207,6 +215,149 @@ class CharacterSelectScene(engine.Scene):
         upload_button.click += self.avatar_upload_click
         self.add_sprite_with_border(self.player_profile_region, upload_button, self.avatar_upload_border, 5, 104)
         self.player_profile_lock.release()
+
+    def render_main_character_info(self):
+        
+        self.character_info_region.clear()
+        self.character_info_prof.surface = self.get_scaled_surface(self.scene_manager.surfaces[self.display_character.name + "banner"])
+        self.character_info_prof.free = True
+        self.character_info_prof.character = self.display_character
+        self.add_sprite_with_border(self.character_info_region, self.character_info_prof, self.banner_border, 0, 5)
+        mission_button = self.create_text_display(self.font, "Missions", WHITE, BLACK, 10, 3, 80)
+        mission_button.click += self.mission_click
+        self.add_bordered_sprite(self.character_info_region, mission_button, WHITE, 47, 225)
+        for i, ability in enumerate(self.main_ability_sprites):
+            ability.surface = self.get_scaled_surface(self.scene_manager.surfaces[self.display_character.main_abilities[i].db_name])
+            ability.ability = self.display_character.main_abilities[i]
+            ability.free = True
+            self.add_sprite_with_border(self.character_info_region, ability, ability.border_box, x=55 + ((i + 1) * 125),
+                                                  y=5)
+
+        if self.display_character.alt_abilities:
+            self.character_info_region.add_sprite(self.alt_arrow, 670, 17)
+
+        self.add_sprite_with_border(self.character_info_region, self.detail_target.char_select_desc, self.info_display_border, 180, 110)
+        
+
+        if type(self.detail_target) == Ability:
+            self.show_ability_details(self.detail_target)
+
+    def render_alt_character_info(self):
+        self.character_info_region.clear()
+        self.alt_character_info_prof.surface = self.get_scaled_surface(self.scene_manager.surfaces[self.display_character.name + "banner"])
+        self.alt_character_info_prof.character = self.display_character
+        self.alt_character_info_prof.free = True
+        self.add_sprite_with_border(self.character_info_region, self.alt_character_info_prof, self.banner_border, 0, 5)
+        mission_button = self.create_text_display(self.font, "Missions", WHITE, BLACK, 10, 3, 80)
+        mission_button.click += self.mission_click
+        self.add_bordered_sprite(self.character_info_region, mission_button, WHITE, 47, 225)
+        for i, ability in enumerate(self.display_character.alt_abilities):
+            self.alt_ability_sprites[i].surface = self.get_scaled_surface(self.scene_manager.surfaces[ability.db_name])
+            self.alt_ability_sprites[i].free = True
+            self.alt_ability_sprites[i].ability = ability
+            self.add_sprite_with_border(self.character_info_region, self.alt_ability_sprites[i], self.alt_ability_sprites[i].border_box, x=55 + ((i + 1) * 125),
+                                                  y=5)
+
+        main_arrow = self.ui_factory.from_surface(
+            sdl2.ext.BUTTON,
+            self.get_scaled_surface(self.scene_manager.surfaces["left_arrow"], width = 50, height = 50), free=True)
+        main_arrow.click += self.main_arrow_click
+        self.character_info_region.add_sprite(main_arrow, 670, 17)
+
+        if type(self.detail_target) == Ability:
+            text = self.detail_target.name + ": " + self.detail_target.desc
+        else:
+            text = self.detail_target.desc
+
+        self.add_sprite_with_border(self.character_info_region, self.detail_target.char_select_desc, self.info_display_border, 180, 110)
+
+        if type(self.detail_target) == Ability:
+            self.show_ability_details(self.detail_target)
+
+    def show_ability_details(self, ability: Ability):
+        if not self.window_up:
+            self.render_energy_cost(ability)
+            self.render_cooldown(ability)
+
+    def render_energy_cost(self, ability: Ability):
+        total_energy = 0
+        for k, v in ability.cost.items():
+            for i in range(v):
+                self.character_info_region.add_sprite(
+                    self.sprite_factory.from_surface(
+                        self.get_scaled_surface(self.scene_manager.surfaces[k.name])),
+                    185 + (total_energy * 13), 240)
+                total_energy += 1
+
+    def render_cooldown(self, ability: Ability):
+        cooldown_panel = self.create_text_display(self.font,
+                                                  f"CD: {ability.cooldown}",
+                                                  BLACK, WHITE, 0, 0, 40, 3)
+        self.character_info_region.add_sprite(cooldown_panel, x=610, y=235)
+
+    def render_team_display(self):
+
+        self.team_region.clear()
+
+        for i, character in enumerate(self.selected_team):
+            self.team_display[i].surface = self.get_scaled_surface(self.scene_manager.surfaces[character.name + "allyprof"])
+            self.team_display[i].free = True
+            self.team_display[i].character = character
+            self.add_sprite_with_border(self.team_region, self.team_display[i], self.team_display[i].border_box, i * 110, 0)
+
+    def render_start_button(self):
+        self.start_match_region.clear()
+        if len(self.selected_team) == 3:
+            self.start_match_region.add_sprite(self.start_button, 0, 0)
+
+    def render_character_selection(self):
+        self.character_select_region.clear()
+
+        self.character_select_region.add_sprite(self.left_button, -20, 105)
+
+        
+        self.character_select_region.add_sprite(self.right_button, 715, 105)
+
+        column = 0
+        row = 0
+        characters = list(character_db.values())
+        for i in range(12):
+            current_slot = i + ((self.page_on_display - 1) * 12)
+            try:
+                self.add_sprite_with_border(self.character_select_region, self.character_sprites[current_slot], self.character_sprites[current_slot].border_box, 60 + (column * 110), 35 + (row * 110))
+                if characters[current_slot].selected:
+                    selected_filter = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["locked"]), free=True)
+                    selected_filter.character = characters[current_slot]
+                    selected_filter.click += self.character_click
+                    self.character_select_region.add_sprite(selected_filter, 60 + (column * 110), 35 + (row * 110))
+                else:
+                    self.character_sprites[current_slot].character = characters[current_slot]
+                    
+                
+            except IndexError:
+                break
+            column += 1
+            if column == 6:
+                row += 1
+                column = 0
+
+    #endregion
+
+    #region On-Click Event Handlers
+
+    def mission_click(self, button, sender):
+        self.window_up = not self.window_up
+        if self.window_up:
+            self.render_mission_panel()
+        else:
+            self.mission_region.clear()
+
+    def cancel_search_click(self, button, sender):
+        play_sound(self.scene_manager.sounds["undo"])
+        self.window_up = False
+        self.clicked_search = False
+        self.scene_manager.connection.send_search_cancellation()
+        self.render_search_panel()
 
     def avatar_upload_click(self, button, sender):
         def callback():
@@ -258,28 +409,6 @@ class CharacterSelectScene(engine.Scene):
             play_sound(self.scene_manager.sounds["page"])
             self.render_main_character_info()
 
-    def show_ability_details(self, ability: Ability):
-        if not self.window_up:
-            self.render_energy_cost(ability)
-            self.render_cooldown(ability)
-
-    def render_energy_cost(self, ability: Ability):
-        total_energy = 0
-        for k, v in ability.cost.items():
-            for i in range(v):
-                self.character_info_region.add_sprite(
-                    self.sprite_factory.from_surface(
-                        self.get_scaled_surface(self.scene_manager.surfaces[k.name])),
-                    185 + (total_energy * 13), 240)
-                total_energy += 1
-
-    def render_cooldown(self, ability: Ability):
-        cooldown_panel = self.create_text_display(self.font,
-                                                  f"CD: {ability.cooldown}",
-                                                  BLACK, WHITE, 0, 0, 40, 3)
-        self.character_info_region.add_sprite(cooldown_panel, x=610, y=235)
-
-
 
     def ability_click(self, button, _sender):
         if not self.window_up:
@@ -295,59 +424,7 @@ class CharacterSelectScene(engine.Scene):
             self.render_alt_character_info()
             self.show_ability_details(button.ability)
 
-    def render_main_character_info(self):
-        
-        self.character_info_region.clear()
-        self.character_info_prof.surface = self.get_scaled_surface(self.scene_manager.surfaces[self.display_character.name + "banner"])
-        self.character_info_prof.free = True
-        self.character_info_prof.character = self.display_character
-        self.add_sprite_with_border(self.character_info_region, self.character_info_prof, self.banner_border, 0, 5)
-
-        for i, ability in enumerate(self.main_ability_sprites):
-            ability.surface = self.get_scaled_surface(self.scene_manager.surfaces[self.display_character.main_abilities[i].db_name])
-            ability.ability = self.display_character.main_abilities[i]
-            ability.free = True
-            self.add_sprite_with_border(self.character_info_region, ability, ability.border_box, x=55 + ((i + 1) * 125),
-                                                  y=5)
-
-        if self.display_character.alt_abilities:
-            self.character_info_region.add_sprite(self.alt_arrow, 670, 17)
-
-        self.add_sprite_with_border(self.character_info_region, self.detail_target.char_select_desc, self.info_display_border, 180, 110)
-        
-
-        if type(self.detail_target) == Ability:
-            self.show_ability_details(self.detail_target)
-
-    def render_alt_character_info(self):
-        self.character_info_region.clear()
-        self.alt_character_info_prof.surface = self.get_scaled_surface(self.scene_manager.surfaces[self.display_character.name + "banner"])
-        self.alt_character_info_prof.character = self.display_character
-        self.alt_character_info_prof.free = True
-        self.add_sprite_with_border(self.character_info_region, self.alt_character_info_prof, self.banner_border, 0, 5)
-
-        for i, ability in enumerate(self.display_character.alt_abilities):
-            self.alt_ability_sprites[i].surface = self.get_scaled_surface(self.scene_manager.surfaces[ability.db_name])
-            self.alt_ability_sprites[i].free = True
-            self.alt_ability_sprites[i].ability = ability
-            self.add_sprite_with_border(self.character_info_region, self.alt_ability_sprites[i], self.alt_ability_sprites[i].border_box, x=55 + ((i + 1) * 125),
-                                                  y=5)
-
-        main_arrow = self.ui_factory.from_surface(
-            sdl2.ext.BUTTON,
-            self.get_scaled_surface(self.scene_manager.surfaces["left_arrow"], width = 50, height = 50), free=True)
-        main_arrow.click += self.main_arrow_click
-        self.character_info_region.add_sprite(main_arrow, 670, 17)
-
-        if type(self.detail_target) == Ability:
-            text = self.detail_target.name + ": " + self.detail_target.desc
-        else:
-            text = self.detail_target.desc
-
-        self.add_sprite_with_border(self.character_info_region, self.detail_target.char_select_desc, self.info_display_border, 180, 110)
-
-        if type(self.detail_target) == Ability:
-            self.show_ability_details(self.detail_target)
+    
 
     def character_alt_click(self, button, _sender):
         if not self.window_up:
@@ -378,16 +455,6 @@ class CharacterSelectScene(engine.Scene):
                 self.display_character = button.character
                 self.render_main_character_info()
 
-    def render_team_display(self):
-
-        self.team_region.clear()
-
-        for i, character in enumerate(self.selected_team):
-            self.team_display[i].surface = self.get_scaled_surface(self.scene_manager.surfaces[character.name + "allyprof"])
-            self.team_display[i].free = True
-            self.team_display[i].character = character
-            self.add_sprite_with_border(self.team_region, self.team_display[i], self.team_display[i].border_box, i * 110, 0)
-
     def character_click(self, button, _sender):
         if not self.window_up:
             if self.detail_target == button.character and not button.character.selected and len(self.selected_team) < 3:
@@ -410,12 +477,6 @@ class CharacterSelectScene(engine.Scene):
                 self.render_character_selection()
                 self.render_main_character_info()
             self.render_start_button()
-        
-
-    def render_start_button(self):
-        self.start_match_region.clear()
-        if len(self.selected_team) == 3:
-            self.start_match_region.add_sprite(self.start_button, 0, 0)
 
     def start_click(self, _button, _sender):
         if not self.clicked_search and self.scene_manager.connected and not self.window_up:
@@ -430,9 +491,35 @@ class CharacterSelectScene(engine.Scene):
             self.window_up = True
             self.render_search_panel()
 
-    
-    def start_battle(self, enemy_names, pickled_player, energy):
+    #endregion
 
+    def settle_player(self, username: str, wins: int, losses: int, mission_data: str, ava_code = None):
+        """Extracts and apportions player data into the character select scene.
+        
+           Called by Scene Manager to move from Login Scene or In-Game Scene to
+           Character Select Scene"""
+        self.clicked_search = False
+        self.window_up = False
+        self.player_name = username
+        self.player_wins = wins
+        self.player_losses = losses
+
+        self.nametag = self.create_text_display(self.font, self.player_name, BLACK, WHITE, 0, 0, 95)
+        self.wintag = self.create_text_display(self.font, f"Wins: {self.player_wins}", BLACK, WHITE, 0, 0, 95)
+        self.losstag = self.create_text_display(self.font, f"Losses: {self.player_losses}", BLACK, WHITE, 0, 0, 95)
+
+        if ava_code:
+            new_image = pickle.loads(ava_code)
+
+            self.player_profile = Image.frombytes(mode = new_image["mode"], size = new_image["size"], data=new_image["pixels"])
+        
+        self.player = Player(self.player_name, self.player_wins, self.player_losses, self.player_profile, mission_data)
+        
+        self.full_render()
+
+    def start_battle(self, enemy_names, pickled_player, energy):
+        """Function called by Scene Manager to move from Character Select Scene to
+           In-Game Scene after receiving an enemy start package from the server"""
         enemy_team = [Character(name) for name in enemy_names]
         
         player_pouch = pickle.loads(pickled_player)
@@ -441,7 +528,7 @@ class CharacterSelectScene(engine.Scene):
 
         enemy = Player(player_pouch[0], player_pouch[1], player_pouch[2], enemy_ava)
 
-        player = Player(self.player_name, self.player_wins, self.player_losses, self.player_profile)
+        
 
         for character in self.selected_team:
             character.dead = False
@@ -450,53 +537,10 @@ class CharacterSelectScene(engine.Scene):
             character.targeted = False
             character.acted = False
 
-        self.scene_manager.start_battle(self.selected_team, enemy_team, player, enemy, energy)
-
-    def full_render(self):
-        self.region.clear()
-        self.region.add_sprite(
-            self.sprite_factory.from_surface(
-                self.get_scaled_surface(self.scene_manager.surfaces["background"]), free=True), 0, 0)
-        if self.display_character:
-            self.render_main_character_info()
-        self.render_character_selection()
-        self.render_team_display()
-        self.render_start_button()
-        self.render_player_profile()
-        self.render_search_panel()
-        gc.collect()
+        self.scene_manager.start_battle(self.selected_team, enemy_team, self.player, enemy, energy)
 
 
-    def render_character_selection(self):
-        self.character_select_region.clear()
-
-        self.character_select_region.add_sprite(self.left_button, -20, 105)
-
-        
-        self.character_select_region.add_sprite(self.right_button, 715, 105)
-
-        column = 0
-        row = 0
-        characters = list(character_db.values())
-        for i in range(12):
-            current_slot = i + ((self.page_on_display - 1) * 12)
-            try:
-                self.add_sprite_with_border(self.character_select_region, self.character_sprites[current_slot], self.character_sprites[current_slot].border_box, 60 + (column * 110), 35 + (row * 110))
-                if characters[current_slot].selected:
-                    selected_filter = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["locked"]), free=True)
-                    selected_filter.character = characters[current_slot]
-                    selected_filter.click += self.character_click
-                    self.character_select_region.add_sprite(selected_filter, 60 + (column * 110), 35 + (row * 110))
-                else:
-                    self.character_sprites[current_slot].character = characters[current_slot]
-                    
-                
-            except IndexError:
-                break
-            column += 1
-            if column == 6:
-                row += 1
-                column = 0
+    
 
 
 def make_character_select_scene(scene_manager) -> CharacterSelectScene:

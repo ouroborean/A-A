@@ -44,6 +44,7 @@ class LoginScene(engine.Scene):
         self.password_entry = False
         self.clicked_login = False
         self.clicked_register = False
+        self.updating = False
         self.message = ""
         self.username_box = self.ui_factory.from_color(sdl2.ext.TEXTENTRY, WHITE, (150, 25))
         self.username_box.pressed += self.select_username
@@ -52,10 +53,21 @@ class LoginScene(engine.Scene):
         self.password_box.pressed += self.select_password
         self.password_box.input += self.edit_password_text
         self.login_region = self.region.subregion(x=300, y=200, width=200, height=300)
-    
+        self.update_panel_region = self.region.subregion(144, 158, 0, 0)
+        self.update_panel_border = self.sprite_factory.from_color(BLACK, (516, 388))
+        self.update_message = self.create_text_display(self.font, "Checking for new version! Please wait a moment.", WHITE, BLACK, 0, 0, 400)
+
     def full_render(self):
+        self.region.clear()
         self.region.add_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.surfaces["background"])), 0, 0)
         self.render_login_region()
+        self.render_update_panel_region()
+
+    def render_update_panel_region(self):
+        self.update_panel_region.clear()
+        if self.updating:
+            self.add_bordered_sprite(self.update_panel_region, self.update_panel_border, WHITE, 0, 0)
+            self.update_panel_region.add_sprite(self.update_message, 58, 100)
 
     def handle_backspace(self):
         if self.username_entry:
@@ -91,9 +103,9 @@ class LoginScene(engine.Scene):
             self.add_bordered_sprite(self.login_region, self.password_box, AQUA, 25, 200)
         else:
             self.login_region.add_sprite(self.password_box, 25, 200)
-        login_button = self.create_text_display(self.font, "Log In", WHITE, BLACK, 17, 3, 80)
+        login_button = self.create_text_display(self.font, "Log In", WHITE, BLACK, 18, 3, 80)
         login_button.click += self.login_click
-        register_button = self.create_text_display(self.font, "Register", WHITE, BLACK, 10, 3, 80)
+        register_button = self.create_text_display(self.font, "Register", WHITE, BLACK, 11, 3, 80)
         register_button.click += self.register_click
         self.add_bordered_sprite(self.login_region, login_button, WHITE, 15, 250)
 

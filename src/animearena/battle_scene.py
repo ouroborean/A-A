@@ -9,13 +9,15 @@ import textwrap
 import copy
 import os
 import importlib.resources
-from animearena import engine
+from animearena import character_select_scene, engine
 from animearena import character
 from animearena.character import Character, character_db
 from animearena.ability import Ability, Target, one, two, three
 from animearena.energy import Energy
 from animearena.effects import Effect, EffectType
 from animearena.player import Player
+import animearena.animation
+from animearena.animation import Animation, get_shake_animation
 from random import randint
 from playsound import playsound
 from pathlib import Path
@@ -269,10 +271,10 @@ class BattleScene(engine.Scene):
             BLACK, (204, 104))
         self.waiting_label = self.create_text_display(self.font,
                                                       "Waiting for opponent",
-                                                      WHITE, BLACK, 0, 4, 150)
+                                                      WHITE, BLACK, 4, 4, 160)
         self.turn_label = self.create_text_display(self.font,
                                                    "It's your turn!", WHITE,
-                                                   BLACK, 20, 4, 150)
+                                                   BLACK, 22, 4, 150)
         self.energy_region = self.region.subregion(x=206,
                                                    y=5,
                                                    width=150,
@@ -291,6 +293,137 @@ class BattleScene(engine.Scene):
         self.game_end_region = self.region.subregion(60, 207, 781, 484)
         self.surrender_button_region = self.region.subregion(725, 925, 0, 0)
         self.enemy_info_region = self.region.subregion(5, 860, 670, 135)
+
+    #region On-Click event handlers
+
+    def enemy_info_profile_click(self, button, sender):
+        play_sound(self.scene_manager.sounds["click"])
+        self.enemy_detail_ability = None
+        self.draw_enemy_info_region()
+
+    def enemy_info_ability_click(self, button, sender):
+        play_sound(self.scene_manager.sounds["click"])
+        self.enemy_detail_ability = button.ability
+        self.draw_enemy_info_region()
+
+    def click_surrender_button(self, button, sender):
+        if not self.clicked_surrender and (
+            (not self.window_up) or
+            (self.window_up and self.exchanging_energy)):
+            play_sound(self.scene_manager.sounds["click"])
+            self.clicked_surrender = True
+            self.scene_manager.connection.send_surrender()
+            self.lose_game()
+
+    def confirm_button_click(self, _button, _sender):
+        self.execution_loop()
+        for attr, _ in self.offered_pool.items():
+            self.offered_pool[attr] = 0
+        self.turn_expend_region.clear()
+        self.draw_turn_end_region()
+        self.window_closing = True
+        play_sound(self.scene_manager.sounds["turnend"])
+        self.turn_end()
+
+    def plus_button_click(self, button, _sender):
+        attr = button.energy
+        play_sound(self.scene_manager.sounds["click"])
+        if self.player_display.team.energy_pool[
+                attr] > 0 and self.round_any_cost > 0:
+            self.player_display.team.energy_pool[attr] -= 1
+            self.offered_pool[attr] += 1
+            self.round_any_cost -= 1
+        self.draw_any_cost_expenditure_window()
+
+    def any_expenditure_cancel_click(self, _button, _sender):
+        for attr, energy in self.offered_pool.items():
+            if energy > 0 and attr != Energy.RANDOM:
+                self.round_any_cost += energy
+                self.player_display.team.energy_pool[attr] += energy
+                self.offered_pool[attr] = 0
+        self.turn_expend_region.clear()
+        self.window_closing = True
+        play_sound(self.scene_manager.sounds["undo"])
+        self.draw_turn_end_region()
+
+    def minus_button_click(self, button, _sender):
+        attr = button.energy
+        play_sound(self.scene_manager.sounds["click"])
+        if self.offered_pool[attr] > 0:
+            self.player_display.team.energy_pool[attr] += 1
+            self.offered_pool[attr] -= 1
+            self.round_any_cost += 1
+        self.draw_any_cost_expenditure_window()
+
+    def turn_end_button_click(self, _button, _sender):
+        if not self.waiting_for_turn and not self.window_up:
+            self.reset_targeting()
+            self.return_targeting_to_default()
+            self.full_update()
+
+            if self.round_any_cost == 0:
+                play_sound(self.scene_manager.sounds["turnend"])
+                self.execution_loop()
+                self.turn_end()
+            else:
+                self.window_up = True
+                self.turn_end_region.clear()
+                self.draw_any_cost_expenditure_window()
+
+    def exchange_accept_click(self, button, sender):
+        self.has_exchanged = True
+        play_sound(self.scene_manager.sounds["click"])
+        self.player_display.team.energy_pool[Energy(
+            self.traded_away_energy)] -= 2
+        self.player_display.team.energy_pool[Energy(
+            self.traded_for_energy)] += 1
+        self.player_display.team.energy_pool[4] -= 1
+        self.window_closing = True
+        self.exchanging_energy = not self.exchanging_energy
+        self.traded_away_energy = 5
+        self.traded_for_energy = 5
+        self.full_update()
+
+    def exchange_cancel_click(self, button, sender):
+        self.window_closing = True
+        play_sound(self.scene_manager.sounds["undo"])
+        self.exchanging_energy = not self.exchanging_energy
+        self.traded_away_energy = 5
+        self.traded_for_energy = 5
+        self.update_energy_region()
+
+    def received_click(self, button, sender):
+        play_sound(self.scene_manager.sounds["select"])
+        self.traded_for_energy = button.energy_type
+        self.update_energy_region()
+
+    def offered_click(self, button, sender):
+        play_sound(self.scene_manager.sounds["select"])
+        self.traded_away_energy = button.energy_type
+        self.update_energy_region()
+
+    def exchange_button_click(self, button, sender):
+        if not self.waiting_for_turn and not self.window_up:
+            play_sound(self.scene_manager.sounds["click"])
+            self.exchanging_energy = not self.exchanging_energy
+            self.update_energy_region()
+
+    #endregion
+
+    #region Rendering functions
+
+    def full_update(self):
+        self.region.clear()
+        self.region.add_sprite(self.background, 0, 0)
+        self.player_display.update_display()
+        self.enemy_display.update_display()
+        self.update_energy_region()
+        self.draw_turn_end_region()
+        self.draw_effect_hover()
+        self.draw_player_region()
+        self.draw_enemy_region()
+        self.draw_surrender_region()
+        self.draw_enemy_info_region()
 
     def draw_enemy_info_region(self):
         self.enemy_info_region.clear()
@@ -403,28 +536,9 @@ class BattleScene(engine.Scene):
                                                         height=6)
         self.enemy_info_region.add_sprite(cooldown_text_sprite, 105, 105)
 
-    def enemy_info_profile_click(self, button, sender):
-        play_sound(self.scene_manager.sounds["click"])
-        self.enemy_detail_ability = None
-        self.draw_enemy_info_region()
-
-    def enemy_info_ability_click(self, button, sender):
-        play_sound(self.scene_manager.sounds["click"])
-        self.enemy_detail_ability = button.ability
-        self.draw_enemy_info_region()
-
     def draw_surrender_region(self):
         self.surrender_button_region.clear()
         self.surrender_button_region.add_sprite(self.surrender_button, 0, 0)
-
-    def click_surrender_button(self, button, sender):
-        if not self.clicked_surrender and (
-            (not self.window_up) or
-            (self.window_up and self.exchanging_energy)):
-            play_sound(self.scene_manager.sounds["click"])
-            self.clicked_surrender = True
-            self.scene_manager.connection.send_surrender()
-            self.lose_game()
 
     def draw_player_region(self):
         self.player_region.clear()
@@ -478,7 +592,7 @@ class BattleScene(engine.Scene):
         self.turn_end_region.add_sprite(self.turn_end_button, 0, 0)
         if self.waiting_for_turn:
             self.add_bordered_sprite(self.turn_end_region, self.waiting_label,
-                                     WHITE, 0, 55)
+                                     WHITE, -5, 55)
         else:
             self.add_bordered_sprite(self.turn_end_region, self.turn_label,
                                      WHITE, 0, 55)
@@ -507,7 +621,7 @@ class BattleScene(engine.Scene):
                                                       "OK",
                                                       WHITE,
                                                       BLACK,
-                                                      x=22,
+                                                      x=20,
                                                       y=10,
                                                       width=60,
                                                       height=30)
@@ -518,7 +632,7 @@ class BattleScene(engine.Scene):
                                                  "Cancel",
                                                  WHITE,
                                                  BLACK,
-                                                 x=5,
+                                                 x=6,
                                                  y=10,
                                                  width=60,
                                                  height=30)
@@ -583,6 +697,15 @@ class BattleScene(engine.Scene):
         region.add_sprite_vertical_center(plus_button, x=plus_button_x)
         region.add_sprite_vertical_center(minus_button, x=minus_button_x)
 
+    def draw_effect_hover(self):
+        self.hover_effect_region.clear()
+        for manager in self.player_display.team.character_managers:
+            manager.show_hover_text()
+        for manager in self.enemy_display.team.character_managers:
+            manager.show_hover_text()
+
+    #endregion
+
     def execution_loop(self):
         for manager in self.player_display.team.character_managers:
             if manager.acted:
@@ -613,6 +736,10 @@ class BattleScene(engine.Scene):
         return character_db[char_name]
 
     def resolve_ticking_ability(self):
+        """Checks all Character Managers for continuous effects.
+        
+        All continuous effects that belong to the player whose turn
+        is currently ending are triggered and resolved."""
         for manager in self.player_display.team.character_managers:
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_DMG)
@@ -702,17 +829,7 @@ class BattleScene(engine.Scene):
             for eff in gen:
                 if eff.check_waiting() and self.is_allied(eff):
                     manager.check_unique_cont(eff)
-
-    def confirm_button_click(self, _button, _sender):
-        self.execution_loop()
-        for attr, _ in self.offered_pool.items():
-            self.offered_pool[attr] = 0
-        self.turn_expend_region.clear()
-        self.draw_turn_end_region()
-        self.window_closing = True
-        play_sound(self.scene_manager.sounds["turnend"])
-        self.turn_end()
-
+    
     def tick_ability_cooldown(self):
         for manager in self.player_display.team.character_managers:
             for ability in manager.source.main_abilities:
@@ -721,51 +838,6 @@ class BattleScene(engine.Scene):
             for ability in manager.source.alt_abilities:
                 ability.cooldown_remaining = max(
                     ability.cooldown_remaining - 1, 0)
-
-    def any_expenditure_cancel_click(self, _button, _sender):
-        for attr, energy in self.offered_pool.items():
-            if energy > 0 and attr != Energy.RANDOM:
-                self.round_any_cost += energy
-                self.player_display.team.energy_pool[attr] += energy
-                self.offered_pool[attr] = 0
-        self.turn_expend_region.clear()
-        self.window_closing = True
-        play_sound(self.scene_manager.sounds["undo"])
-        self.draw_turn_end_region()
-
-    def plus_button_click(self, button, _sender):
-        attr = button.energy
-        play_sound(self.scene_manager.sounds["click"])
-        if self.player_display.team.energy_pool[
-                attr] > 0 and self.round_any_cost > 0:
-            self.player_display.team.energy_pool[attr] -= 1
-            self.offered_pool[attr] += 1
-            self.round_any_cost -= 1
-        self.draw_any_cost_expenditure_window()
-
-    def minus_button_click(self, button, _sender):
-        attr = button.energy
-        play_sound(self.scene_manager.sounds["click"])
-        if self.offered_pool[attr] > 0:
-            self.player_display.team.energy_pool[attr] += 1
-            self.offered_pool[attr] -= 1
-            self.round_any_cost += 1
-        self.draw_any_cost_expenditure_window()
-
-    def turn_end_button_click(self, _button, _sender):
-        if not self.waiting_for_turn and not self.window_up:
-            self.reset_targeting()
-            self.return_targeting_to_default()
-            self.full_update()
-
-            if self.round_any_cost == 0:
-                play_sound(self.scene_manager.sounds["turnend"])
-                self.execution_loop()
-                self.turn_end()
-            else:
-                self.window_up = True
-                self.turn_end_region.clear()
-                self.draw_any_cost_expenditure_window()
 
     def turn_end(self):
         self.tick_effect_duration()
@@ -807,7 +879,7 @@ class BattleScene(engine.Scene):
                     manager.source.current_effects.append(
                         temp_yatsufusa_storage)
 
-        #Yatsufusa Resurrection handling
+        #region Yatsufusa Resurrection handling
         for manager in self.enemy_display.team.character_managers:
             if manager.source.dead and manager.has_effect(
                     EffectType.MARK, "Yatsufusa"):
@@ -872,6 +944,11 @@ class BattleScene(engine.Scene):
             character_pouch = []
             character_pouch.append(manager.source.hp)
             character_pouch.append(manager.source.energy_contribution)
+            character_pouch.append(manager.source.mission1progress)
+            character_pouch.append(manager.source.mission2progress)
+            character_pouch.append(manager.source.mission3progress)
+            character_pouch.append(manager.source.mission4progress)
+            character_pouch.append(manager.source.mission5progress)
             for effect in manager.source.current_effects:
                 effect_pouch = []
                 effect_pouch.append(effect.eff_type.value)
@@ -891,6 +968,11 @@ class BattleScene(engine.Scene):
             character_pouch = []
             character_pouch.append(manager.source.hp)
             character_pouch.append(manager.source.energy_contribution)
+            character_pouch.append(manager.source.mission1progress)
+            character_pouch.append(manager.source.mission2progress)
+            character_pouch.append(manager.source.mission3progress)
+            character_pouch.append(manager.source.mission4progress)
+            character_pouch.append(manager.source.mission5progress)
             for effect in manager.source.current_effects:
                 effect_pouch = []
                 effect_pouch.append(effect.eff_type.value)
@@ -920,8 +1002,18 @@ class BattleScene(engine.Scene):
             self.player_display.team.character_managers[
                 i].source.energy_contribution = character_pouch[1]
             self.player_display.team.character_managers[
+                i].source.mission1progress=character_pouch[2]
+            self.player_display.team.character_managers[
+                i].source.mission1progress=character_pouch[3]
+            self.player_display.team.character_managers[
+                i].source.mission1progress=character_pouch[4]
+            self.player_display.team.character_managers[
+                i].source.mission1progress=character_pouch[5]
+            self.player_display.team.character_managers[
+                i].source.mission1progress=character_pouch[6]
+            self.player_display.team.character_managers[
                 i].source.current_effects.clear()
-            for j, effect_pouch in enumerate(character_pouch[2]):
+            for j, effect_pouch in enumerate(character_pouch[7]):
                 if effect_pouch[5] > 2:
                     user = self.player_display.team.character_managers[
                         effect_pouch[5] - 3]
@@ -942,8 +1034,18 @@ class BattleScene(engine.Scene):
             self.enemy_display.team.character_managers[
                 i].source.energy_contribution = character_pouch[1]
             self.enemy_display.team.character_managers[
+                i].source.mission1progress=character_pouch[2]
+            self.enemy_display.team.character_managers[
+                i].source.mission1progress=character_pouch[3]
+            self.enemy_display.team.character_managers[
+                i].source.mission1progress=character_pouch[4]
+            self.enemy_display.team.character_managers[
+                i].source.mission1progress=character_pouch[5]
+            self.enemy_display.team.character_managers[
+                i].source.mission1progress=character_pouch[6]
+            self.enemy_display.team.character_managers[
                 i].source.current_effects.clear()
-            for j, effect_pouch in enumerate(character_pouch[2]):
+            for j, effect_pouch in enumerate(character_pouch[7]):
                 if effect_pouch[5] > 2:
                     user = self.player_display.team.character_managers[
                         effect_pouch[5] - 3]
@@ -965,6 +1067,13 @@ class BattleScene(engine.Scene):
         for manager in self.player_display.team.character_managers:
             for eff in manager.source.current_effects:
                 eff.tick_duration()
+                #region Spend Turn Under Effect Mission Check
+                if eff.name == "Uzumaki Barrage" and eff.eff_type == EffectType.ALL_STUN:
+                    if manager.is_stunned():
+                        eff.user.source.mission2progress += 1
+                if eff.name == "Shadow Clones" and eff.eff_type == EffectType.ALL_DR:
+                    eff.user.source.mission1progress += 1
+                #endregion
                 if eff.duration == 0:
                     if eff.name == "Quirk - Transform":
                         for effect in manager.source.current_effects:
@@ -1115,7 +1224,6 @@ class BattleScene(engine.Scene):
         for manager in self.player_display.team.character_managers:
             if manager.source.hp <= 0:
                 manager.source.dead = True
-
             manager.refresh_character()
             if not manager.source.dead:
                 game_lost = False
@@ -1176,7 +1284,7 @@ class BattleScene(engine.Scene):
         self.add_bordered_sprite(self.game_end_region, loss_panel, BLACK, 0, 0)
         return_button = self.create_text_display(self.font,
                                                  "Return To Character Select",
-                                                 WHITE, BLACK, 5, 5, 200)
+                                                 WHITE, BLACK, 14, 5, 220)
         return_button.click += self.return_to_char_select
         self.add_bordered_sprite(self.game_end_region, return_button, WHITE,
                                  550, 400)
@@ -1198,7 +1306,7 @@ class BattleScene(engine.Scene):
         self.add_bordered_sprite(self.game_end_region, win_panel, BLACK, 0, 0)
         return_button = self.create_text_display(self.font,
                                                  "Return To Character Select",
-                                                 WHITE, BLACK, 5, 5, 200)
+                                                 WHITE, BLACK, 14, 5, 220)
         return_button.click += self.return_to_char_select
         self.add_bordered_sprite(self.game_end_region, return_button, WHITE,
                                  20, 25)
@@ -1414,44 +1522,6 @@ class BattleScene(engine.Scene):
             self.add_bordered_sprite(self.energy_region, accept_button, GREEN,
                                      4, 90)
 
-    def exchange_accept_click(self, button, sender):
-        self.has_exchanged = True
-        play_sound(self.scene_manager.sounds["click"])
-        self.player_display.team.energy_pool[Energy(
-            self.traded_away_energy)] -= 2
-        self.player_display.team.energy_pool[Energy(
-            self.traded_for_energy)] += 1
-        self.player_display.team.energy_pool[4] -= 1
-        self.window_closing = True
-        self.exchanging_energy = not self.exchanging_energy
-        self.traded_away_energy = 5
-        self.traded_for_energy = 5
-        self.full_update()
-
-    def exchange_cancel_click(self, button, sender):
-        self.window_closing = True
-        play_sound(self.scene_manager.sounds["undo"])
-        self.exchanging_energy = not self.exchanging_energy
-        self.traded_away_energy = 5
-        self.traded_for_energy = 5
-        self.update_energy_region()
-
-    def received_click(self, button, sender):
-        play_sound(self.scene_manager.sounds["select"])
-        self.traded_for_energy = button.energy_type
-        self.update_energy_region()
-
-    def offered_click(self, button, sender):
-        play_sound(self.scene_manager.sounds["select"])
-        self.traded_away_energy = button.energy_type
-        self.update_energy_region()
-
-    def exchange_button_click(self, button, sender):
-        if not self.waiting_for_turn and not self.window_up:
-            play_sound(self.scene_manager.sounds["click"])
-            self.exchanging_energy = not self.exchanging_energy
-            self.update_energy_region()
-
     def handle_unique_startup(self, character: "CharacterManager"):
         if character.source.name == "gokudera":
             character.add_effect(
@@ -1639,26 +1709,6 @@ class BattleScene(engine.Scene):
         self.draw_player_region()
         self.draw_enemy_region()
         self.draw_surrender_region()
-
-    def full_update(self):
-        self.region.clear()
-        self.region.add_sprite(self.background, 0, 0)
-        self.player_display.update_display()
-        self.enemy_display.update_display()
-        self.update_energy_region()
-        self.draw_turn_end_region()
-        self.draw_effect_hover()
-        self.draw_player_region()
-        self.draw_enemy_region()
-        self.draw_surrender_region()
-        self.draw_enemy_info_region()
-
-    def draw_effect_hover(self):
-        self.hover_effect_region.clear()
-        for manager in self.player_display.team.character_managers:
-            manager.show_hover_text()
-        for manager in self.enemy_display.team.character_managers:
-            manager.show_hover_text()
 
     def apply_targeting(self, primary_target: "CharacterManager"):
         if self.selected_ability.target_type == Target.SINGLE:
@@ -3302,6 +3352,9 @@ class CharacterManager():
             elif self.has_effect(EffectType.MARK, "Lucky Rabbit's Foot"):
                 self.source.hp = 35
             else:
+                #region Killing Blow Mission Check
+
+                #endregion
                 if self.has_effect(EffectType.MARK, "Beast Instinct"):
                     if targeter == self.get_effect(EffectType.MARK,
                                                    "Beast Instinct").user:
@@ -3427,6 +3480,11 @@ class CharacterManager():
         if def_type == "NORMAL":
             return not (self.check_invuln() or self.source.dead
                         or self.is_ignoring())
+        elif def_type == "REGBYPASS":
+            if self.check_bypass_effects():
+                return not (self.source.dead)
+            else:
+                return not (self.source.dead or self.check_invuln())
         elif def_type == "BYPASS":
             return not (self.source.dead or self.is_ignoring())
         elif def_type == "FULLBYPASS":
@@ -3671,9 +3729,9 @@ class CharacterManager():
     def add_received_ability(self, ability: Ability):
         self.received_ability.append(ability)
 
-    def update(self):
+    def update(self, x: int = 0, y: int = 0):
         self.character_region.clear()
-        self.update_profile()
+        self.update_profile(x, y)
         self.adjust_ability_costs()
         self.update_ability()
         self.update_targeted_sprites()
@@ -3681,10 +3739,10 @@ class CharacterManager():
         self.update_effect_region()
         self.draw_hp_bar()
 
-    def update_limited(self):
+    def update_limited(self, x: int = 0, y: int = 0):
         self.character_region.clear()
         self.adjust_ability_costs()
-        self.update_enemy_profile()
+        self.update_enemy_profile(x, y)
         self.update_targeted_sprites()
         self.update_effect_region()
         self.draw_hp_bar()
@@ -3734,7 +3792,7 @@ class CharacterManager():
                     self.scene.scene_manager.surfaces[self.source.name +
                                                       "enemyaltprof2"])
 
-    def update_profile(self):
+    def update_profile(self, x: int = 0, y: int = 0):
         self.character_region.add_sprite(
             self.scene.sprite_factory.from_surface(
                 self.scene.get_scaled_surface(
@@ -3745,20 +3803,22 @@ class CharacterManager():
         self.profile_sprite.surface = self.scene.get_scaled_surface(
             self.scene.scene_manager.surfaces[self.source.name + "allyprof"])
         self.check_profile_swaps()
+        
+        
         self.scene.add_sprite_with_border(self.character_region,
                                           self.profile_sprite,
-                                          self.profile_border, 0, 0)
+                                          self.profile_border, x, y)
         if self.targeted:
             self.character_region.add_sprite(self.selected_filter, 0, 0)
 
-    def update_enemy_profile(self):
+    def update_enemy_profile(self, x: int = 0, y: int = 0):
 
         self.profile_sprite.surface = self.scene.get_scaled_surface(
             self.scene.scene_manager.surfaces[self.source.name + "enemyprof"])
         self.check_enemy_profile_swaps()
 
         self.scene.add_bordered_sprite(self.character_region,
-                                       self.profile_sprite, BLACK, 0, 0)
+                                       self.profile_sprite, BLACK, x, y)
         if self.targeted:
             self.character_region.add_sprite(self.selected_filter, 0, 0)
 

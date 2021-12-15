@@ -46,6 +46,11 @@ class Character:
     damage_reduction: int
     sistema_CAI_stage: int
     current_effects: list["Effect"]
+    mission1progress: int
+    mission2progress: int
+    mission3progress: int
+    mission4progress: int
+    mission5progress: int
     
 
     def __init__(self, name:str, desc:str = None):
@@ -68,6 +73,11 @@ class Character:
         self.damage_reduction = 0
         self.current_effects = []
         self.current_hp = 100
+        self.mission1progress = 0
+        self.mission2progress = 0
+        self.mission3progress = 0
+        self.mission4progress = 0
+        self.mission5progress = 0
         self.main_abilities = [Ability(f"{name}{i + 1}") for i in range(4)]
         self.current_abilities = self.main_abilities
         self.alt_abilities = []
@@ -87,7 +97,7 @@ character_db = {"naruto": Character("naruto", "Uzumaki Naruto, a former outcast 
                 " she believes in. She develops a unique version of the Hyuga's Gentle Fist that involves expelling her chakra from her bodies chakra points, shaping them into guardian lions."),
                 "neji": Character("neji", "Hyuga Neji, a shinobi of the Leaf Village's Hyuga clan. Regarded as a genius despite being born into a lower caste of the family, Neji's prowess of the Byakugan and Gentle Fist taijutsu is unmatched among the Hyuga clan."),
                 "shikamaru": Character("shikamaru", "Nara Shikamaru, a jonin from the Hidden Leaf Village. A talented shinobi whose genius is only matched by his laziness. Shikamaru's clan specializes in jutsu that can manipulate shadows to debilitate their enemies."),
-                "kakashi": Character("kakashi", "Kakashi Hatake, renowned ninja of the Hidden Leaf Village. A prodigiously skilled shinigami in his own right, " +
+                "kakashi": Character("kakashi", "Kakashi Hatake, renowned ninja of the Hidden Leaf Village. A prodigiously skilled shinobi in his own right, " +
                 "the addition of his childhood friend's Sharingan eye served to make him one of the most formidable shinobi of all time."),
                 "minato": Character("minato", "Yamikaze Minato, the fourth Hokage of the Hidden Leaf Village. Minato gave his life protecting " +
                 " the Leaf Village from the Nine-Tailed Fox, leaving it sealed inside his only son."),
@@ -181,8 +191,8 @@ character_db = {"naruto": Character("naruto", "Uzumaki Naruto, a former outcast 
                 " fires energy blasts which become more dangerous with the situation its wielder finds themselves in."),
                 "raba": Character("raba", "Lubbock, an assassin working for Night Raid. With his wire Teigu 'Cross Tail', Lubbock is a versatile killer that can use razor-sharp threads to deliver lethal blows or defend his allies."),
                 "sheele": Character("sheele", "Sheele, an assassin of Night Raid. A compassionate woman who, in a moment of life-threatening danger, discovered she had a talent for murder. She wields Extase, a pair of giant scissors that can cut through anything."),
-                "seiryu": Character("seiryu", "Seiryu Ubiquitous, former member of the Imperial Guard. After Esdeath forms the Jaegers to hunt down Night Raid, Seiryu joins the group to get vengeance on the" +
-                " criminals who killed her mentor. Twisted by the darkness in the capitol, and her own sense of justice, Seiryu uses her living Teigu 'Koro' to slay evil wherever she finds it."),
+                "seryu": Character("seryu", "Seryu Ubiquitous, former member of the Imperial Guard. After Esdeath forms the Jaegers to hunt down Night Raid, Seryu joins the group to get vengeance on the" +
+                " criminals who killed her mentor. Twisted by the darkness in the capitol, and her own sense of justice, Seryu uses her living Teigu 'Koro' to slay evil wherever she finds it."),
                 "kurome": Character("kurome", "Kurome, the younger sister of Akame. Seperated during their youth to be trained as assassins, Kurome and Akame's paths led them to opposite sides of the battlefield. Armed with " + 
                 "the corpse-animating blade Yatsufusa and bolstered by experimental medication that is slowly killing her, Kurome wants nothing more than to kill her sister so that, through Yatsufusa's power, they can be together forever."),
                 "esdeath": Character("esdeath", "Esdeath, the strongest Teigu wielder in the Empire. The leader of the Empire's anti-Night Raid task force known as the Jaegers, Esdeath's ice-wielding powers " +

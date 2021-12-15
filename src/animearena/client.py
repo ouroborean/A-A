@@ -43,6 +43,8 @@ class ConnectionHandler:
         newest_version = buffer.read_string()
         print(f"Running on version: {VERSION}. Newest version: {newest_version}")
         if VERSION != newest_version:
+            
+            
             s = sys.argv[0]
             
             version_tag = newest_version.replace(".", "-")
@@ -71,12 +73,14 @@ class ConnectionHandler:
             
             abs_path = pathlib.Path().resolve()
             if os.path.exists("temp.config"):
+                print("Found old config file")
                 with open("temp.config", "r") as f:
                     old_file = f.read().strip()
                 os.remove("temp.config")
                 os.remove(abs_path / old_file)
             
-
+        self.scene_manager.login_scene.updating = False
+        self.scene_manager.login_scene.full_render()
         buffer.clear()
 
     def send_version_request(self):
@@ -149,13 +153,14 @@ class ConnectionHandler:
         buffer.read_int()
         wins = buffer.read_int()
         losses = buffer.read_int()
+        mission_data = buffer.read_string()
         ava_code = None
         has_avatar = buffer.read_int()
         if has_avatar:
             length = buffer.read_int()
             ava_code = bytes(buffer.read_bytes(length))
     
-        self.scene_manager.login(self.scene_manager.login_scene.username_box.text, wins, losses, ava_code)
+        self.scene_manager.login(self.scene_manager.login_scene.username_box.text, wins, losses, mission_data, ava_code)
 
         buffer.clear()
 

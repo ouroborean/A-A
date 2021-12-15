@@ -5,9 +5,14 @@ from typing import Tuple
 import typing
 import importlib.resources
 from PIL import Image
-from animearena import character
+from animearena import battle_scene, character
 from animearena.character import character_db
 from playsound import playsound
+
+if typing.TYPE_CHECKING:
+    from animearena.character_select_scene import CharacterSelectScene
+    from animearena.battle_scene import BattleScene
+    from animearena.login_scene import LoginScene
 
 def get_image_from_path(file_name: str) -> Image:
     with importlib.resources.path('animearena.resources', file_name) as path:
@@ -21,7 +26,12 @@ class SceneManager:
     connected: bool
     surfaces: dict
     sounds: dict
+    char_select: "CharacterSelectScene"
+    battle_scene: "BattleScene"
+    login_scene: "LoginScene"
+    frame_count: int
     def __init__(self, window: sdl2.ext.Window = None):
+        self.frame_count = 0
         self.surfaces = {}
         self.sounds = {}
         if window:
@@ -90,15 +100,15 @@ class SceneManager:
     def bind_connection(self, connection):
         self.connection = connection
 
-    def login(self, username, wins, losses, ava_code=None):
+    def login(self, username, wins, losses, mission_data, ava_code=None):
         self.play_sound(self.sounds["login"])
         self.set_scene_to_current(self.char_select)
-        self.char_select.settle_player(username, wins, losses, ava_code)
+        self.char_select.settle_player(username, wins, losses, mission_data, ava_code)
 
     def return_to_select(self, player):
         self.change_window_size(800, 700)
         self.set_scene_to_current(self.char_select)
-        self.char_select.settle_player(player.name, player.wins, player.losses)
+        self.char_select.settle_player(player.name, player.wins, player.losses, player.mission_data)
 
     def start_battle(self, player_team, enemy_team, player, enemy, energy):
         self.play_sound(self.sounds["game_start"])

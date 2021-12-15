@@ -78,7 +78,7 @@ async def server_loop(scene_manager):
     while not scene_manager.connected:
         try:
             #35.219.128.93
-            reader, writer = await asyncio.wait_for(asyncio.open_connection("35.219.128.93", 5692, limit = 1024 * 256, happy_eyeballs_delay=0.25), 1)
+            reader, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", 5692, limit = 1024 * 256, happy_eyeballs_delay=0.25), 1)
             
             scene_manager.connected = True
             scene_manager.connection.writer = writer
@@ -92,10 +92,10 @@ async def server_loop(scene_manager):
             cancelled = True
             break
     while True and not cancelled:
-        if not VERSION_CHECKED:
-            print("Checking version")
-            scene_manager.connection.send_version_request()
-            VERSION_CHECKED = True
+        # if not VERSION_CHECKED:
+        #     print("Checking version")
+        #     scene_manager.connection.send_version_request()
+        #     VERSION_CHECKED = True
         try:
             data = await reader.readuntil(b'\x1f\x1f\x1f')
         except CancelledError:
@@ -122,7 +122,6 @@ async def game_loop(scene_manager, uiprocessor, window, server_loop_task):
     tasktask = asyncio.create_task(server_loop_task)
     while running:
         start = time.monotonic()
-
         scene_manager.current_scene.triggered_event = False
         events = sdl2.ext.get_events()
         for event in events:
@@ -199,6 +198,12 @@ async def game_loop(scene_manager, uiprocessor, window, server_loop_task):
         window.refresh()
         done = time.monotonic()
         elapsed_time = start - done
+        scene_manager.frame_count += 1
+        if scene_manager.frame_count > 60:
+            scene_manager.frame_count = 0
+        # for animation in scene_manager.current_scene.animations:
+        #     if animation.active and scene_manager.frame_count % animation.rate == 0:
+        #         animation.trigger()
         sleep_duration = max((1.0 / target_fps.get()) - elapsed_time, 0)
         await asyncio.sleep(sleep_duration)
     logging.debug("Broke game loop!")

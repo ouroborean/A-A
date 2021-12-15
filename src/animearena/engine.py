@@ -21,6 +21,8 @@ import sdl2.sdlttf
 import sdl2.surface
 from sdl2 import endian
 from pathlib import Path
+import animearena.text_formatter
+from animearena.animation import Animation
 def get_image_from_path(file_name: str) -> Image:
     with importlib.resources.path('animearena.resources', file_name) as path:
         return Image.open(path)
@@ -47,10 +49,12 @@ class Scene:
     ui_factory: sdl2.ext.UIFactory
     resource_manager: sdl2.ext.Resources
     triggered_event: bool
+    animations: list[Animation]
     font: None
 
     def __init__(self, sprite_type: Union[Literal[0], Literal[1]],
                  resource_manager: sdl2.ext.Resources):
+        self.animations = []
         self.region = Region()
         self.sprite_factory = sdl2.ext.SpriteFactory(sprite_type, free=False)
         self.ui_factory = sdl2.ext.UIFactory(self.sprite_factory, free=False)
@@ -179,7 +183,8 @@ class Scene:
         chars_per_line = max_width // char_width
 
         # get list of lines from full string based on box width
-        lines = textwrap.wrap(text, chars_per_line)
+        # lines = textwrap.wrap(text, chars_per_line)
+        lines = animearena.text_formatter.get_lines(text, max_width)
 
         # if height is on auto, then set it to a function of the margin plus
         # the space required for all lines

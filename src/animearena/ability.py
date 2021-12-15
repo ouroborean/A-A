@@ -3273,7 +3273,7 @@ def exe_berserker_howl(user: "CharacterManager", playerTeam: list["CharacterMana
         user.check_on_harm()
 
 def exe_koro_defense(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Seiryu is invulnerable."))
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Seryu is invulnerable."))
     user.check_on_use()
 
 def exe_self_destruct(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
@@ -3304,6 +3304,45 @@ def exe_insatiable_justice(user: "CharacterManager", playerTeam: list["Character
                     target.source.current_effects.append(temp_yatsufusa_storage)
         user.check_on_use()
         user.check_on_harm()
+#endregion
+#region Sheele Execution
+def exe_extase(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    for target in user.current_targets:
+        if target.final_can_effect("REGBYPASS"):
+            base_damage = 35
+            if target.get_dest_def_total() > 0:
+                base_damage += 15
+            if target.has_effect(EffectType.MARK, "Trump Card - Blinding Light"):
+                base_damage += 10
+            user.deal_damage(base_damage, target)
+    user.check_on_use()
+    user.check_on_harm()
+
+def exe_savior_strike(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                base_damage = 25
+                user.deal_damage(base_damage, target)
+                target.cancel_control_effects()
+        user.check_on_use()
+        user.check_on_harm()
+
+
+def exe_blinding_light(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 4, lambda eff: "This character is stunned."))
+                target.add_effect(Effect(user.used_ability, EffectType.DEF_NEGATE, user, 4, lambda eff: "This character cannot reduce damage or become invulnerable."))
+                target.add_effect(Effect(user.used_ability, EffectType.MARK, user, lambda eff: "This character will take 10 more damage from Extase - Bisector of Creation."))
+                user.check_on_stun(target)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_extase_block(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Sheele is invulnerable."))
+    user.check_on_use()
 #endregion
 #region Shigaraki Execution
 def exe_decaying_touch(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
@@ -3523,6 +3562,8 @@ def mental_out_ability_switch(target: "CharacterManager") -> int:
     if target.source.name == "touka":
         return 2
     if target.source.name == "killua":
+        return 0
+    if target.source.name == "sheele":
         return 0
 
 def exe_mental_out(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
@@ -4449,7 +4490,7 @@ ability_info_db = {
         [0, 2, 0, 0, 1, 8], Target.ALL_TARGET,
         default_target("ALL"), exe_mahapadma
     ],
-    "frenda1": [
+    "frenda2": [
         "Close Combat Bombs",
         "Frenda hurls a handful of bombs at an enemy, marking them with a stack of Close Combat Bombs for 3 turns. If Detonate is used, "
         +
@@ -4457,7 +4498,7 @@ ability_info_db = {
         [0, 0, 0, 0, 0, 0], Target.SINGLE,
         default_target("HOSTILE"), exe_close_combat_bombs
     ],
-    "frenda2": [
+    "frenda1": [
         "Doll Trap",
         "Frenda traps an ally or herself, permanently marking them with a Doll Trap. During this time, if any enemy damages the marked ally, all stacks of Doll Trap on that ally are transferred to"
         +
@@ -4681,7 +4722,7 @@ ability_info_db = {
     "ichimaru1": [
         "Butou Renjin",
         "Ichimaru deals 15 damage to one enemy for two turns, adding a stack of Kamishini no Yari to the target each turn when it damages them.",
-        [0, 0, 0, 1, 1, 2], Target.SINGLE,
+        [0, 0, 0, 1, 1, 1], Target.SINGLE,
         default_target("HOSTILE"), exe_butou_renjin
     ],
     "ichimaru2": [
@@ -5563,32 +5604,32 @@ ability_info_db = {
                                                        4], Target.SINGLE,
         default_target("SELF"), exe_sideways_jumps
     ],
-    "seiryu1": [
+    "seryu1": [
         "Body Modification - Arm Gun",
-        "Seiryu deals 20 damage to one enemy. Becomes Body Modification - Self Destruct if Seiryu falls below 30 health.",
+        "Seryu deals 20 damage to one enemy. Becomes Body Modification - Self Destruct if Seryu falls below 30 health.",
         [0, 0, 0, 0, 1, 1], Target.SINGLE,
         default_target("HOSTILE"), exe_body_mod_arm_gun
     ],
-    "seiryu2": [
+    "seryu2": [
         "Raging Koro",
         "Koro deals 20 damage to one enemy for two turns. Becomes Insatiable Justice while active.",
         [0, 0, 0, 0, 2, 2], Target.SINGLE,
         default_target("HOSTILE"), exe_raging_koro
     ],
-    "seiryu3": [
+    "seryu3": [
         "Berserker Howl",
         "Koro deals 15 damage to all enemies and lowers the damage they deal by 10 for 2 turns.",
         [0, 0, 0, 0, 3, 3], Target.MULTI_ENEMY,
         default_target("HOSTILE"), exe_berserker_howl
     ],
-    "seiryu4": [
-        "Koro Defense", "Seiryu becomes invulnerable for one turn.",
+    "seryu4": [
+        "Koro Defense", "Seryu becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
         default_target("SELF"), exe_koro_defense
     ],
     "seiryualt1": [
         "Body Modification - Self Destruct",
-        "Seiryu deals 30 damage to all enemies. After using this ability, Seiryu dies. Effects that prevent death cannot prevent Seiryu from dying. This ability cannot be countered.",
+        "Seryu deals 30 damage to all enemies. After using this ability, Seryu dies. Effects that prevent death cannot prevent Seryu from dying. This ability cannot be countered.",
         [0, 0, 0, 0, 2, 0], Target.MULTI_ENEMY,
         default_target("HOSTILE"), exe_self_destruct
     ],
@@ -5600,22 +5641,22 @@ ability_info_db = {
     "sheele1": [
         "Extase - Bisector of Creation",
         "Sheele deals 30 damage to one enemy. This ability cannot be countered, reflected, or ignored, and deals 15 more damage if the target has destructible defense.",
-        [0,0,0,1,1,0], Target.SINGLE
+        [0,0,0,1,1,0], Target.SINGLE, default_target("HOSTILE"), exe_extase
     ],
     "sheele2": [
         "Savior Strike",
         "Sheele deals 25 damage to one enemy. If that enemy is using a continuous ability, that ability is ended as though that character were stunned.",
-        [0,0,0,1,1,0], Target.SINGLE
+        [0,0,0,1,1,0], Target.SINGLE, default_target("HOSTILE"), exe_savior_strike
     ],
     "sheele3": [
         "Trump Card - Blinding Light",
         "Target enemy is stunned for two turns. During this time, they cannot reduce damage or become invulnerable and Extase - Bisector of Creation will deal 10 additional damage to them.",
-        [0,0,1,1,0,5], Target.SINGLE
+        [0,0,1,1,0,5], Target.SINGLE, default_target("HOSTILE"), exe_blinding_light
     ],
     "sheele4": [
         "Extase Block",
         "Sheele becomes invulnerable for one turn.",
-        [0,0,0,0,1,4], Target.SINGLE
+        [0,0,0,0,1,4], Target.SINGLE, default_target("SELF"), exe_extase_block
     ],
     "shigaraki1": [
         "Decaying Touch",
