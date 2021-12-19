@@ -178,7 +178,8 @@ class CharacterSelectScene(engine.Scene):
         MISSION_X_BUFFER = 10
         
         for i in range(5):
-            text_sprite = self.create_text_display(self.font, f"{mission_db[self.display_character.name][i].description} ({self.player.missions[self.display_character.name][i]}/{mission_db[self.display_character.name][i].max})", WHITE, BLACK, 0, 0, MISSION_MAX_WIDTH)
+            current = min(self.player.missions[self.display_character.name][i], mission_db[self.display_character.name][i].max)
+            text_sprite = self.create_text_display(self.font, f"{mission_db[self.display_character.name][i].description} ({current}/{mission_db[self.display_character.name][i].max})", WHITE, BLACK, 0, 0, MISSION_MAX_WIDTH)
             self.mission_region.add_sprite(text_sprite, MISSION_X_BUFFER, (MISSION_MAX_HEIGHT * i) + MISSION_Y_BUFFER)
 
 

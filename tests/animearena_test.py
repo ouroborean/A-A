@@ -1687,8 +1687,8 @@ def test_close_combat_bombs(frenda_test_scene: BattleScene):
     frenda = frenda_test_scene.player_display.team.character_managers[0]
     eteam = frenda_test_scene.enemy_display.team.character_managers
     pteam = frenda_test_scene.player_display.team.character_managers
-    bombs = frenda.source.current_abilities[0]
-    dolltrap = frenda.source.current_abilities[1]
+    bombs = frenda.source.current_abilities[1]
+    dolltrap = frenda.source.current_abilities[0]
     detonate = frenda.source.current_abilities[2]
     astolfo = eteam[0]
     naruto = eteam[1]
@@ -1712,8 +1712,8 @@ def test_doll_trap(frenda_test_scene: BattleScene):
     frenda = frenda_test_scene.player_display.team.character_managers[0]
     eteam = frenda_test_scene.enemy_display.team.character_managers
     pteam = frenda_test_scene.player_display.team.character_managers
-    bombs = frenda.source.current_abilities[0]
-    dolltrap = frenda.source.current_abilities[1]
+    bombs = frenda.source.current_abilities[1]
+    dolltrap = frenda.source.current_abilities[0]
     detonate = frenda.source.current_abilities[2]
     astolfo = eteam[0]
     naruto = eteam[1]
@@ -1736,8 +1736,8 @@ def test_doll_trap_transfer(frenda_test_scene: BattleScene):
     frenda = frenda_test_scene.player_display.team.character_managers[0]
     eteam = frenda_test_scene.enemy_display.team.character_managers
     pteam = frenda_test_scene.player_display.team.character_managers
-    bombs = frenda.source.current_abilities[0]
-    dolltrap = frenda.source.current_abilities[1]
+    bombs = frenda.source.current_abilities[1]
+    dolltrap = frenda.source.current_abilities[0]
     detonate = frenda.source.current_abilities[2]
     astolfo = eteam[0]
     naruto = eteam[1]
@@ -1767,8 +1767,8 @@ def test_multi_explosive_detonation(frenda_test_scene: BattleScene):
     frenda = frenda_test_scene.player_display.team.character_managers[0]
     eteam = frenda_test_scene.enemy_display.team.character_managers
     pteam = frenda_test_scene.player_display.team.character_managers
-    bombs = frenda.source.current_abilities[0]
-    dolltrap = frenda.source.current_abilities[1]
+    bombs = frenda.source.current_abilities[1]
+    dolltrap = frenda.source.current_abilities[0]
     detonate = frenda.source.current_abilities[2]
     astolfo = eteam[0]
     naruto = eteam[1]

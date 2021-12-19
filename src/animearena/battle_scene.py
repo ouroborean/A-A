@@ -9,7 +9,7 @@ import textwrap
 import copy
 import os
 import importlib.resources
-from animearena import character_select_scene, engine
+from animearena import character_select_scene, engine, mission
 from animearena import character
 from animearena.character import Character, character_db
 from animearena.ability import Ability, Target, one, two, three
@@ -202,7 +202,7 @@ class BattleScene(engine.Scene):
     enemy: Player
     dying_to_doping: bool
     target_clicked: bool
-
+    missions_to_check: list[str]
     def __init__(self, scene_manager, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.window_closing = True
@@ -213,6 +213,7 @@ class BattleScene(engine.Scene):
         self.scene_manager = scene_manager
         self.ally_managers = []
         self.enemy_managers = []
+        self.missions_to_check = []
         self.round_any_cost = 0
         self.current_button = None
         self.player_display = ActiveTeamDisplay(self)
@@ -746,13 +747,13 @@ class BattleScene(engine.Scene):
             for eff in gen:
                 if eff.check_waiting() and self.is_allied(eff) and (
                         eff.mag > 15 or not manager.deflecting()):
-                    eff.user.deal_eff_damage(eff.mag, manager)
+                    eff.user.deal_eff_damage(eff.mag, manager, eff)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_PIERCE_DMG)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied(eff) and (
                         eff.mag > 15 or not manager.deflecting()):
-                    eff.user.deal_eff_pierce_damage(eff.mag, manager)
+                    eff.user.deal_eff_pierce_damage(eff.mag, manager, eff)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_AFF_DMG)
             for eff in gen:
@@ -760,7 +761,7 @@ class BattleScene(engine.Scene):
                         eff.mag > 15 or not manager.deflecting()):
                     if eff.name == "Doping Rampage":
                         self.dying_to_doping = True
-                    eff.user.deal_eff_aff_damage(eff.mag, manager)
+                    eff.user.deal_eff_aff_damage(eff.mag, manager, eff)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_HEAL)
             for eff in gen:
@@ -792,19 +793,19 @@ class BattleScene(engine.Scene):
             for eff in gen:
                 if eff.check_waiting() and self.is_allied(eff) and (
                         eff.mag > 15 or not manager.deflecting()):
-                    eff.user.deal_eff_damage(eff.mag, manager)
+                    eff.user.deal_eff_damage(eff.mag, manager, eff)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_PIERCE_DMG)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied(eff) and (
                         eff.mag > 15 or not manager.deflecting()):
-                    eff.user.deal_eff_pierce_damage(eff.mag, manager)
+                    eff.user.deal_eff_pierce_damage(eff.mag, manager, eff)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_AFF_DMG)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied(eff) and (
                         eff.mag > 15 or not manager.deflecting()):
-                    eff.user.deal_eff_aff_damage(eff.mag, manager)
+                    eff.user.deal_eff_aff_damage(eff.mag, manager, eff)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_HEAL)
             for eff in gen:
@@ -1004,13 +1005,13 @@ class BattleScene(engine.Scene):
             self.player_display.team.character_managers[
                 i].source.mission1progress=character_pouch[2]
             self.player_display.team.character_managers[
-                i].source.mission1progress=character_pouch[3]
+                i].source.mission2progress=character_pouch[3]
             self.player_display.team.character_managers[
-                i].source.mission1progress=character_pouch[4]
+                i].source.mission3progress=character_pouch[4]
             self.player_display.team.character_managers[
-                i].source.mission1progress=character_pouch[5]
+                i].source.mission4progress=character_pouch[5]
             self.player_display.team.character_managers[
-                i].source.mission1progress=character_pouch[6]
+                i].source.mission5progress=character_pouch[6]
             self.player_display.team.character_managers[
                 i].source.current_effects.clear()
             for j, effect_pouch in enumerate(character_pouch[7]):
@@ -1036,13 +1037,13 @@ class BattleScene(engine.Scene):
             self.enemy_display.team.character_managers[
                 i].source.mission1progress=character_pouch[2]
             self.enemy_display.team.character_managers[
-                i].source.mission1progress=character_pouch[3]
+                i].source.mission2progress=character_pouch[3]
             self.enemy_display.team.character_managers[
-                i].source.mission1progress=character_pouch[4]
+                i].source.mission3progress=character_pouch[4]
             self.enemy_display.team.character_managers[
-                i].source.mission1progress=character_pouch[5]
+                i].source.mission4progress=character_pouch[5]
             self.enemy_display.team.character_managers[
-                i].source.mission1progress=character_pouch[6]
+                i].source.mission5progress=character_pouch[6]
             self.enemy_display.team.character_managers[
                 i].source.current_effects.clear()
             for j, effect_pouch in enumerate(character_pouch[7]):
@@ -1072,6 +1073,7 @@ class BattleScene(engine.Scene):
                     if manager.is_stunned():
                         eff.user.source.mission2progress += 1
                 if eff.name == "Shadow Clones" and eff.eff_type == EffectType.ALL_DR:
+                    print("Had Shadow Clones for a turn!")
                     eff.user.source.mission1progress += 1
                 #endregion
                 if eff.duration == 0:
@@ -1112,7 +1114,7 @@ class BattleScene(engine.Scene):
                         for enemy in self.enemy_display.team.character_managers:
                             if enemy.final_can_effect(
                                     manager.check_bypass_effects()):
-                                eff.user.deal_eff_damage(40, enemy)
+                                eff.user.deal_eff_damage(40, enemy, eff)
                     if eff.name == "Lightning Dragon's Roar":
                         manager.add_effect(
                             Effect(Ability("laxus2"),
@@ -1148,7 +1150,7 @@ class BattleScene(engine.Scene):
                                     "Illusory Breakdown").user == manager:
                                 if emanager.final_can_effect(
                                         manager.check_bypass_effects()):
-                                    manager.deal_eff_damage(25, emanager)
+                                    manager.deal_eff_damage(25, emanager, eff)
                                     emanager.add_effect(
                                         Effect(
                                             Ability("chrome2"),
@@ -1165,7 +1167,7 @@ class BattleScene(engine.Scene):
                                     "Mental Immolation").user == manager:
                                 if emanager.final_can_effect(
                                         manager.check_bypass_effects()):
-                                    manager.deal_eff_damage(20, emanager)
+                                    manager.deal_eff_damage(20, emanager, eff)
                                     emanager.source.energy_contribution -= 1
                                     manager.check_on_drain(emanager)
                     if eff.name == "Mental Annihilation" and eff.mag > 0:
@@ -1176,12 +1178,12 @@ class BattleScene(engine.Scene):
                                     EffectType.MARK,
                                     "Mental Annihilation").user == manager:
                                 if emanager.final_can_effect("BYPASS"):
-                                    manager.deal_eff_damage(35, emanager)
+                                    manager.deal_eff_damage(35, emanager, eff)
                     if eff.name == "Illusory World Destruction" and eff.mag > 0:
                         for emanager in self.enemy_display.team.character_managers:
                             if emanager.final_can_effect(
                                     manager.check_bypass_effects()):
-                                manager.deal_eff_damage(25, emanager)
+                                manager.deal_eff_damage(25, emanager, eff)
                                 emanager.add_effect(
                                     Effect(
                                         Ability("chromealt2"),
@@ -1222,6 +1224,7 @@ class BattleScene(engine.Scene):
         play_sound(self.scene_manager.sounds["turnstart"])
         game_lost = True
         for manager in self.player_display.team.character_managers:
+            print(f"{manager.source} Mission 1 has {manager.source.mission1progress} progress!")
             if manager.source.hp <= 0:
                 manager.source.dead = True
             manager.refresh_character()
@@ -1230,6 +1233,7 @@ class BattleScene(engine.Scene):
 
         game_won = True
         for manager in self.enemy_display.team.character_managers:
+            print(f"{manager.source} Mission 1 has {manager.source.mission1progress} progress!")
             if manager.source.hp <= 0:
                 manager.source.dead = True
             manager.refresh_character(True)
@@ -1273,6 +1277,12 @@ class BattleScene(engine.Scene):
 
     def lose_game(self):
         self.player.losses += 1
+        for i in range(3):
+            self.player.missions[self.player_display.team.character_managers[i].source.name][0] += self.player_display.team.character_managers[i].source.mission1progress
+            self.player.missions[self.player_display.team.character_managers[i].source.name][1] += self.player_display.team.character_managers[i].source.mission2progress
+            self.player.missions[self.player_display.team.character_managers[i].source.name][2] += self.player_display.team.character_managers[i].source.mission3progress
+            self.player.missions[self.player_display.team.character_managers[i].source.name][3] += self.player_display.team.character_managers[i].source.mission4progress
+            self.player.missions[self.player_display.team.character_managers[i].source.name][4] += self.player_display.team.character_managers[i].source.mission5progress
         self.scene_manager.connection.send_player_update(self.player)
         self.scene_manager.connection.send_match_statistics([
             manager.source.name
@@ -1293,8 +1303,15 @@ class BattleScene(engine.Scene):
         play_sound(self.scene_manager.sounds["click"])
         self.scene_manager.return_to_select(self.player)
 
+
     def win_game(self, surrendered=False):
         self.player.wins += 1
+        for i in range(3):
+            self.player.missions[self.player_display.team.character_managers[i].source.name][0] += self.player_display.team.character_managers[i].source.mission1progress
+            self.player.missions[self.player_display.team.character_managers[i].source.name][1] += self.player_display.team.character_managers[i].source.mission2progress
+            self.player.missions[self.player_display.team.character_managers[i].source.name][2] += self.player_display.team.character_managers[i].source.mission3progress
+            self.player.missions[self.player_display.team.character_managers[i].source.name][3] += self.player_display.team.character_managers[i].source.mission4progress
+            self.player.missions[self.player_display.team.character_managers[i].source.name][4] += self.player_display.team.character_managers[i].source.mission5progress
         self.scene_manager.connection.send_player_update(self.player)
         self.scene_manager.connection.send_match_statistics([
             manager.source.name
@@ -1557,6 +1574,8 @@ class BattleScene(engine.Scene):
         enemy_roster: list[CharacterManager] = []
         for i, ally in enumerate(ally_team):
             char_manager = CharacterManager(ally, self)
+            if not ally.name in self.missions_to_check:
+                self.missions_to_check.append(ally.name)
             char_manager.profile_sprite = self.ui_factory.from_surface(
                 sdl2.ext.BUTTON,
                 self.get_scaled_surface(
@@ -1667,6 +1686,8 @@ class BattleScene(engine.Scene):
             ally_roster.append(char_manager)
         for i, enemy in enumerate(enemy_team):
             e_char_manager = CharacterManager(enemy, self)
+            if not enemy.name in self.missions_to_check:
+                self.missions_to_check.append(enemy.name)
             e_char_manager.profile_sprite = self.ui_factory.from_surface(
                 sdl2.ext.BUTTON,
                 self.get_scaled_surface(
@@ -1975,10 +1996,10 @@ class CharacterManager():
                     self.receive_eff_damage(
                         15,
                         character.get_effect(EffectType.DEST_DEF,
-                                             "Four-God Resisting Shield").user)
+                                             "Four-God Resisting Shield"))
         if self.has_effect(EffectType.UNIQUE, "Porcospino Nuvola"):
             self.receive_eff_damage(
-                10, character.get_effect(EffectType.UNIQUE,
+                10, self.get_effect(EffectType.UNIQUE,
                                          "Porcospino Nuvola"))
 
     def check_on_help(self):
@@ -2015,7 +2036,7 @@ class CharacterManager():
             if self.final_can_effect():
                 self.receive_eff_pierce_damage(
                     20,
-                    self.get_effect(EffectType.MARK, "Hidden Mine").user)
+                    self.get_effect(EffectType.MARK, "Hidden Mine"))
             self.full_remove_effect(
                 "Hidden Mine",
                 self.get_effect(EffectType.MARK, "Hidden Mine").user)
@@ -2027,7 +2048,7 @@ class CharacterManager():
         if self.has_effect(EffectType.MARK, "Solid Script - Fire"):
             self.receive_eff_aff_damage(
                 10,
-                self.get_effect(EffectType.MARK, "Solid Script - Fire").user)
+                self.get_effect(EffectType.MARK, "Solid Script - Fire"))
 
     def check_bypass_effects(self) -> str:
         if self.has_effect(EffectType.UNIQUE, "Dive"):
@@ -2093,7 +2114,7 @@ class CharacterManager():
     def check_unique_cont(self, eff: Effect):
         if eff.name == "Utsuhi Ame":
             if self.final_can_effect(eff.user.check_bypass_effects()):
-                self.receive_eff_damage(eff.mag * 20, eff.user)
+                self.receive_eff_damage(eff.mag * 20, eff)
                 if eff.mag == 1:
                     eff.user.apply_stack_effect(
                         Effect(
@@ -2169,7 +2190,7 @@ class CharacterManager():
             if self.final_can_effect(eff.user.check_bypass_effects()) and (
                     not self.deflecting() or (2 * (eff.mag**2) > 15)):
                 base_damage = (2 * (2**eff.mag))
-                eff.user.deal_eff_damage(base_damage, self)
+                eff.user.deal_eff_damage(base_damage, self, eff)
                 eff.alter_mag(1)
                 if self.has_effect(
                         EffectType.MARK, "Chakra Point Strike"
@@ -2179,9 +2200,9 @@ class CharacterManager():
             if self.final_can_effect(
                     eff.user.check_bypass_effects()) and not self.deflecting():
                 if self.check_for_dmg_reduction() < 15:
-                    eff.user.deal_eff_pierce_damage(15, self)
+                    eff.user.deal_eff_pierce_damage(15, self, eff)
                 else:
-                    eff.user.deal_eff_damage(15, self)
+                    eff.user.deal_eff_damage(15, self, eff)
         if eff.name == "Titania's Rampage":
             valid_targets: list["CharacterManager"] = []
             for enemy in self.scene.enemy_display.team.character_managers:
@@ -2194,17 +2215,17 @@ class CharacterManager():
                 print(
                     f"Dealing {damage} damage to {valid_targets[target].source.name}"
                 )
-                self.deal_eff_pierce_damage(damage, valid_targets[target])
+                self.deal_eff_pierce_damage(damage, valid_targets[target], eff)
                 eff.alter_mag(1)
         if eff.name == "Circle Blade":
             for enemy in self.scene.enemy_display.team.character_managers:
                 if enemy.final_can_effect(self.check_bypass_effects()
                                           ) and not enemy.deflecting():
-                    self.deal_eff_damage(15, enemy)
+                    self.deal_eff_damage(15, enemy, eff)
         if eff.name == "Butou Renjin":
             if self.final_can_effect(
                     eff.user.check_bypass_effects()) and not self.deflecting():
-                eff.user.deal_eff_damage(15, self)
+                eff.user.deal_eff_damage(15, self, eff)
                 self.apply_stack_effect(
                     Effect(
                         Ability("ichimaru3"),
@@ -2221,7 +2242,7 @@ class CharacterManager():
                 if eff.user.has_effect(EffectType.STACK, "Gather Power"):
                     base_damage += (5 * eff.user.get_effect(
                         EffectType.STACK, "Gather Power").mag)
-                eff.user.deal_eff_damage(base_damage, self)
+                eff.user.deal_eff_damage(base_damage, self, eff)
 
     def is_counter_immune(self):
         gen = [
@@ -2269,16 +2290,16 @@ class CharacterManager():
                         eff.user.check_on_drain(self)
                         if self.has_effect(EffectType.MARK,
                                            "Third Dance - Shirafune"):
-                            self.full_remove_effect("Third Dance - Shirafune",
-                                                    self)
                             if eff.user.final_can_effect():
-                                eff.user.receive_eff_damage(30, self)
+                                eff.user.receive_eff_damage(30, self.get_effect(EffectType.MARK, "Third Dance - Shirafune"))
                                 eff.user.add_effect(
                                     Effect(
                                         Ability("rukia3"), EffectType.ALL_STUN,
-                                        self, 2, lambda eff:
+                                        self.get_effect(EffectType.MARK, "Third Dance - Shirafune").user, 2, lambda eff:
                                         "This character is stunned."))
                                 self.check_on_stun(eff.user)
+                            self.full_remove_effect("Third Dance - Shirafune",
+                                                    self)
                         return True
 
                 #target counter check
@@ -2290,7 +2311,6 @@ class CharacterManager():
                     for eff in gen:
                         if eff.name == "Draw Stance":
                             src = Ability("touka1")
-                            target.full_remove_effect("Draw Stance", eff.user)
                             self.add_effect(
                                 Effect(
                                     src, EffectType.UNIQUE, eff.user, 2,
@@ -2299,20 +2319,21 @@ class CharacterManager():
                                 ))
                             if self.final_can_effect(
                             ) and not self.deflecting():
-                                self.receive_eff_damage(15, eff.user)
+                                self.receive_eff_damage(15, eff)
+                            target.full_remove_effect("Draw Stance", eff.user)
                             if self.has_effect(EffectType.MARK,
                                                "Third Dance - Shirafune"):
-                                self.full_remove_effect(
-                                    "Third Dance - Shirafune", self)
                                 if target.final_can_effect():
-                                    target.receive_eff_damage(30, self)
+                                    target.receive_eff_damage(30, self.get_effect(EffectType.MARK, "Third Dance - Shirafune"))
                                     target.add_effect(
                                         Effect(
                                             Ability("rukia3"),
-                                            EffectType.ALL_STUN, self, 2,
+                                            EffectType.ALL_STUN, self.get_effect(EffectType.MARK, "Third Dance - Shirafune").user, 2,
                                             lambda eff:
                                             "This character is stunned."))
                                     self.check_on_stun(target)
+                                self.full_remove_effect(
+                                    "Third Dance - Shirafune", self)
                             return True
                         if eff.name == "Zero Point Breakthrough":
                             src = Ability("tsunayoshi3")
@@ -2338,17 +2359,17 @@ class CharacterManager():
                                        mag=110))
                             if self.has_effect(EffectType.MARK,
                                                "Third Dance - Shirafune"):
-                                self.full_remove_effect(
-                                    "Third Dance - Shirafune", self)
                                 if target.final_can_effect():
-                                    target.receive_eff_damage(30, self)
+                                    target.receive_eff_damage(30, self.get_effect(EffectType.MARK, "Third Dance - Shirafune"))
                                     target.add_effect(
                                         Effect(
                                             Ability("rukia3"),
-                                            EffectType.ALL_STUN, self, 2,
+                                            EffectType.ALL_STUN, self.get_effect(EffectType.MARK, "Third Dance - Shirafune").user, 2,
                                             lambda eff:
                                             "This character is stunned."))
                                     self.check_on_stun(target)
+                                self.full_remove_effect(
+                                    "Third Dance - Shirafune", self)
                             return True
                         if eff.name == "One For All - Shoot Style":
                             src = Ability("midoriya3")
@@ -2362,17 +2383,17 @@ class CharacterManager():
                                 ))
                             if self.has_effect(EffectType.MARK,
                                                "Third Dance - Shirafune"):
-                                self.full_remove_effect(
-                                    "Third Dance - Shirafune", self)
                                 if target.final_can_effect():
-                                    target.receive_eff_damage(30, self)
+                                    target.receive_eff_damage(30, self.get_effect(EffectType.MARK, "Third Dance - Shirafune"))
                                     target.add_effect(
                                         Effect(
                                             Ability("rukia3"),
-                                            EffectType.ALL_STUN, self, 2,
+                                            EffectType.ALL_STUN, self.get_effect(EffectType.MARK, "Third Dance - Shirafune").user, 2,
                                             lambda eff:
                                             "This character is stunned."))
                                     self.check_on_stun(target)
+                                self.full_remove_effect(
+                                    "Third Dance - Shirafune", self)
                             return True
                         if eff.name == "Minion - Tama":
                             src = Ability("ruler3")
@@ -2392,17 +2413,17 @@ class CharacterManager():
                                 self.receive_eff_pierce_damage(20, eff.user)
                             if self.has_effect(EffectType.MARK,
                                                "Third Dance - Shirafune"):
-                                self.full_remove_effect(
-                                    "Third Dance - Shirafune", self)
                                 if eff.user.final_can_effect():
-                                    eff.user.receive_eff_damage(30, self)
+                                    eff.user.receive_eff_damage(30, self.get_effect(EffectType.MARK, "Third Dance - Shirafune"))
                                     eff.user.add_effect(
                                         Effect(
                                             Ability("rukia3"),
-                                            EffectType.ALL_STUN, self, 2,
+                                            EffectType.ALL_STUN, self.get_effect(EffectType.MARK, "Third Dance - Shirafune").user, 2,
                                             lambda eff:
                                             "This character is stunned."))
                                     self.check_on_stun(eff.user)
+                                self.full_remove_effect(
+                                    "Third Dance - Shirafune", self)
                             return True
                         if eff.name == "Casseur de Logistille":
                             src = Ability("astolfo1")
@@ -2432,17 +2453,17 @@ class CharacterManager():
                                     eff.user.check_on_stun(self)
                                 if self.has_effect(EffectType.MARK,
                                                    "Third Dance - Shirafune"):
-                                    self.full_remove_effect(
-                                        "Third Dance - Shirafune", self)
                                     if eff.user.final_can_effect():
-                                        eff.user.receive_eff_damage(30, self)
+                                        eff.user.receive_eff_damage(30, self.get_effect(EffectType.MARK, "Third Dance - Shirafune"))
                                         eff.user.add_effect(
                                             Effect(
                                                 Ability("rukia3"),
-                                                EffectType.ALL_STUN, self, 2,
+                                                EffectType.ALL_STUN, self.get_effect(EffectType.MARK, "Third Dance - Shirafune").user, 2,
                                                 lambda eff:
                                                 "This character is stunned."))
                                         self.check_on_stun(eff.user)
+                                self.full_remove_effect(
+                                        "Third Dance - Shirafune", self)
                                 return True
 
                     gen = (eff for eff in target.source.current_effects
@@ -2463,7 +2484,7 @@ class CharacterManager():
 
         return False
 
-    def check_on_damage_dealt(self, target: "CharacterManager"):
+    def check_on_damage_dealt(self, target: "CharacterManager", damage: int):
         #TODO check user effects
 
         #TODO check target effects
@@ -2512,7 +2533,7 @@ class CharacterManager():
                             invisible=True))
                 self.apply_stack_effect(
                     Effect(
-                        Ability("frenda2"),
+                        Ability("frenda1"),
                         EffectType.STACK,
                         eff.user,
                         280000,
@@ -2526,7 +2547,7 @@ class CharacterManager():
                               "Conductivity").user.receive_eff_damage(
                                   10,
                                   target.get_effect(EffectType.ALL_DR,
-                                                    "Conductivity").user)
+                                                    "Conductivity"))
 
         if target.source.hp <= 0:
             if self.has_effect(EffectType.STUN_IMMUNE, "Beast Instinct"):
@@ -2588,7 +2609,7 @@ class CharacterManager():
         target.receive_damage(mod_damage, self)
 
         if target.has_effect(EffectType.UNIQUE, "Thunder Palace"):
-            self.receive_eff_damage(mod_damage, self)
+            self.receive_eff_damage(mod_damage, target.get_effect(EffectType.UNIQUE, "Thunder Palace"))
             target.full_remove_effect("Thunder Palace", target)
         if target.has_effect(EffectType.UNIQUE, "Burning Axle"):
             user = target.get_effect(EffectType.UNIQUE, "Burning Axle").user
@@ -2598,7 +2619,6 @@ class CharacterManager():
                        lambda eff: "This character is stunned."))
             user.check_on_stun(target)
 
-        self.check_on_damage_dealt(target)
 
     def receive_damage(self, damage: int, dealer: "CharacterManager"):
         mod_damage = damage - self.check_for_dmg_reduction()
@@ -2639,22 +2659,14 @@ class CharacterManager():
                             temp_yatsufusa_storage)
 
         mod_damage = self.pass_through_dest_def(mod_damage)
-        if mod_damage < 0:
-            mod_damage = 0
-
-        self.source.hp -= mod_damage
-
-        if mod_damage > 0:
-            self.damage_taken_check(mod_damage)
-
+        self.apply_active_damage_taken(mod_damage, dealer)
         self.death_check(dealer)
 
-    def deal_eff_damage(self, damage: int, target: "CharacterManager"):
+    def deal_eff_damage(self, damage: int, target: "CharacterManager", source: Effect):
         damage = self.get_boosts(damage)
-        target.receive_eff_damage(damage, self)
-        self.check_on_damage_dealt(target)
+        target.receive_eff_damage(damage, source)
 
-    def receive_eff_damage(self, damage: int, dealer: "CharacterManager"):
+    def receive_eff_damage(self, damage: int, source: Effect):
         mod_damage = damage - self.check_for_dmg_reduction()
 
         if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
@@ -2693,13 +2705,8 @@ class CharacterManager():
                             temp_yatsufusa_storage)
 
         mod_damage = self.pass_through_dest_def(mod_damage)
-        if mod_damage < 0:
-            mod_damage = 0
-        self.source.hp -= mod_damage
-        if mod_damage > 0:
-            self.damage_taken_check(mod_damage)
-
-        self.death_check(dealer)
+        self.apply_eff_damage_taken(mod_damage, source)
+        self.death_check(source.user)
 
     def deal_pierce_damage(self, damage: int, target: "CharacterManager"):
         mod_damage = self.get_boosts(damage)
@@ -2712,7 +2719,7 @@ class CharacterManager():
         target.receive_pierce_damage(mod_damage, self)
 
         if target.has_effect(EffectType.UNIQUE, "Thunder Palace"):
-            self.receive_eff_damage(mod_damage, self)
+            self.receive_eff_damage(mod_damage, target.get_effect(EffectType.UNIQUE, "Thunder Palace"))
             target.full_remove_effect("Thunder Palace", target)
         if target.has_effect(EffectType.UNIQUE, "Burning Axle"):
             user = target.get_effect(EffectType.UNIQUE, "Burning Axle").user
@@ -2722,7 +2729,6 @@ class CharacterManager():
                        lambda eff: "This character is stunned."))
             user.check_on_stun(target)
 
-        self.check_on_damage_dealt(target)
 
     def receive_pierce_damage(self, damage: int, dealer: "CharacterManager"):
         mod_damage = damage
@@ -2762,22 +2768,14 @@ class CharacterManager():
 
         mod_damage = self.pass_through_dest_def(mod_damage)
 
-        if mod_damage < 0:
-            mod_damage = 0
-
-        self.source.hp -= mod_damage
-        if mod_damage > 0:
-            self.damage_taken_check(mod_damage)
-
+        self.apply_active_damage_taken(mod_damage, dealer)
         self.death_check(dealer)
 
-    def deal_eff_pierce_damage(self, damage: int, target: "CharacterManager"):
+    def deal_eff_pierce_damage(self, damage: int, target: "CharacterManager", source: Effect):
         damage = self.get_boosts(damage)
-        target.receive_eff_pierce_damage(damage, self)
-        self.check_on_damage_dealt(target)
+        target.receive_eff_pierce_damage(damage, source)
 
-    def receive_eff_pierce_damage(self, damage: int,
-                                  dealer: "CharacterManager"):
+    def receive_eff_pierce_damage(self, damage: int, source: Effect):
         mod_damage = damage
 
         if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
@@ -2815,13 +2813,8 @@ class CharacterManager():
                         "Selfless Genius").user.source.current_effects.append(
                             temp_yatsufusa_storage)
         mod_damage = self.pass_through_dest_def(mod_damage)
-        if mod_damage < 0:
-            mod_damage = 0
-        self.source.hp -= mod_damage
-        if mod_damage > 0:
-            self.damage_taken_check(mod_damage)
-
-        self.death_check(dealer)
+        self.apply_eff_damage_taken(mod_damage, source)
+        self.death_check(source.user)
 
     def deal_aff_damage(self, damage: int, target: "CharacterManager"):
         #TODO check for affliction boosts
@@ -2835,7 +2828,7 @@ class CharacterManager():
             target.receive_aff_dmg(damage, self)
 
             if target.has_effect(EffectType.UNIQUE, "Thunder Palace"):
-                self.receive_eff_damage(damage, self)
+                self.receive_eff_damage(damage, target.get_effect(EffectType.UNIQUE, "Thunder Palace"))
                 target.full_remove_effect("Thunder Palace", target)
             if target.has_effect(EffectType.UNIQUE, "Burning Axle"):
                 user = target.get_effect(EffectType.UNIQUE,
@@ -2846,7 +2839,6 @@ class CharacterManager():
                            2, lambda eff: "This character is stunned."))
                 user.check_on_stun(target)
 
-            self.check_on_damage_dealt(target)
 
     def receive_aff_dmg(self, damage: int, dealer: "CharacterManager"):
         #TODO add affliction damage received boosts
@@ -2887,22 +2879,15 @@ class CharacterManager():
                         "Selfless Genius").user.source.current_effects.append(
                             temp_yatsufusa_storage)
 
-        if mod_damage < 0:
-            mod_damage = 0
-        self.source.hp -= mod_damage
-
-        if mod_damage > 0:
-            self.damage_taken_check(mod_damage)
-
+        self.apply_active_damage_taken(mod_damage, dealer)
         self.death_check(dealer)
 
-    def deal_eff_aff_damage(self, damage: int, target: "CharacterManager"):
+    def deal_eff_aff_damage(self, damage: int, target: "CharacterManager", source: Effect):
         #TODO add affliction damage boosts
         if not target.is_aff_immune():
-            target.receive_eff_aff_damage(damage, self)
-            self.check_on_damage_dealt(target)
+            target.receive_eff_aff_damage(damage, source)
 
-    def receive_eff_aff_damage(self, damage: int, dealer: "CharacterManager"):
+    def receive_eff_aff_damage(self, damage: int, source):
         #TODO add affliction damage received boosts
         mod_damage = damage
 
@@ -2940,14 +2925,44 @@ class CharacterManager():
                         "Selfless Genius").user.source.current_effects.append(
                             temp_yatsufusa_storage)
 
-        if mod_damage < 0:
-            mod_damage = 0
+        self.apply_eff_damage_taken(mod_damage, source)
+
+        self.death_check(source.user)
+
+    def receive_system_aff_damage(self, damage: int):
+        if not self.is_aff_immune():
+            mod_damage = damage
+        else:
+            mod_damage = 0    
         self.source.hp -= mod_damage
+        self.death_check(self)
 
-        if mod_damage > 0:
-            self.damage_taken_check(mod_damage)
+    def apply_eff_damage_taken(self, damage: int, source: "Effect"):
+        if damage < 0:
+            damage = 0
 
-        self.death_check(dealer)
+        self.source.hp -= damage
+
+        if damage > 0:
+            self.eff_damage_taken_check(damage, source)
+            #region Effect damage-based mission checks
+
+            #endregion
+
+    def apply_active_damage_taken(self, damage: int, dealer: "CharacterManager"):
+        if damage < 0:
+            damage = 0
+
+
+        
+        self.source.hp -= damage
+
+        if damage > 0:
+            self.damage_taken_check(damage, dealer)
+            dealer.check_on_damage_dealt(self, damage)
+            #region Damage-based mission checks
+
+            #endregion
 
     def get_boosts(self, damage: int) -> int:
         mod_damage = damage
@@ -3197,7 +3212,119 @@ class CharacterManager():
             break
         return output
 
-    def damage_taken_check(self, damage: int):
+    def eff_damage_taken_check(self, damage: int, source: "CharacterManager"):
+        if self.source.name == "seiryu" and self.source.hp < 30:
+            self.add_effect(
+                Effect(
+                    Ability("seiryualt1"),
+                    EffectType.ABILITY_SWAP,
+                    self,
+                    280000,
+                    lambda eff:
+                    "Body Modification - Arm Gun has been replaced by Body Modification - Self Destruct.",
+                    mag=11))
+        if self.has_effect(EffectType.MARK, "To The Extreme!"):
+            extreme = self.get_effect(EffectType.MARK, "To The Extreme!")
+            extreme.alter_mag(damage)
+            if extreme.mag >= 20:
+                stacks = extreme.mag // 20
+                extreme.alter_mag(-(stacks * 20))
+                self.apply_stack_effect(
+                    Effect(
+                        Ability("ryohei1"),
+                        EffectType.STACK,
+                        self,
+                        280000,
+                        lambda eff:
+                        f"Maximum Cannon will deal {eff.mag * 15} more damage and cost {eff.mag} more random energy.",
+                        mag=stacks), self)
+                self.apply_stack_effect(
+                    Effect(
+                        Ability("ryohei2"),
+                        EffectType.STACK,
+                        self,
+                        280000,
+                        lambda eff:
+                        f"Kangaryu will heal {eff.mag * 20} more health and cost {eff.mag} more random energy.",
+                        mag=stacks), self)
+        if self.has_effect(EffectType.MARK,
+                    "You Are Needed") and self.source.hp < 30:
+            self.full_remove_effect("You Are Needed", self)
+            src = Ability("chrome1")
+            self.add_effect(
+                Effect(
+                    src,
+                    EffectType.PROF_SWAP,
+                    self,
+                    280000,
+                    lambda eff:
+                    "Rokudou Mukuro has intervened, replacing Chrome for the rest of the match.",
+                    mag=1))
+            self.add_effect(
+                Effect(src,
+                    EffectType.ABILITY_SWAP,
+                    self,
+                    280000,
+                    lambda eff:
+                    "You Are Needed has been replaced by Trident Combat.",
+                    mag=11))
+            self.add_effect(
+                Effect(
+                    src,
+                    EffectType.ABILITY_SWAP,
+                    self,
+                    280000,
+                    lambda eff:
+                    "Illusory Breakdown has been replaced by Illusory World Destruction.",
+                    mag=22))
+            self.add_effect(
+                Effect(
+                    src,
+                    EffectType.ABILITY_SWAP,
+                    self,
+                    280000,
+                    lambda eff:
+                    "Mental Immolation has been replaced by Mental Annihilation.",
+                    mag=33))
+            self.add_effect(
+                Effect(
+                    src,
+                    EffectType.ABILITY_SWAP,
+                    self,
+                    280000,
+                    lambda eff:
+                    "Mental Substitution has been replaced by Trident Deflection.",
+                    mag=44))
+            if self.has_effect(EffectType.DEST_DEF, "Illusory Breakdown"):
+                self.remove_effect(
+                    self.get_effect(EffectType.DEST_DEF, "Illusory Breakdown"))
+            if self.has_effect(EffectType.DEST_DEF, "Mental Immolation"):
+                self.remove_effect(
+                    self.get_effect(EffectType.DEST_DEF, "Mental Immolation"))
+            for manager in self.scene.enemy_display.team.character_managers:
+                if manager.has_effect(
+                        EffectType.MARK,
+                        "Illusory Breakdown") and manager.get_effect(
+                            EffectType.MARK,
+                            "Illusory Breakdown").user == self:
+                    manager.remove_effect(
+                        manager.get_effect(EffectType.MARK,
+                                        "Illusory Breakdown"))
+                if manager.has_effect(
+                        EffectType.MARK,
+                        "Mental Immolation") and manager.get_effect(
+                            EffectType.MARK, "Mental Immolation").user == self:
+                    manager.remove_effect(
+                        manager.get_effect(EffectType.MARK,
+                                        "Mental Immolation"))
+        if self.has_effect(EffectType.CONT_AFF_DMG, "Susano'o"):
+            if self.source.hp < 20 or self.get_effect(EffectType.DEST_DEF,
+                                                      "Susano'o").mag <= 0:
+                self.full_remove_effect("Susano'o", self)
+
+        
+
+    def damage_taken_check(self, damage: int, damager: "CharacterManager"):
         if self.has_effect(EffectType.UNIQUE, "In The Name Of Ruler!"):
             for manager in self.scene.player_display.team.character_managers:
                 if manager.has_effect_with_user(EffectType.ALL_STUN,
@@ -3353,7 +3480,10 @@ class CharacterManager():
                 self.source.hp = 35
             else:
                 #region Killing Blow Mission Check
-
+                if "naruto" in self.scene.missions_to_check:
+                    if targeter.source.name == "naruto":
+                        if targeter.has_effect(EffectType.ALL_INVULN, "Sage Mode"):
+                            targeter.source.mission3progress += 1
                 #endregion
                 if self.has_effect(EffectType.MARK, "Beast Instinct"):
                     if targeter == self.get_effect(EffectType.MARK,

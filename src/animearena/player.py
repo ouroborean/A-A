@@ -19,7 +19,7 @@ class Player:
             mission_data = mission_set.split("/")
             mission_dict[mission_data[0]] = []
             for i in range(5):
-                mission_dict[mission_data[0]].append(mission_data[i+1])
+                mission_dict[mission_data[0]].append(int(mission_data[i+1]))
         return mission_dict
 
 

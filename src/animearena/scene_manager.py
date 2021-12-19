@@ -105,10 +105,17 @@ class SceneManager:
         self.set_scene_to_current(self.char_select)
         self.char_select.settle_player(username, wins, losses, mission_data, ava_code)
 
+    def package_mission_data(self, mission_data) -> str:
+        mission_strings = []
+        for name, nums in mission_data.items():
+            mission_strings.append(f"{name}/{nums[0]}/{nums[1]}/{nums[2]}/{nums[3]}/{nums[4]}")
+        mission_string = "|".join(mission_strings)
+        return mission_string
+
     def return_to_select(self, player):
         self.change_window_size(800, 700)
         self.set_scene_to_current(self.char_select)
-        self.char_select.settle_player(player.name, player.wins, player.losses, player.mission_data)
+        self.char_select.settle_player(player.name, player.wins, player.losses, self.package_mission_data(player.missions))
 
     def start_battle(self, player_team, enemy_team, player, enemy, energy):
         self.play_sound(self.sounds["game_start"])

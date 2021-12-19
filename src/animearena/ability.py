@@ -954,7 +954,7 @@ def exe_luna(user: "CharacterManager", playerTeam: list["CharacterManager"], ene
     if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.id < 3:
-                hostile_effects = [eff for eff in target.source.current_effects if eff.user.is_enemy()]
+                hostile_effects = [eff for eff in target.source.current_effects if eff.user.is_enemy() and not eff.system]
                 if hostile_effects:
                     num = randint(0, len(hostile_effects) - 1)
                     print(f"Removing effect at index {num}")
@@ -1880,7 +1880,7 @@ def exe_susanoo(user: "CharacterManager", playerTeam: list["CharacterManager"], 
     user.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 280000, lambda eff: "Itachi will take 10 affliction damage. If his health falls below 20 or Susano'o's destructible defense is destroyed, Susano'o will end.", mag=10))
     user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Amaterasu has been replaced by Totsuka Blade.", mag=11))
     user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Tsukuyomi has been replaced by Yata Mirror.", mag=22))
-    user.receive_eff_aff_damage(10, user)
+    user.receive_system_aff_damage(10)
     user.check_on_use()
 
 def exe_crow_genjutsu(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
@@ -1899,7 +1899,7 @@ def exe_totsuka_blade(user: "CharacterManager", playerTeam: list["CharacterManag
 
 def exe_yata_mirror(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.get_effect(EffectType.DEST_DEF, "Susano'o").alter_dest_def(20)
-    user.receive_eff_aff_damage(5, user)
+    user.receive_system_aff_damage(5)
     user.check_on_use()
 #endregion
 #region Jiro Execution
@@ -2496,7 +2496,7 @@ def exe_smash(user: "CharacterManager", playerTeam: list["CharacterManager"], en
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(45, target)
-                user.receive_eff_aff_damage(20, user)
+                user.receive_system_aff_damage(20)
                 user.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 3, lambda eff: "This character is stunned."))
         user.check_on_use()
         user.check_on_harm()
@@ -2616,7 +2616,7 @@ def exe_blood_suppression_removal(user: "CharacterManager", playerTeam: list["Ch
     user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 5, lambda eff: "Mirai's abilities cause their target to receive 10 affliction damage for 2 turns."))
     user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 5, lambda eff: "Blood Suppression Removal has been replaced by Blood Bullet.", mag = 11))
     user.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 5, lambda eff: "Mirai will take 10 affliction damage.", mag=10))
-    user.receive_eff_aff_damage(10, user)
+    user.receive_eff_aff_damage(10, user.get_effect(EffectType.MARK, "Blood Suppression Removal"))
     user.check_on_use()
 
 def exe_blood_sword_combat(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
@@ -2625,7 +2625,7 @@ def exe_blood_sword_combat(user: "CharacterManager", playerTeam: list["Character
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(30, target)
                 if user.has_effect(EffectType.MARK, "Blood Suppression Removal"):
-                    user.deal_eff_aff_damage(10, target)
+                    user.deal_eff_aff_damage(10, target, user.get_effect(EffectType.MARK, "Blood Suppression Removal"))
                     target.add_effect(Effect(Ability("mirai1"), EffectType.CONT_AFF_DMG, user, 3, lambda eff: "This character will take 10 affliction damage.", mag = 10))
         user.check_on_use()
         user.check_on_harm()
@@ -2634,7 +2634,7 @@ def exe_blood_shield(user: "CharacterManager", playerTeam: list["CharacterManage
     user.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 2, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag = 20))
     user.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 2, lambda eff: f"This character has {eff.mag} points of damage reduction.", mag = 20))
     if user.has_effect(EffectType.MARK, "Blood Suppression Removal"):
-        user.receive_eff_aff_damage(10, user)
+        user.receive_eff_aff_damage(10, user.get_effect(EffectType.MARK, "Blood Suppression Removal"))
         user.add_effect(Effect(Ability("mirai1"), EffectType.CONT_AFF_DMG, user, 3, lambda eff: "This character will take 10 affliction damage.", mag = 10))
     user.check_on_use()
     
@@ -2650,7 +2650,7 @@ def exe_blood_bullet(user: "CharacterManager", playerTeam: list["CharacterManage
                 user.deal_aff_damage(10, target)
                 target.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 3, lambda eff: "This character will take 10 affliction damage.", mag = 10))
                 if user.has_effect(EffectType.MARK, "Blood Suppression Removal"):
-                    user.deal_eff_aff_damage(10, target)
+                    user.deal_eff_aff_damage(10, target, user.get_effect(EffectType.MARK, "Blood Suppression Removal"))
                     target.add_effect(Effect(Ability("mirai1"), EffectType.CONT_AFF_DMG, user, 3, lambda eff: "This character will take 10 affliction damage.", mag = 10))
         user.check_on_use()
         user.check_on_harm()
@@ -2808,7 +2808,7 @@ def exe_fire_dragons_iron_fist(user: "CharacterManager", playerTeam: list["Chara
             if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                 user.deal_damage(15, target)
                 if target.has_effect(EffectType.CONT_AFF_DMG, "Fire Dragon's Roar") or target.has_effect(EffectType.CONT_AFF_DMG, "Fire Dragon's Sword Horn"):
-                    user.deal_eff_aff_damage(10, target)
+                    user.deal_aff_damage(10, target)
         user.check_on_use()
         user.check_on_harm()
 
@@ -2874,7 +2874,7 @@ nemurin_sleep_messages = [ "Nemurin is dozing off.", "Nemurin is fully asleep.",
 
 def exe_nemurin_nap(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "Nemurin has entered the dream world, allowing the use of her abilities."))
-    user.add_effect(Effect(user.used_ability, EffectType.CONT_UNIQUE, user, 280000, lambda eff: "Every turn her sleep grows one stage deeper, improving her abilities. If Nemurin takes non-absorbed damage, she loses one stage of sleep depth.", mag = 1))
+    user.add_effect(Effect(user.used_ability, EffectType.CONT_UNIQUE, user, 280000, lambda eff: "Every turn her sleep grows one stage deeper, improving her abilities. If Nemurin takes new, non-absorbed damage, she loses one stage of sleep depth.", mag = 1))
     user.add_effect(Effect(user.used_ability, EffectType.CONT_HEAL, user, 280000, lambda eff: "Nemurin will heal 10 health.", mag = 10))
     user.receive_eff_healing(10)
     user.check_on_use()
@@ -3106,7 +3106,7 @@ def exe_in_the_name_of_ruler(user: "CharacterManager", playerTeam: list["Charact
             if target.final_can_effect(user.check_bypass_effects()):
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 6, lambda eff: "This character is stunned."))
                 user.check_on_stun(target)
-        user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 5, lambda eff: "In The Name Of Ruler! will end if Ruler is damaged."))
+        user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 5, lambda eff: "In The Name Of Ruler! will end if Ruler takes new damage."))
         user.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 5, lambda eff: "Ruler is stunned."))
         user.check_on_use()
         user.check_on_harm()
@@ -3590,7 +3590,7 @@ def exe_mental_out(user: "CharacterManager", playerTeam: list["CharacterManager"
 
 
 def exe_exterior(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    user.receive_eff_aff_damage(25, user)
+    user.receive_system_aff_damage(25)
     user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 9, lambda eff: "Mental Out lasts 1 more turn."))
     user.add_effect(Effect(user.used_ability, EffectType.COST_ADJUST, user, 9, lambda eff: "Mental Out costs 1 less mental energy.", mag = -131))
     user.check_on_use()
@@ -5385,7 +5385,7 @@ ability_info_db = {
         "Nemurin Nap",
         "Nemurin heads for the dream world, enabling the use of her other abilities. Every turn, her sleep grows one stage deeper. While dozing, Nemurin heals "
         +
-        "10 health per turn. While fully asleep, Nemurin Beam and Dream Manipulation cost one less random energy. While deeply asleep, Nemurin Beam and Dream Manipulation become area-of-effect. When Nemurin takes non-absorbed damage, she loses one stage of sleep depth.",
+        "10 health per turn. While fully asleep, Nemurin Beam and Dream Manipulation cost one less random energy. While deeply asleep, Nemurin Beam and Dream Manipulation become area-of-effect. When Nemurin takes new, non-absorbed damage, she loses one stage of sleep depth.",
         [0, 0, 0, 0, 1, 2], Target.SINGLE,
         default_target("SELF", lockout=(EffectType.MARK, "Nemurin Nap")), exe_nemurin_nap
     ],
@@ -5512,7 +5512,7 @@ ability_info_db = {
     ],
     "ruler1": [
         "In The Name Of Ruler!",
-        "Ruler stuns one enemy and herself for 3 turns. This skill cannot be used while active and will end if Ruler is damaged.",
+        "Ruler stuns one enemy and herself for 3 turns. This skill cannot be used while active and will end if Ruler receives new damage.",
         [0, 0, 1, 0, 0, 2], Target.SINGLE,
         default_target("HOSTILE",
                        lockout=(EffectType.MARK, "In The Name Of Ruler!")), exe_in_the_name_of_ruler
@@ -5627,13 +5627,13 @@ ability_info_db = {
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
         default_target("SELF"), exe_koro_defense
     ],
-    "seiryualt1": [
+    "seryualt1": [
         "Body Modification - Self Destruct",
         "Seryu deals 30 damage to all enemies. After using this ability, Seryu dies. Effects that prevent death cannot prevent Seryu from dying. This ability cannot be countered.",
         [0, 0, 0, 0, 2, 0], Target.MULTI_ENEMY,
         default_target("HOSTILE"), exe_self_destruct
     ],
-    "seiryualt2": [
+    "seryualt2": [
         "Insatiable Justice",
         "Koro instantly kills one enemy that is below 30 health. Effects that prevent death cannot prevent this ability.",
         [0, 0, 0, 0, 2, 5], Target.SINGLE, target_insatiable_justice, exe_insatiable_justice

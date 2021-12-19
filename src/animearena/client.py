@@ -11,7 +11,7 @@ from animearena.player import Player
 from typing import Callable
 from PIL import Image
 
-VERSION = "0.9.2"
+VERSION = "0.9.3"
 
 class ConnectionHandler:
 
@@ -169,6 +169,11 @@ class ConnectionHandler:
         buffer.write_int(5)
         buffer.write_int(player.wins)
         buffer.write_int(player.losses)
+        mission_strings = []
+        for name, nums in player.missions.items():
+            mission_strings.append(f"{name}/{nums[0]}/{nums[1]}/{nums[2]}/{nums[3]}/{nums[4]}")
+        mission_string = "|".join(mission_strings)
+        buffer.write_string(mission_string)
         buffer.write_byte(b'\x1f\x1f\x1f')
         self.writer.write(buffer.get_byte_array())
 
