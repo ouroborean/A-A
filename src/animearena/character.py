@@ -51,6 +51,12 @@ class Character:
     mission3progress: int
     mission4progress: int
     mission5progress: int
+    mission1complete: bool
+    mission2complete: bool
+    mission3complete: bool
+    mission4complete: bool
+    mission5complete: bool
+    
     
 
     def __init__(self, name:str, desc:str = None):
@@ -78,6 +84,11 @@ class Character:
         self.mission3progress = 0
         self.mission4progress = 0
         self.mission5progress = 0
+        self.mission1complete = False
+        self.mission2complete = False
+        self.mission3complete = False
+        self.mission4complete = False
+        self.mission5complete = False
         self.main_abilities = [Ability(f"{name}{i + 1}") for i in range(4)]
         self.current_abilities = self.main_abilities
         self.alt_abilities = []
@@ -110,6 +121,8 @@ character_db = {"naruto": Character("naruto", "Uzumaki Naruto, a former outcast 
                 "as her six flowers, the Shun Shun Rikka. Using this innate gift, she can reject the natural state of the world in a myriad of ways."),
                 "rukia": Character("rukia", "Kuchiki Rukia, the shinigami originally charged with the protection of Karakura town. After recovering in the Soul Society, " +
                 "Rukia gains her original shinigami powers back, returning her ability to call on Sode no Shirayuki, a powerful ice-type zanpakutou."),
+                "byakuya": Character("byakuya", "Kuchiki Byakuya, Captain of the Gotei 13's 6th Squad. The elder brother of Kuchiki Rukia, Byakuya is a ruthless shinigami who follows his code of ethics to the letter, " +
+                "which eventually leads him to a clash with Kurosaki Ichigo. Byakuya is a master of Kido, and can use his zanpakutou to deliver a barrage of attacks with tiny, nearly invisible blades."),
                 "ichimaru": Character("ichimaru","Ichimaru Gin, the Captain of the Gotei 13's 3rd Squad. A sly, cunning shinigami, no one knows what's going on behind Ichimaru's stoic, grinning mask. Until the moment that he strikes, " +
                 "there isn't a soul alive that can tell what Ichimaru is going to do."),
                 "aizen": Character("aizen", "Sousuke Aizen, the betrayer of Soul Society. A shinigami of incredible power, Aizen's overwhelming strength and cunning are only augmented by his Zanpakutou's ability to control his enemies five senses."),

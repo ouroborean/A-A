@@ -5,11 +5,17 @@ import os
 import pathlib
 import sys
 import requests
+from animearena import mission
 from animearena.byte_buffer import ByteBuffer
 from animearena.character import Character, character_db
 from animearena.player import Player
 from typing import Callable
 from PIL import Image
+import typing
+
+if typing.TYPE_CHECKING:
+    from animearena.scene_manager import SceneManager
+
 
 VERSION = "0.9.3"
 
@@ -19,6 +25,7 @@ class ConnectionHandler:
     waiting_for_opponent: bool
     waiting_for_login: bool
     waiting_for_registration: bool
+    scene_manager: "SceneManager"
 
     def __init__(self, scene_manager):
         self.waiting_for_registration = False
@@ -91,6 +98,14 @@ class ConnectionHandler:
         buffer.clear()
 
     def handle_surrender_notification(self, data:list[bytes]):
+        buffer = ByteBuffer()
+        buffer.write_bytes(data)
+        buffer.read_int()
+        mission_packages = []
+        for _ in range(3):
+            mission_package = [buffer.read_int() for i in range(5)]
+            mission_packages.append(mission_package)
+        self.scene_manager.battle_scene.ingest_mission_packages(mission_packages)
         self.scene_manager.battle_scene.win_game(surrendered = True)
 
     def send_message(self, message: str):
@@ -108,9 +123,14 @@ class ConnectionHandler:
         self.writer.write(buffer.get_byte_array())
         buffer.clear()
 
-    def send_surrender(self):
+    def send_surrender(self, mission_progress_packages):
         buffer = ByteBuffer()
         buffer.write_int(6)
+
+        for mission_progress_package in mission_progress_packages:
+            for mission_progress in mission_progress_package:
+                buffer.write_int(mission_progress)
+
         buffer.write_byte(b'\x1f\x1f\x1f')
         self.writer.write(buffer.get_byte_array())
         buffer.clear()

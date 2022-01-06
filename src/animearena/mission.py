@@ -351,6 +351,10 @@ mission_db = {
                            Mission(max=30, description="Trigger the secondary effect of Narukami."),
                            Mission(max=30, description="Trigger the secondary effect of Whirlwind Rush 30 times."),
                            Mission(max=30, description="Deal killing blows while under the effect of Godspeed."),
-                           Mission(max=5, description="Win matches where Killua's secondary effects are always triggered."))
-                
+                           Mission(max=5, description="Win matches where Killua's secondary effects are always triggered.")),
+                "byakuya": (Mission(max=0, description="N/A"),
+                            Mission(max=0, description="N/A"),
+                            Mission(max=0, description="N/A"),
+                            Mission(max=0, description="N/A"),
+                            Mission(max=0, description="N/A"))
             }

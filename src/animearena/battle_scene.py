@@ -22,6 +22,10 @@ from random import randint
 from playsound import playsound
 from pathlib import Path
 from typing import Optional
+import typing
+
+if typing.TYPE_CHECKING:
+    from animearena.scene_manager import SceneManager
 
 FONT_FILENAME = "Basic-Regular.ttf"
 FONTSIZE = 16
@@ -313,8 +317,30 @@ class BattleScene(engine.Scene):
             (self.window_up and self.exchanging_energy)):
             play_sound(self.scene_manager.sounds["click"])
             self.clicked_surrender = True
-            self.scene_manager.connection.send_surrender()
+            self.scene_manager.connection.send_surrender(self.get_enemy_mission_progress_packages())
             self.lose_game()
+
+    def ingest_mission_packages(self, packages):
+        
+        for i, package in enumerate(packages):
+                self.player_display.team.character_managers[i].source.mission1progress = package[0]
+                self.player_display.team.character_managers[i].source.mission2progress = package[1]
+                self.player_display.team.character_managers[i].source.mission3progress = package[2]
+                self.player_display.team.character_managers[i].source.mission4progress = package[3]
+                self.player_display.team.character_managers[i].source.mission5progress = package[4]
+                
+
+    def get_enemy_mission_progress_packages(self) -> list[list[int]]:
+        output = []
+        for manager in self.enemy_display.team.character_managers:
+            mission_progress_package = [manager.source.mission1progress,
+                                        manager.source.mission2progress,
+                                        manager.source.mission3progress,
+                                        manager.source.mission4progress,
+                                        manager.source.mission5progress]
+            output.append(mission_progress_package)
+        return output
+            
 
     def confirm_button_click(self, _button, _sender):
         self.execution_loop()
@@ -745,6 +771,7 @@ class BattleScene(engine.Scene):
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_DMG)
             for eff in gen:
+
                 if eff.check_waiting() and self.is_allied(eff) and (
                         eff.mag > 15 or not manager.deflecting()):
                     eff.user.deal_eff_damage(eff.mag, manager, eff)
@@ -946,10 +973,15 @@ class BattleScene(engine.Scene):
             character_pouch.append(manager.source.hp)
             character_pouch.append(manager.source.energy_contribution)
             character_pouch.append(manager.source.mission1progress)
+            character_pouch.append(manager.source.mission1complete)
             character_pouch.append(manager.source.mission2progress)
+            character_pouch.append(manager.source.mission2complete)
             character_pouch.append(manager.source.mission3progress)
+            character_pouch.append(manager.source.mission3complete)
             character_pouch.append(manager.source.mission4progress)
+            character_pouch.append(manager.source.mission4complete)
             character_pouch.append(manager.source.mission5progress)
+            character_pouch.append(manager.source.mission5complete)
             for effect in manager.source.current_effects:
                 effect_pouch = []
                 effect_pouch.append(effect.eff_type.value)
@@ -959,6 +991,7 @@ class BattleScene(engine.Scene):
                 effect_pouch.append(effect.db_name)
                 effect_pouch.append(effect.user_id)
                 effect_pouch.append(effect.invisible)
+                effect_pouch.append(effect.system)
                 effect_pouch.append(effect.waiting)
                 effects_pouch.append(effect_pouch)
             character_pouch.append(effects_pouch)
@@ -970,10 +1003,15 @@ class BattleScene(engine.Scene):
             character_pouch.append(manager.source.hp)
             character_pouch.append(manager.source.energy_contribution)
             character_pouch.append(manager.source.mission1progress)
+            character_pouch.append(manager.source.mission1complete)
             character_pouch.append(manager.source.mission2progress)
+            character_pouch.append(manager.source.mission2complete)
             character_pouch.append(manager.source.mission3progress)
+            character_pouch.append(manager.source.mission3complete)
             character_pouch.append(manager.source.mission4progress)
+            character_pouch.append(manager.source.mission4complete)
             character_pouch.append(manager.source.mission5progress)
+            character_pouch.append(manager.source.mission5complete)
             for effect in manager.source.current_effects:
                 effect_pouch = []
                 effect_pouch.append(effect.eff_type.value)
@@ -983,6 +1021,7 @@ class BattleScene(engine.Scene):
                 effect_pouch.append(effect.db_name)
                 effect_pouch.append(effect.user_id)
                 effect_pouch.append(effect.invisible)
+                effect_pouch.append(effect.system)
                 effect_pouch.append(effect.waiting)
                 effects_pouch.append(effect_pouch)
             character_pouch.append(effects_pouch)
@@ -1004,29 +1043,37 @@ class BattleScene(engine.Scene):
                 i].source.energy_contribution = character_pouch[1]
             self.player_display.team.character_managers[
                 i].source.mission1progress=character_pouch[2]
+            self.player_display.team.character_managers[i].source.mission1complete = character_pouch[3]
             self.player_display.team.character_managers[
-                i].source.mission2progress=character_pouch[3]
+                i].source.mission2progress=character_pouch[4]
+            self.player_display.team.character_managers[i].source.mission1complete = character_pouch[5]
             self.player_display.team.character_managers[
-                i].source.mission3progress=character_pouch[4]
+                i].source.mission3progress=character_pouch[6]
+            self.player_display.team.character_managers[i].source.mission1complete = character_pouch[7]
             self.player_display.team.character_managers[
-                i].source.mission4progress=character_pouch[5]
+                i].source.mission4progress=character_pouch[8]
+            self.player_display.team.character_managers[i].source.mission1complete = character_pouch[9]
             self.player_display.team.character_managers[
-                i].source.mission5progress=character_pouch[6]
+                i].source.mission5progress=character_pouch[10]
+            self.player_display.team.character_managers[i].source.mission1complete = character_pouch[11]
             self.player_display.team.character_managers[
                 i].source.current_effects.clear()
-            for j, effect_pouch in enumerate(character_pouch[7]):
+            for j, effect_pouch in enumerate(character_pouch[12]):
                 if effect_pouch[5] > 2:
                     user = self.player_display.team.character_managers[
                         effect_pouch[5] - 3]
                 else:
                     user = self.enemy_display.team.character_managers[
                         effect_pouch[5]]
-
-                effect = Effect(Ability(effect_pouch[4]),
+                if effect_pouch[7] == True:
+                    source = effect_pouch[4]
+                else:
+                    source = Ability(effect_pouch[4])
+                effect = Effect(source,
                                 EffectType(effect_pouch[0]), user,
                                 effect_pouch[2], effect_pouch[3],
-                                effect_pouch[1], effect_pouch[6])
-                effect.waiting = effect_pouch[7]
+                                effect_pouch[1], effect_pouch[6], effect_pouch[7])
+                effect.waiting = effect_pouch[8]
                 self.player_display.team.character_managers[
                     i].source.current_effects.append(effect)
         for i, character_pouch in enumerate(team2pouch):
@@ -1037,28 +1084,41 @@ class BattleScene(engine.Scene):
             self.enemy_display.team.character_managers[
                 i].source.mission1progress=character_pouch[2]
             self.enemy_display.team.character_managers[
-                i].source.mission2progress=character_pouch[3]
+                i].source.mission1complete = character_pouch[3]
             self.enemy_display.team.character_managers[
-                i].source.mission3progress=character_pouch[4]
+                i].source.mission2progress=character_pouch[4]
             self.enemy_display.team.character_managers[
-                i].source.mission4progress=character_pouch[5]
+                i].source.mission2complete = character_pouch[5]
             self.enemy_display.team.character_managers[
-                i].source.mission5progress=character_pouch[6]
+                i].source.mission3progress=character_pouch[6]
+            self.enemy_display.team.character_managers[
+                i].source.mission3complete = character_pouch[7]
+            self.enemy_display.team.character_managers[
+                i].source.mission4progress=character_pouch[8]
+            self.enemy_display.team.character_managers[
+                i].source.mission4complete = character_pouch[9]
+            self.enemy_display.team.character_managers[
+                i].source.mission5progress=character_pouch[10]
+            self.enemy_display.team.character_managers[
+                i].source.mission5complete = character_pouch[11]
             self.enemy_display.team.character_managers[
                 i].source.current_effects.clear()
-            for j, effect_pouch in enumerate(character_pouch[7]):
+            for j, effect_pouch in enumerate(character_pouch[12]):
                 if effect_pouch[5] > 2:
                     user = self.player_display.team.character_managers[
                         effect_pouch[5] - 3]
                 else:
                     user = self.enemy_display.team.character_managers[
                         effect_pouch[5]]
-
-                effect = Effect(Ability(effect_pouch[4]),
+                if effect_pouch[7] == True:
+                    source = effect_pouch[4]
+                else:
+                    source = Ability(effect_pouch[4])
+                effect = Effect(source,
                                 EffectType(effect_pouch[0]), user,
                                 effect_pouch[2], effect_pouch[3],
-                                effect_pouch[1], effect_pouch[6])
-                effect.waiting = effect_pouch[7]
+                                effect_pouch[1], effect_pouch[6], effect_pouch[7])
+                effect.waiting = effect_pouch[8]
                 self.enemy_display.team.character_managers[
                     i].source.current_effects.append(effect)
         if not rejoin:
@@ -1067,15 +1127,23 @@ class BattleScene(engine.Scene):
     def tick_effect_duration(self):
         for manager in self.player_display.team.character_managers:
             for eff in manager.source.current_effects:
-                eff.tick_duration()
+
                 #region Spend Turn Under Effect Mission Check
-                if eff.name == "Uzumaki Barrage" and eff.eff_type == EffectType.ALL_STUN:
-                    if manager.is_stunned():
+                if not eff.check_waiting():
+                    if eff.name == "Uzumaki Barrage" and eff.eff_type == EffectType.ALL_STUN:
+                        if manager.is_stunned():
+                            eff.user.source.mission2progress += 1
+                    if eff.name == "Tsukuyomi" and eff.eff_type == EffectType.ALL_STUN:
                         eff.user.source.mission2progress += 1
                 if eff.name == "Shadow Clones" and eff.eff_type == EffectType.ALL_DR:
-                    print("Had Shadow Clones for a turn!")
                     eff.user.source.mission1progress += 1
+                if eff.name == "Flying Raijin" and eff.eff_type == EffectType.ALL_INVULN:
+                    eff.user.source.mission5progress += 1
                 #endregion
+                if eff.eff_type == EffectType.CONSECUTIVE_TRACKER:
+                        if not manager.has_effect(EffectType.CONSECUTIVE_BUFFER, eff.name):
+                            eff.removing = True
+                eff.tick_duration()
                 if eff.duration == 0:
                     if eff.name == "Quirk - Transform":
                         for effect in manager.source.current_effects:
@@ -1198,7 +1266,7 @@ class BattleScene(engine.Scene):
                                    2, lambda eff: f"{eff.name} has ended."))
             new_list = [
                 eff for eff in manager.source.current_effects
-                if eff.duration > 0
+                if eff.duration > 0 and not eff.removing
             ]
             manager.source.current_effects = new_list
 
@@ -1213,7 +1281,7 @@ class BattleScene(engine.Scene):
                                    2, lambda eff: f"{eff.name} has ended."))
             new_list = [
                 eff for eff in manager.source.current_effects
-                if eff.duration > 0
+                if eff.duration > 0 and not eff.removing
             ]
             manager.source.current_effects = new_list
 
@@ -1224,7 +1292,6 @@ class BattleScene(engine.Scene):
         play_sound(self.scene_manager.sounds["turnstart"])
         game_lost = True
         for manager in self.player_display.team.character_managers:
-            print(f"{manager.source} Mission 1 has {manager.source.mission1progress} progress!")
             if manager.source.hp <= 0:
                 manager.source.dead = True
             manager.refresh_character()
@@ -1233,7 +1300,6 @@ class BattleScene(engine.Scene):
 
         game_won = True
         for manager in self.enemy_display.team.character_managers:
-            print(f"{manager.source} Mission 1 has {manager.source.mission1progress} progress!")
             if manager.source.hp <= 0:
                 manager.source.dead = True
             manager.refresh_character(True)
@@ -1303,9 +1369,18 @@ class BattleScene(engine.Scene):
         play_sound(self.scene_manager.sounds["click"])
         self.scene_manager.return_to_select(self.player)
 
+    def win_game_mission_check(self):
+        for character in self.player_display.team.character_managers:
+            if "itachi" in self.missions_to_check:
+                if character.has_effect(EffectType.SYSTEM, "ItachiMission4Tracker"):
+                    character.source.mission4progress += 1
+
 
     def win_game(self, surrendered=False):
         self.player.wins += 1
+
+        self.win_game_mission_check()
+
         for i in range(3):
             self.player.missions[self.player_display.team.character_managers[i].source.name][0] += self.player_display.team.character_managers[i].source.mission1progress
             self.player.missions[self.player_display.team.character_managers[i].source.name][1] += self.player_display.team.character_managers[i].source.mission2progress
@@ -1757,6 +1832,18 @@ class BattleScene(engine.Scene):
                 if manager.targeted:
                     self.acting_character.add_current_target(manager)
                     manager.add_received_ability(self.selected_ability)
+        elif self.selected_ability.target_type == Target.MULTI_EITHER:
+            self.selected_ability.primary_target = primary_target
+            if primary_target in self.player_display.team.character_managers:
+                for manager in self.player_display.team.character_managers:
+                    if manager.targeted:
+                        self.acting_character.add_current_target(manager)
+                        manager.add_received_ability(self.selected_ability)
+            elif primary_target in self.enemy_display.team.character_managers:
+                for manager in self.enemy_display.team.character_managers:
+                    if manager.targeted:
+                        self.acting_character.add_current_target(manager)
+                        manager.add_received_ability(self.selected_ability)
         self.reset_targeting()
         self.acting_character.primary_target = primary_target
         self.selected_ability.user = self.acting_character
@@ -3178,12 +3265,23 @@ class CharacterManager():
                if eff.eff_type == EffectType.DEST_DEF)
         for eff in gen:
             current_def = eff.mag
+            self.check_for_absorb_missions(eff, dmg)
             eff.alter_dest_def(-dmg)
             self.check_for_collapsing_dest_def(eff)
             dmg = engine.sat_subtract(current_def, dmg)
             if dmg == 0:
                 return dmg
         return dmg
+
+    def check_for_absorb_missions(self, eff: Effect, damage: int):
+        if eff.mag > damage:
+            progress = damage
+        else:
+            progress = eff.mag
+        
+        if "itachi" in self.scene.missions_to_check:
+            if self.source.name == "itachi" and eff.name == "Susano'o":
+                self.source.mission5progress += progress
 
     def can_act(self) -> bool:
         if self.is_stunned():
@@ -3212,7 +3310,12 @@ class CharacterManager():
             break
         return output
 
-    def eff_damage_taken_check(self, damage: int, source: "CharacterManager"):
+    def eff_damage_taken_check(self, damage: int, source: "Effect"):
+
+        if "naruto" in self.scene.missions_to_check:
+            if not self.has_effect(EffectType.SYSTEM, "NarutoMission5Tracker") and source.name != "Rasengan":
+                self.add_effect(Effect("NarutoMission5Tracker", EffectType.SYSTEM, source.user, 280000, lambda eff: "", system = True))
+
         if self.source.name == "seiryu" and self.source.hp < 30:
             self.add_effect(
                 Effect(
@@ -3321,10 +3424,18 @@ class CharacterManager():
             if self.source.hp < 20 or self.get_effect(EffectType.DEST_DEF,
                                                       "Susano'o").mag <= 0:
                 self.full_remove_effect("Susano'o", self)
+                if not self.has_effect(EffectType.SYSTEM, "ItachiMission4Tracker"):
+                    self.add_effect(Effect("ItachiMission4Tracker", EffectType.SYSTEM, self, 280000, lambda eff:"", system = True))
+
 
         
 
     def damage_taken_check(self, damage: int, damager: "CharacterManager"):
+
+        if "naruto" in self.scene.missions_to_check:
+            if not self.has_effect(EffectType.SYSTEM, "NarutoMission5Tracker") and damager.used_ability.name != "Rasengan":
+                self.add_effect(Effect("NarutoMission5Tracker", EffectType.SYSTEM, damager, 280000, lambda eff: "", system = True))
+
         if self.has_effect(EffectType.UNIQUE, "In The Name Of Ruler!"):
             for manager in self.scene.player_display.team.character_managers:
                 if manager.has_effect_with_user(EffectType.ALL_STUN,
@@ -3463,9 +3574,15 @@ class CharacterManager():
             if self.source.hp < 20 or self.get_effect(EffectType.DEST_DEF,
                                                       "Susano'o").mag <= 0:
                 self.full_remove_effect("Susano'o", self)
+                if not self.has_effect(EffectType.SYSTEM, "ItachiMission4Tracker"):
+                    self.add_effect(Effect("ItachiMission4Tracker", EffectType.SYSTEM, self, 280000, lambda eff:"", system = True))
+
 
     def deflecting(self) -> bool:
         return self.has_effect(EffectType.MARK, "Flashing Deflection")
+
+    def mission_active(self, name: str, character: "CharacterManager") -> bool:
+        return name in self.scene.missions_to_check and character.source.name == name
 
     def death_check(self, targeter: "CharacterManager"):
 
@@ -3480,10 +3597,20 @@ class CharacterManager():
                 self.source.hp = 35
             else:
                 #region Killing Blow Mission Check
-                if "naruto" in self.scene.missions_to_check:
-                    if targeter.source.name == "naruto":
-                        if targeter.has_effect(EffectType.ALL_INVULN, "Sage Mode"):
-                            targeter.source.mission3progress += 1
+                if self.mission_active("naruto", targeter):
+                    if targeter.has_effect(EffectType.ALL_INVULN, "Sage Mode"):
+                        targeter.source.mission3progress += 1
+                    if targeter.used_ability.name == "Rasengan" and not self.has_effect(EffectType.SYSTEM, "NarutoMission5Tracker"):
+                        targeter.source.mission5progress += 1
+                if self.mission_active("itachi", targeter):
+                    if targeter.has_effect(EffectType.DEST_DEF, "Susano'o"):
+                        targeter.source.mission3progress += 1
+                if self.mission_active("minato", targeter):
+                    if targeter.used_ability.name == "Flying Raijin":
+                        targeter.source.mission2progress += 1
+                if self.mission_active("neji", targeter):
+                    if targeter.used_ability.name == "Eight Trigrams - Mountain Crusher" and self.check_invuln():
+                        targeter.source.mission1progress += 1
                 #endregion
                 if self.has_effect(EffectType.MARK, "Beast Instinct"):
                     if targeter == self.get_effect(EffectType.MARK,

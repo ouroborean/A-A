@@ -1,6 +1,8 @@
 import enum
 import typing
 
+from typing import Optional, Union
+
 import sdl2
 import sdl2.ext
 
@@ -60,13 +62,16 @@ class EffectType(enum.IntEnum):
     AFF_IMMUNE = 45
     INVIS_END = 46
     COUNTER_IMMUNE = 47
+    SYSTEM = 48
+    CONSECUTIVE_TRACKER = 49
+    CONSECUTIVE_BUFFER = 50
 
 
 class Effect:
     eff_type: EffectType
     mag: int
     duration: int
-    source: "Ability"
+    source: Union["Ability", str]
     user: "CharacterManager"
     eff_img: sdl2.SDL_Surface
     name: str
@@ -74,9 +79,10 @@ class Effect:
     user_id: int
     invisible: bool
     system: bool
+    removing: bool
 
     def __init__(self,
-                 source: "Ability",
+                 source: Union["Ability", str],
                  eff_type: EffectType,
                  user: "CharacterManager",
                  duration: int,
@@ -87,17 +93,22 @@ class Effect:
         self.eff_type = eff_type
         self.mag = mag
         self.duration = duration
-        self.name = source.name
-        self.db_name = source.db_name
-        self.source = source
+        if type(source) == str:
+            self.name = source
+            self.db_name = source
+        else:
+            self.name = source.name
+            self.db_name = source.db_name
+            self.source = source
+            self.eff_img = source.image
         self.user = user
         self.user_id = self.user.id
         self.desc = desc
         self.lambda_string = self.get_desc()
-        self.eff_img = source.image
         self.waiting = True
         self.invisible = invisible
         self.system = system
+        self.removing = False
 
     def get_desc(self) -> str:
         return self.desc(self)

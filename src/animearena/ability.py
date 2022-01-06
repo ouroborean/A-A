@@ -12,6 +12,7 @@ import os
 import importlib.resources
 
 from sdl2.ext import pixelaccess
+from animearena import mission
 from animearena.effects import EffectType, Effect
 
 def get_path(file_name: str) -> Path:
@@ -37,6 +38,7 @@ class Target(enum.IntEnum):
     MULTI_ENEMY = 1
     MULTI_ALLY = 2
     ALL_TARGET = 3
+    MULTI_EITHER = 4
 
 
 @enum.unique
@@ -828,7 +830,9 @@ def exe_uzumaki_barrage(user: "CharacterManager", playerTeam: list["CharacterMan
                 user.deal_damage(base_damage, target)
                 if user.has_effect(EffectType.MARK, "Uzumaki Barrage"):
                     target.add_effect(Effect(Ability("narutoalt2"), EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                    user.check_on_stun(target)
+                    if user.is_stunned():
+                        user.source.mission2progress += 1
+                        user.check_on_stun(target)
             user.add_effect(Effect(Ability("narutoalt2"), EffectType.MARK, user, 3, lambda eff: "Uzumaki Barrage will stun its target for one turn."))
         
         user.check_on_use()
@@ -839,6 +843,21 @@ def exe_toad_taijutsu(user: "CharacterManager", playerTeam: list["CharacterManag
         base_damage = 35
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
+
+                #region Naruto Mission 4 handling
+                if not target.has_effect(EffectType.SYSTEM, "NarutoMission4Tracker"):
+                    target.add_effect(Effect("NarutoMission4Tracker", EffectType.SYSTEM, user, 280000, lambda eff: "", system = True))
+                    
+                    if not user.source.mission4complete:
+                        mission_complete = True
+                        for enemy in enemyTeam:
+                            if not enemy.has_effect(EffectType.SYSTEM, "NarutoMission4Tracker"):
+                                mission_complete = False
+                        if mission_complete:
+                            user.source.mission4progress += 1
+                            user.source.mission4complete = True
+                #endregion
+                
                 user.deal_damage(base_damage, target)
                 target.add_effect(Effect(Ability("narutoalt3"), EffectType.COST_ADJUST, user, 4, lambda eff: "This character's ability costs have been increased by 2 random energy.", mag=52))
         user.check_on_use()
@@ -972,6 +991,68 @@ def exe_luna(user: "CharacterManager", playerTeam: list["CharacterManager"], ene
 
 def exe_kosmos(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Astolfo is invulnerable."))
+    user.check_on_use()
+
+#endregion
+#region Byakuya Execution
+
+def exe_scatter(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered(playerTeam, enemyTeam):
+        base_power = 25
+        helped = False
+        harmed = False
+        for target in user.current_targets:
+            if target.id < 3 and target.helpful_target(user, user.check_bypass_effects()):
+                target.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 2, lambda eff: f"This character has {eff.mag} destructible defense.", mag = 25))
+                helped = True
+            elif target.id > 2 and target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(base_power, target)
+        user.check_on_use()
+        if helped:
+            user.check_on_help()
+        if harmed:
+            user.check_on_harm()
+
+def exe_sixrod(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
+                if target.is_stunned():
+                    user.check_on_stun(target)
+        user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Bakudou #61 - Six-Rod Light Restraint has been replaced by Hadou #2 - Byakurai.", mag=21))
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_senbonzakura_kageyoshi(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.TARGET_SWAP, user, 5, lambda eff: "Scatter, Senbonzakura will affect all enemy or allied targets.", mag = 14))
+    user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 5, lambda eff: "Bankai - Senbonzakura Kageyoshi has been replaced by White Imperial Sword.", mag = 32))
+    user.check_on_use()
+
+def exe_byakurai(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    base_damage = 25
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_pierce_damage(base_damage, target)
+        user.remove_effect(user.get_effect_with_user(EffectType.ABILITY_SWAP, "Bakudou #61 - Six-Rod Light Restraint", user))
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_imperial_sword(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    base_damage = 30
+    if not user.check_countered(playerTeam, enemyTeam):
+        missing_health = 100 - user.source.hp
+        boost_mag = (missing_health // 10) * 5
+        mod_damage = base_damage + boost_mag
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_pierce_damage(mod_damage, target)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_danku(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Byakuya is invulnerable."))
     user.check_on_use()
 
 #endregion
@@ -1859,6 +1940,21 @@ def exe_amaterasu(user: "CharacterManager", playerTeam: list["CharacterManager"]
     if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+
+                #region Itachi Mission 1 Handling
+                if not target.has_effect(EffectType.SYSTEM, "ItachiMission1Handler"):
+                    target.add_effect(Effect("ItachiMission1Handler", EffectType.SYSTEM, user, 280000, lambda eff: "", system = True))
+                    if not user.source.mission1complete:
+                        mission_completed = True
+                        for enemy in enemyTeam:
+                            if not enemy.has_effect(EffectType.SYSTEM, "ItachiMission1Handler"):
+                                mission_completed = False
+                        if mission_completed:
+                            user.source.mission1complete = True
+                            user.source.mission1progress += 1
+                    
+                #endregion
+
                 user.deal_aff_damage(10, target)
                 target.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 280000, lambda eff: "This character will take 10 affliction damage.", mag=10))
         user.check_on_use()
@@ -1871,7 +1967,15 @@ def exe_tsukuyomi(user: "CharacterManager", playerTeam: list["CharacterManager"]
             if target.final_can_effect(user.check_bypass_effects()):
                 target.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 6, lambda eff: "If this character is aided by an ally, this effect will end."))
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 6, lambda eff: "This character is stunned."))
-                user.check_on_stun(target)
+                if target.is_stunned():
+
+                    #region Itachi Mission 2 Progress
+
+                    user.source.mission2progress += 1
+
+                    #endregion
+
+                    user.check_on_stun(target)
         user.check_on_use()
         user.check_on_harm()
 
@@ -2530,6 +2634,21 @@ def exe_flying_raijin(user: "CharacterManager", playerTeam: list["CharacterManag
             if target.final_can_effect("BYPASS"):
                 user.deal_pierce_damage(35, target)
                 if target.has_effect(EffectType.MARK, "Marked Kunai"):
+
+                    #region  Minato Mission 4 Check
+
+                    if not user.has_effect(EffectType.CONSECUTIVE_TRACKER, "MinatoMission4Tracker"):
+                        user.add_effect(Effect("MinatoMission4Tracker", EffectType.CONSECUTIVE_TRACKER, user, 280000, lambda eff:"", mag = 1, system=True))
+                        user.add_effect(Effect("MinatoMission4Tracker", EffectType.CONSECUTIVE_BUFFER, user, 2, lambda eff: "", system = True))
+                    elif user.get_effect(EffectType.CONSECUTIVE_TRACKER, "MinatoMission4Tracker").mag == 2:
+                        user.source.mission4progress += 1
+                        user.remove_effect(user.get_effect(EffectType.CONSECUTIVE_TRACKER, "MinatoMission4Tracker"))
+                    else:
+                        user.get_effect(EffectType.CONSECUTIVE_TRACKER, "MinatoMission4Tracker").alter_mag(1)
+                        user.add_effect(Effect("MinatoMission4Tracker", EffectType.CONSECUTIVE_BUFFER, user, 2, lambda eff: ""))
+
+                    #endregion
+
                     user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Minato is invulnerable."))
                     target.full_remove_effect("Marked Kunai", user)
                     user.used_ability.cooldown = 0
@@ -2541,7 +2660,11 @@ def exe_marked_kunai(user: "CharacterManager", playerTeam: list["CharacterManage
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                 user.deal_pierce_damage(10, target)
-                target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "This character has been marked."))
+                if not target.has_effect(EffectType.MARK, "Marked Kunai"):
+                    target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "This character has been marked."))
+                    #region Minato Mission 3 Check
+                    user.source.mission3progress += 1
+                    #endregion
         user.check_on_use()
         user.check_on_harm()
 
@@ -2549,8 +2672,17 @@ def exe_partial_shiki_fuujin(user: "CharacterManager", playerTeam: list["Charact
     if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
+
                 target.add_effect(Effect(user.used_ability, EffectType.COOLDOWN_MOD, user, 280000, lambda eff: "This character's cooldowns have been increased by 1.", mag = 1))
                 target.add_effect(Effect(user.used_ability, EffectType.COST_ADJUST, user, 280000, lambda eff: "This character's ability costs have been increased by one random.", mag = 51))
+
+        #region Minato Mission 1 Check
+
+        if user.source.hp < 20:
+            user.source.mission1progress += 1
+
+        #endregion
+
         user.check_on_use()
         user.check_on_harm()
         user.source.hp = 0
@@ -3203,7 +3335,7 @@ def exe_avalon(user: "CharacterManager", playerTeam: list["CharacterManager"], e
             if target.helpful_target(user, user.check_bypass_effects()):
                 user.give_healing(10, target)
                 target.add_effect(Effect(user.used_ability, EffectType.CONT_HEAL, user, 280000, lambda eff: "This character will heal 10 health.", mag = 10))
-                target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "This character cannot be targeted with Avalon.", system = True))
+                target.add_effect(Effect("Avalon", EffectType.MARK, user, 280000, lambda eff: "This character cannot be targeted with Avalon.", system = True))
         user.check_on_use()
         user.check_on_help()
 
@@ -3565,6 +3697,8 @@ def mental_out_ability_switch(target: "CharacterManager") -> int:
         return 0
     if target.source.name == "sheele":
         return 0
+    if target.source.name == "byakuya":
+        return 0
 
 def exe_mental_out(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if not user.check_countered(playerTeam, enemyTeam):
@@ -3587,7 +3721,6 @@ def exe_mental_out(user: "CharacterManager", playerTeam: list["CharacterManager"
                 user.alt_ability_sprites[0].ability = user.source.alt_abilities[0]
                 user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, base_duration - 1, lambda eff: f"Mental Out has been replaced by {stolen_ability.name}.", mag = 11))
                 user.check_on_stun(target)
-
 
 def exe_exterior(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.receive_system_aff_damage(25)
@@ -4236,6 +4369,15 @@ ability_info_db = {
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
         default_target("SELF"), exe_kosmos
     ],
+    "byakuya1": ["Scatter, Senbonzakura", "Byakuya deals 25 damage to target enemy or gives target ally 25 points of destructible defense for one turn. During Bankai - Senbonzakura Kageyoshi, this ability will target all enemies or allies.",
+                 [0,0,0,1,1,0], Target.SINGLE, default_target("ALL"), exe_scatter
+    ],
+    "byakuya2": ["Bakudou #61 - Six-Rod Light Restraint", "Byakuya stuns target enemy for one turn. After being used, this ability is replaced by Hadou #2 - Byakurai", [0, 1, 0, 0, 0, 2], Target.SINGLE, default_target("HOSTILE"), exe_sixrod],
+    "byakuya3": ["Bankai - Senbonzakura Kageyoshi", "For the next 2 turns, Scatter, Senbonzakura will affect all enemies or allies when it is used and this ability will be replaced by White Imperial Sword.", 
+                [0, 0, 0, 1, 1, 3], Target.SINGLE, default_target("SELF"), exe_senbonzakura_kageyoshi],
+    "byakuya4": ["Bakudou #81 - Danku", "Byakuya becomes invulnerable for one turn.", [0,0,0,0,1,4], Target.SINGLE, default_target("SELF"), exe_danku],
+    "byakuyaalt1": ["Hadou #2 - Byakurai", "Byakuya deals 25 piercing damage to one enemy.", [0,1,0,0,0,0], Target.SINGLE, default_target("HOSTILE"), exe_byakurai],
+    "byakuyaalt2": ["White Imperial Sword", "Byakuya deals 30 piercing damage to one enemy. This damage is increased by 5 for every 10 health Byakuya is missing.", [0,1,0,1,0,1], Target.SINGLE, default_target("HOSTILE"), exe_imperial_sword],
     "cmary1": [
         "Quickdraw - Pistol",
         "Calamity Mary deals 15 damage to target enemy. This ability will become Quickdraw - Rifle after being used.",
