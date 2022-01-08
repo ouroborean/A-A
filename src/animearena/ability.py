@@ -1749,17 +1749,20 @@ def exe_twin_lion_fist(user: "CharacterManager", playerTeam: list["CharacterMana
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(20, target)
                 if user.has_effect(EffectType.MARK, "Byakugan"):
-                    target.source.energy_contribution -= 1
-                    user.check_on_drain(target)
+                    target.drain_energy(1, user)
                 used = True
+    else:
+        user.source.first_countered = True
+    user.source.second_swing = True
     if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(20, target)
                 if user.has_effect(EffectType.MARK, "Byakugan"):
-                    target.source.energy_contribution -= 1
-                    user.check_on_drain(target)
+                    target.drain_energy(1, user)
                 used = True
+    user.source.second_swing = False
+    user.source.first_countered = False
     if used:
         user.check_on_use()
         user.check_on_harm()
@@ -1775,9 +1778,8 @@ def exe_hinata_trigrams(user: "CharacterManager", playerTeam: list["CharacterMan
             if target.id > 2 and target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                 user.deal_damage(15, target)
                 if user.has_effect(EffectType.MARK, "Byakugan") and not drained:
-                    target.source.energy_contribution -= 1
+                    target.drain_energy(1, user)
                     drained = True
-                    user.check_on_drain(target)
             elif target.id < 3 and target.helpful_target(user, user.check_bypass_effects()):
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 2, lambda eff: "This character has 10 points of damage reduction.", mag=10))
         if not user.has_effect(EffectType.MARK, "Eight Trigrams - 64 Palms"):
@@ -1821,6 +1823,8 @@ def exe_getsuga_tenshou(user: "CharacterManager", playerTeam: list["CharacterMan
                     user.deal_pierce_damage(40, target)
                 else:
                     user.deal_damage(40, target)
+                if target.check_invuln():
+                    user.source.mission1progress += 1
         user.check_on_use()
         user.check_on_harm()
 
@@ -2102,6 +2106,7 @@ def exe_kamui(user: "CharacterManager", playerTeam: list["CharacterManager"], en
                 if target.final_can_effect("BYPASS"):
                     user.deal_pierce_damage(20, target)
                     if target.check_invuln():
+                        user.source.mission3progress += 1
                         target.add_effect(Effect(user.used_ability, EffectType.ISOLATE, user, 2, lambda eff: "This character is isolated."))
             user.check_on_use()
             user.check_on_harm()
@@ -2963,10 +2968,10 @@ def exe_neji_trigrams(user: "CharacterManager", playerTeam: list["CharacterManag
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                 user.deal_damage(2, target)
-                target.add_effect(Effect(user.used_ability, EffectType.CONT_UNIQUE, user, 13, lambda eff: f"This character will take {2 * (2 ** eff.mag)} damage.", mag=1))
-                target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 13, lambda eff: "Chakra Point Strike can target this character."))
-        user.add_effect(Effect(user.used_ability, EffectType.CONT_USE, user, 13, lambda eff: "Neji is using Eight Trigrams - 128 Palms. This effect will end if Neji is stunned."))
-        user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 13, lambda eff: "Eight Trigrams - 128 Palms has been replaced by Chakra Point Strike.", mag=11))
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_UNIQUE, user, 15, lambda eff: f"This character will take {2 * (2 ** eff.mag)} damage.", mag=1))
+                target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 15, lambda eff: "Chakra Point Strike can target this character."))
+        user.add_effect(Effect(user.used_ability, EffectType.CONT_USE, user, 15, lambda eff: "Neji is using Eight Trigrams - 128 Palms. This effect will end if Neji is stunned."))
+        user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 15, lambda eff: "Eight Trigrams - 128 Palms has been replaced by Chakra Point Strike.", mag=11))
         user.check_on_use()
         user.check_on_harm()
 
@@ -3521,6 +3526,7 @@ def exe_shadow_bind_jutsu(user: "CharacterManager", playerTeam: list["CharacterM
     for enemy in enemyTeam:
         if enemy.has_effect(EffectType.MARK, "Shadow Pin") and not (enemy in user.current_targets):
             user.current_targets.append(enemy)
+            user.source.mission5progress += 1
 
     if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
@@ -3538,6 +3544,7 @@ def exe_shadow_neck_bind(user: "CharacterManager", playerTeam: list["CharacterMa
     for enemy in enemyTeam:
         if enemy.has_effect(EffectType.MARK, "Shadow Pin") and not (enemy in user.current_targets):
             user.current_targets.append(enemy)
+            user.source.mission5progress += 1
 
     if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
@@ -3557,6 +3564,7 @@ def exe_shadow_pin(user: "CharacterManager", playerTeam: list["CharacterManager"
             if target.final_can_effect(user.check_bypass_effects()):
                 target.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 2, lambda eff: "This character cannot target enemies."))
                 target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Shadow Neck Bind and Shadow Bind Jutsu will affect this character in addition to their normal targets."))
+                user.source.mission4progress += 1
         user.check_on_use()
         user.check_on_harm()
 

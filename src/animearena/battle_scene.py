@@ -205,8 +205,13 @@ class BattleScene(engine.Scene):
     player: Player
     enemy: Player
     dying_to_doping: bool
+    sharingan_reflecting: bool
+    sharingan_reflector: Optional["CharacterManager"]
+    sharingan_reflected_effects: list[Effect]
+    sharingan_reflected_effect_ticking: bool
     target_clicked: bool
     missions_to_check: list[str]
+
     def __init__(self, scene_manager, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.window_closing = True
@@ -214,6 +219,10 @@ class BattleScene(engine.Scene):
         self.waiting_for_turn = False
         self.first_turn = True
         self.target_clicked = False
+        self.sharingan_reflecting = False
+        self.sharingan_reflector = None
+        self.sharingan_reflected_effects = []
+        self.sharingan_reflected_effect_ticking = False
         self.scene_manager = scene_manager
         self.ally_managers = []
         self.enemy_managers = []
@@ -739,6 +748,8 @@ class BattleScene(engine.Scene):
                 manager.used_ability.execute(
                     manager, self.player_display.team.character_managers,
                     self.enemy_display.team.character_managers)
+                self.sharingan_reflector = None
+                self.sharingan_reflecting = False
                 expected_cd = manager.used_ability.cooldown + manager.check_for_cooldown_mod(
                     manager.used_ability)
                 if expected_cd < 0:
@@ -771,7 +782,6 @@ class BattleScene(engine.Scene):
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_DMG)
             for eff in gen:
-
                 if eff.check_waiting() and self.is_allied(eff) and (
                         eff.mag > 15 or not manager.deflecting()):
                     eff.user.deal_eff_damage(eff.mag, manager, eff)
@@ -868,6 +878,8 @@ class BattleScene(engine.Scene):
                     ability.cooldown_remaining - 1, 0)
 
     def turn_end(self):
+        self.sharingan_reflecting = False
+        self.sharingan_reflector = None
         self.tick_effect_duration()
         self.tick_ability_cooldown()
         self.has_exchanged = False
@@ -1132,13 +1144,15 @@ class BattleScene(engine.Scene):
                 if not eff.check_waiting():
                     if eff.name == "Uzumaki Barrage" and eff.eff_type == EffectType.ALL_STUN:
                         if manager.is_stunned():
-                            eff.user.source.mission2progress += 1
+                            eff.user.progress_mission(2, 1)
                     if eff.name == "Tsukuyomi" and eff.eff_type == EffectType.ALL_STUN:
-                        eff.user.source.mission2progress += 1
+                        eff.user.progress_mission(2, 1)
                 if eff.name == "Shadow Clones" and eff.eff_type == EffectType.ALL_DR:
-                    eff.user.source.mission1progress += 1
+                    eff.user.progress_mission(1, 1)
                 if eff.name == "Flying Raijin" and eff.eff_type == EffectType.ALL_INVULN:
-                    eff.user.source.mission5progress += 1
+                    eff.user.progress_mission(5, 1)
+                if eff.name == "Kamui" and eff.eff_type == EffectType.IGNORE:
+                    eff.user.progress_mission(5, 1)
                 #endregion
                 if eff.eff_type == EffectType.CONSECUTIVE_TRACKER:
                         if not manager.has_effect(EffectType.CONSECUTIVE_BUFFER, eff.name):
@@ -1268,6 +1282,7 @@ class BattleScene(engine.Scene):
                 eff for eff in manager.source.current_effects
                 if eff.duration > 0 and not eff.removing
             ]
+            
             manager.source.current_effects = new_list
 
         for manager in self.enemy_display.team.character_managers:
@@ -1284,8 +1299,12 @@ class BattleScene(engine.Scene):
                 if eff.duration > 0 and not eff.removing
             ]
             manager.source.current_effects = new_list
+        new_reflected_list = [eff for eff in self.sharingan_reflected_effects if eff.duration > 0 and not eff.removing]
+        self.sharingan_reflected_effects = new_reflected_list
 
     def turn_start(self):
+        self.sharingan_reflecting = False
+        self.sharingan_reflector = None
         self.waiting_for_turn = False
         self.round_any_cost = 0
         self.acting_character = None
@@ -1373,7 +1392,7 @@ class BattleScene(engine.Scene):
         for character in self.player_display.team.character_managers:
             if "itachi" in self.missions_to_check:
                 if character.has_effect(EffectType.SYSTEM, "ItachiMission4Tracker"):
-                    character.source.mission4progress += 1
+                    character.progress_mission(4, 1)
 
 
     def win_game(self, surrendered=False):
@@ -1632,6 +1651,8 @@ class BattleScene(engine.Scene):
                     enemy: Player = None,
                     energy=[0, 0, 0, 0]):
         self.window_closing = True
+        self.sharingan_reflecting = False
+        self.sharingan_reflector = None
         self.clicked_surrender = False
         self.round_any_cost = 0
         self.has_exchanged = False
@@ -1703,7 +1724,7 @@ class BattleScene(engine.Scene):
                     sdl2.ext.BUTTON,
                     self.get_scaled_surface(self.scene_manager.surfaces[
                         char_manager.source.alt_abilities[j].db_name]))
-                for j in range(len(char_manager.source.alt_abilities))
+                for j in range(len(char_manager.source.alt_abilities) - 1)
             ]
             for j, sprite in enumerate(char_manager.alt_ability_sprites):
                 sprite.selected_pane = self.ui_factory.from_surface(
@@ -2098,6 +2119,12 @@ class CharacterManager():
 
     def check_on_use(self):
         for target in self.current_targets:
+
+            #region Receive Ability Mission Tracking
+            if target.has_effect(EffectType.ALL_DR, "Eight Trigrams - 64 Palms"):
+                target.get_effect(EffectType.ALL_DR, "Eight Trigrams - 64 Palms").user.progress_mission(4, 1)
+            #endregion
+
             if target.has_effect(EffectType.MARK,
                                  "Shredding Wedding") and not self.has_effect(
                                      EffectType.MARK, "Shredding Wedding"):
@@ -2275,14 +2302,17 @@ class CharacterManager():
                            mag=32))
         if eff.name == "Eight Trigrams - 128 Palms":
             if self.final_can_effect(eff.user.check_bypass_effects()) and (
-                    not self.deflecting() or (2 * (eff.mag**2) > 15)):
+                    not self.deflecting() or (2 * (2 ** eff.mag) > 15)):
                 base_damage = (2 * (2**eff.mag))
                 eff.user.deal_eff_damage(base_damage, self, eff)
+                print(base_damage)
                 eff.alter_mag(1)
                 if self.has_effect(
                         EffectType.MARK, "Chakra Point Strike"
                 ) and base_damage > self.check_for_dmg_reduction():
                     self.source.energy_contribution -= 1
+                    eff.user.check_on_drain(self)
+                    eff.user.source.mission2progress += 1
         if eff.name == "Relentless Assault":
             if self.final_can_effect(
                     eff.user.check_bypass_effects()) and not self.deflecting():
@@ -2558,6 +2588,8 @@ class CharacterManager():
                            and not self.scene.is_allied(eff))
                     for eff in gen:
                         if eff.name == "Copy Ninja Kakashi":
+                            self.scene.sharingan_reflecting = True
+                            self.scene.sharingan_reflector = target.get_effect(EffectType.REFLECT, "Copy Ninja Kakashi").user
                             target.full_remove_effect("Copy Ninja Kakashi",
                                                       eff.user)
                             alt_targets = [
@@ -2713,6 +2745,17 @@ class CharacterManager():
         if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
             mod_damage = mod_damage * 2
 
+        #region Damage Dealt Mission Check
+
+        if "hinata" in self.scene.missions_to_check:
+            if dealer.source.name == "hinata" and dealer.used_ability.name == "Eight Trigrams - 64 Palms":
+                dealer.source.mission5progress += mod_damage
+        if "neji" in self.scene.missions_to_check:
+            if dealer.used_ability.name == "Eight Trigrams - 128 Palms":
+                dealer.source.mission3progress += damage
+
+        #endregion
+
         if self.will_die(mod_damage):
             if self.has_effect(EffectType.MARK, "Selfless Genius"):
                 mod_damage = 0
@@ -2726,6 +2769,8 @@ class CharacterManager():
                         lambda eff:
                         "This character will deal 10 more damage with non-affliction abilities.",
                         mag=10))
+                self.get_effect(EffectType.MARK,
+                                "Selfless Genius").user.source.mission4progress += 1
                 self.get_effect(EffectType.MARK,
                                 "Selfless Genius").user.source.hp = 0
                 self.get_effect(EffectType.MARK,
@@ -2753,11 +2798,40 @@ class CharacterManager():
         damage = self.get_boosts(damage)
         target.receive_eff_damage(damage, source)
 
+    def progress_mission(self, mission_number: int, progress: int, isToga: bool = False):
+        if not isToga:
+            if mission_number == 1:
+                self.source.mission1progress += progress
+            elif mission_number == 2:
+                self.source.mission2progress += progress
+            elif mission_number == 3:
+                self.source.mission3progress += progress
+            elif mission_number == 4:
+                self.source.mission4progress += progress
+            elif mission_number == 5:
+                self.source.mission5progress += progress
+        else:
+            self.source.mission1progress += 1
+    
+    def progress_toga_mission(self, mission_number: int, progress: int):
+        if mission_number == 2:
+            self.source.mission2progress += progress
+        elif mission_number == 3:
+            self.source.mission3progress += progress
+        elif mission_number == 4:
+            self.source.mission4progress += progress
+        elif mission_number == 5:
+            self.source.mission5progress += progress
+
     def receive_eff_damage(self, damage: int, source: Effect):
         mod_damage = damage - self.check_for_dmg_reduction()
 
         if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
             mod_damage = mod_damage * 2
+
+        if "neji" in self.scene.missions_to_check:
+            if source.name == "Eight Trigrams - 128 Palms":
+                source.user.source.mission3progress += mod_damage
 
         if self.will_die(mod_damage):
             if self.has_effect(EffectType.MARK, "Selfless Genius"):
@@ -2772,6 +2846,8 @@ class CharacterManager():
                         lambda eff:
                         "This character will deal 10 more damage with non-affliction abilities.",
                         mag=10))
+                self.get_effect(EffectType.MARK,
+                                "Selfless Genius").user.source.mission4progress += 1
                 self.get_effect(EffectType.MARK,
                                 "Selfless Genius").user.source.hp = 0
                 self.get_effect(EffectType.MARK,
@@ -2793,7 +2869,7 @@ class CharacterManager():
 
         mod_damage = self.pass_through_dest_def(mod_damage)
         self.apply_eff_damage_taken(mod_damage, source)
-        self.death_check(source.user)
+        self.eff_death_check(source)
 
     def deal_pierce_damage(self, damage: int, target: "CharacterManager"):
         mod_damage = self.get_boosts(damage)
@@ -2834,6 +2910,8 @@ class CharacterManager():
                         lambda eff:
                         "This character will deal 10 more damage with non-affliction abilities.",
                         mag=10))
+                self.get_effect(EffectType.MARK,
+                                "Selfless Genius").user.source.mission4progress += 1
                 self.get_effect(EffectType.MARK,
                                 "Selfless Genius").user.source.hp = 0
                 self.get_effect(EffectType.MARK,
@@ -2882,6 +2960,8 @@ class CharacterManager():
                         "This character will deal 10 more damage with non-affliction abilities.",
                         mag=10))
                 self.get_effect(EffectType.MARK,
+                                "Selfless Genius").user.source.mission4progress += 1
+                self.get_effect(EffectType.MARK,
                                 "Selfless Genius").user.source.hp = 0
                 self.get_effect(EffectType.MARK,
                                 "Selfless Genius").user.source.dead = True
@@ -2901,7 +2981,7 @@ class CharacterManager():
                             temp_yatsufusa_storage)
         mod_damage = self.pass_through_dest_def(mod_damage)
         self.apply_eff_damage_taken(mod_damage, source)
-        self.death_check(source.user)
+        self.eff_death_check(source)
 
     def deal_aff_damage(self, damage: int, target: "CharacterManager"):
         #TODO check for affliction boosts
@@ -2934,6 +3014,16 @@ class CharacterManager():
         if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
             mod_damage = mod_damage * 2
 
+
+        #region Affliction Damage Mission Progress
+
+        if "shikamaru" in self.scene.missions_to_check:
+            if dealer.source.name == "shikamaru" and dealer.used_ability.name == "Shadow Neck Bind":
+                dealer.source.mission1progress += mod_damage
+
+        #endregion
+
+
         if self.will_die(mod_damage):
             if self.has_effect(EffectType.MARK, "Selfless Genius"):
                 mod_damage = 0
@@ -2947,6 +3037,8 @@ class CharacterManager():
                         lambda eff:
                         "This character will deal 10 more damage with non-affliction abilities.",
                         mag=10))
+                self.get_effect(EffectType.MARK,
+                                "Selfless Genius").user.source.mission4progress += 1
                 self.get_effect(EffectType.MARK,
                                 "Selfless Genius").user.source.hp = 0
                 self.get_effect(EffectType.MARK,
@@ -2974,12 +3066,21 @@ class CharacterManager():
         if not target.is_aff_immune():
             target.receive_eff_aff_damage(damage, source)
 
-    def receive_eff_aff_damage(self, damage: int, source):
+    def receive_eff_aff_damage(self, damage: int, source: Effect):
         #TODO add affliction damage received boosts
         mod_damage = damage
 
         if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
             mod_damage = mod_damage * 2
+
+        #region Effect Affliction Damage Mission Check:
+
+        if "shikamaru" in self.scene.missions_to_check:
+            if source.user.source.name == "shikamaru" and source.name == "Shadow Neck Bind":
+                source.user.source.mission1progress += mod_damage
+
+        #endregion
+
         if self.will_die(mod_damage):
             if self.has_effect(EffectType.MARK, "Selfless Genius"):
                 mod_damage = 0
@@ -2993,6 +3094,8 @@ class CharacterManager():
                         lambda eff:
                         "This character will deal 10 more damage with non-affliction abilities.",
                         mag=10))
+                self.get_effect(EffectType.MARK,
+                                "Selfless Genius").user.source.mission4progress += 1
                 self.get_effect(EffectType.MARK,
                                 "Selfless Genius").user.source.hp = 0
                 self.get_effect(EffectType.MARK,
@@ -3014,7 +3117,7 @@ class CharacterManager():
 
         self.apply_eff_damage_taken(mod_damage, source)
 
-        self.death_check(source.user)
+        self.eff_death_check(source)
 
     def receive_system_aff_damage(self, damage: int):
         if not self.is_aff_immune():
@@ -3315,7 +3418,10 @@ class CharacterManager():
         if "naruto" in self.scene.missions_to_check:
             if not self.has_effect(EffectType.SYSTEM, "NarutoMission5Tracker") and source.name != "Rasengan":
                 self.add_effect(Effect("NarutoMission5Tracker", EffectType.SYSTEM, source.user, 280000, lambda eff: "", system = True))
-
+        if "kakashi" in self.scene.missions_to_check:
+            if not self.has_effect(EffectType.SYSTEM, "KakashiMission4Tracker"):
+                self.add_effect(Effect("KakashiMission4Tracker", EffectType.SYSTEM, source.user, 280000, lambda eff: "", system = True))
+        
         if self.source.name == "seiryu" and self.source.hp < 30:
             self.add_effect(
                 Effect(
@@ -3435,6 +3541,9 @@ class CharacterManager():
         if "naruto" in self.scene.missions_to_check:
             if not self.has_effect(EffectType.SYSTEM, "NarutoMission5Tracker") and damager.used_ability.name != "Rasengan":
                 self.add_effect(Effect("NarutoMission5Tracker", EffectType.SYSTEM, damager, 280000, lambda eff: "", system = True))
+        if "kakashi" in self.scene.missions_to_check:
+            if not self.has_effect(EffectType.SYSTEM, "KakashiMission4Tracker") and damager.source.name != "kakashi":
+                self.add_effect(Effect("KakashiMission4Tracker", EffectType.SYSTEM, damager, 280000, lambda eff:"", system = True))
 
         if self.has_effect(EffectType.UNIQUE, "In The Name Of Ruler!"):
             for manager in self.scene.player_display.team.character_managers:
@@ -3585,7 +3694,6 @@ class CharacterManager():
         return name in self.scene.missions_to_check and character.source.name == name
 
     def death_check(self, targeter: "CharacterManager"):
-
         if self.source.hp <= 0:
             if self.has_effect(
                     EffectType.MARK,
@@ -3596,7 +3704,7 @@ class CharacterManager():
             elif self.has_effect(EffectType.MARK, "Lucky Rabbit's Foot"):
                 self.source.hp = 35
             else:
-                #region Killing Blow Mission Check
+                #region Active Killing Blow Mission Check
                 if self.mission_active("naruto", targeter):
                     if targeter.has_effect(EffectType.ALL_INVULN, "Sage Mode"):
                         targeter.source.mission3progress += 1
@@ -3611,6 +3719,29 @@ class CharacterManager():
                 if self.mission_active("neji", targeter):
                     if targeter.used_ability.name == "Eight Trigrams - Mountain Crusher" and self.check_invuln():
                         targeter.source.mission1progress += 1
+                if self.mission_active("hinata", targeter):
+                    if targeter.used_ability.name == "Gentle Step - Twin Lion Fists" and targeter.source.second_swing:
+                        targeter.source.mission2progress += 1
+                    if targeter.used_ability.name == "Gentle Step - Twin Lion Fists" and targeter.source.second_swing and targeter.source.first_countered:
+                        targeter.source.mission3progress += 1
+                if self.mission_active("shikamaru", targeter):
+                    if targeter.used_ability.name == "Shadow Neck Bind":
+                        if targeter.has_effect(EffectType.SYSTEM, "ShikamaruMission2Tracker"):
+                            targeter.source.mission2progress += 1
+                        else:
+                            targeter.add_effect(Effect("ShikamaruMissionTracker2", EffectType.SYSTEM, targeter, 1, lambda eff:"", system = True))
+                if "shikamaru" in self.scene.missions_to_check:
+                    if self.has_effect(EffectType.CONT_AFF_DMG, "Shadow Neck Bind") and targeter != self.get_effect(EffectType.CONT_AFF_DMG, "Shadow Neck Bind").user: 
+                        self.get_effect(EffectType.CONT_AFF_DMG, "Shadow Neck Bind").user.source.mission3progress += 1
+                if "kakashi" in self.scene.missions_to_check:
+                    if self.scene.sharingan_reflecting:
+                        self.scene.sharingan_reflector.source.mission1progress += 1
+                if self.mission_active("kakashi", targeter):
+                    if targeter.used_ability.name == "Raikiri" and self.has_effect(EffectType.ALL_STUN, "Summon - Nin-dogs"):
+                        targeter.source.mission2progress += 1
+                    if not self.has_effect(EffectType.SYSTEM, "KakashiMission4Tracker"):
+                        targeter.source.mission4progress += 1
+                
                 #endregion
                 if self.has_effect(EffectType.MARK, "Beast Instinct"):
                     if targeter == self.get_effect(EffectType.MARK,
@@ -3626,7 +3757,76 @@ class CharacterManager():
                 self.update_effect_region()
                 if temp_yatsufusa_storage:
                     self.source.current_effects.append(temp_yatsufusa_storage)
+                
+                #region Checking for winning killing blow mission progress
+
+                winning_kb = True
+                for manager in self.scene.enemy_display.team.character_managers:
+                    if not manager.source.dead and manager != self:
+                        winning_kb = False
+                if winning_kb:
+                    if "neji" in self.scene.missions_to_check:
+                        if targeter.has_effect(EffectType.ALL_BOOST, "Selfless Genius"):
+                            targeter.get_effect(EffectType.ALL_BOOST, "Selfless Genius").user.source.mission5progress += 1
+                #endregion
+
         self.scene.dying_to_doping = False
+
+    def eff_death_check(self, source: Effect):
+        if self.source.hp <= 0:
+            if self.has_effect(
+                    EffectType.MARK,
+                    "Doping Rampage") and not self.scene.dying_to_doping:
+                self.source.hp = 1
+            elif self.has_effect(EffectType.MARK, "Electric Rage"):
+                self.source.hp = 1
+            elif self.has_effect(EffectType.MARK, "Lucky Rabbit's Foot"):
+                self.source.hp = 35
+            else:
+                #region Effect Killing Blow Mission Check
+                
+                if "shikamaru" in self.scene.missions_to_check:
+                    if source.name == "Shadow Neck Bind":
+                        if source.user.has_effect(EffectType.SYSTEM, "ShikamaruMission2Tracker"):
+                            source.user.source.mission2progress += 1
+                        else:
+                            source.user.add_effect(Effect("ShikamaruMissionTracker2", EffectType.SYSTEM, source.user, 1, lambda eff:"", system = True))
+                    if self.has_effect(EffectType.CONT_AFF_DMG, "Shadow Neck Bind") and source.user != self.get_effect(EffectType.CONT_AFF_DMG, "Shadow Neck Bind").user: 
+                        self.get_effect(EffectType.CONT_AFF_DMG, "Shadow Neck Bind").user.source.mission3progress += 1
+                    if source in self.scene.sharingan_reflected_effects:
+                        source.user.source.mission1progress += 1
+                
+                #endregion
+                if self.has_effect(EffectType.MARK, "Beast Instinct"):
+                    if source.user == self.get_effect(EffectType.MARK,
+                                                   "Beast Instinct").user:
+                        source.user.receive_healing(20)
+                self.source.hp = 0
+                self.source.dead = True
+                temp_yatsufusa_storage = None
+                if self.has_effect(EffectType.MARK, "Yatsufusa"):
+                    temp_yatsufusa_storage = self.get_effect(
+                        EffectType.MARK, "Yatsufusa")
+                self.source.current_effects.clear()
+                self.update_effect_region()
+                if temp_yatsufusa_storage:
+                    self.source.current_effects.append(temp_yatsufusa_storage)
+                
+                #region Checking for winning killing blow mission progress
+
+                winning_kb = True
+                for manager in self.scene.enemy_display.team.character_managers:
+                    if not manager.source.dead and manager != self:
+                        winning_kb = False
+                if winning_kb:
+                    if "neji" in self.scene.missions_to_check:
+                        if source.user.has_effect(EffectType.ALL_BOOST, "Selfless Genius"):
+                            source.user.get_effect(EffectType.ALL_BOOST, "Selfless Genius").user.source.mission5progress += 1
+                #endregion
+
+        self.scene.dying_to_doping = False
+
+
 
     def check_energy_contribution(self) -> list[int]:
         output = [0, 0, 0, 0, 0]
@@ -3697,6 +3897,20 @@ class CharacterManager():
             output = False
             break
         return output
+
+    def drain_energy(self, drain: int, targeter: "CharacterManager"):
+        #TODO check for immunities
+        self.source.energy_contribution -= drain
+
+        #region Drain Mission Check
+
+        if targeter.source.name == "hinata":
+            targeter.source.mission1progress += 1
+
+        #endregion
+
+        targeter.check_on_drain(self)
+
 
     def special_targeting_exemptions(self,
                                      targeter: "CharacterManager") -> bool:

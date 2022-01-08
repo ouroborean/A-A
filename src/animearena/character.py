@@ -44,6 +44,8 @@ class Character:
     ignoring: bool
     hp: int
     damage_reduction: int
+    second_swing: bool
+    first_countered: bool
     sistema_CAI_stage: int
     current_effects: list["Effect"]
     mission1progress: int
@@ -76,6 +78,8 @@ class Character:
         self.stunned = False
         self.ignoring = False
         self.selected = False
+        self.second_swing = False
+        self.first_countered = False
         self.damage_reduction = 0
         self.current_effects = []
         self.current_hp = 100
