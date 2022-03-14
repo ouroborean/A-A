@@ -86,6 +86,14 @@ class SceneManager:
         self.surfaces["locked"] = get_image_from_path("null_pane.png")
         self.surfaces["char_select_blotter"] = get_image_from_path("blotter.png")
         self.surfaces["in_game_background"] = get_image_from_path("in_game_background.png")
+        self.surfaces["lock_icon"] = get_image_from_path("lock_icon.png")
+        self.surfaces["phys_icon"] = get_image_from_path("phys_icon.png")
+        self.surfaces["spec_icon"] = get_image_from_path("spec_icon.png")
+        self.surfaces["wep_icon"] = get_image_from_path("wep_icon.png")
+        self.surfaces["ment_icon"] = get_image_from_path("ment_icon.png")
+        self.surfaces["rand_icon"] = get_image_from_path("rand_icon.png")
+        self.surfaces["exclusive_icon"] = get_image_from_path("exclusive_icon.png")
+        
         self.connected = False
 
     def play_sound(self, file_name: str):
@@ -100,22 +108,22 @@ class SceneManager:
     def bind_connection(self, connection):
         self.connection = connection
 
-    def login(self, username, wins, losses, mission_data, ava_code=None):
+    def login(self, username, wins, losses, medals, mission_data, ava_code=None):
         self.play_sound(self.sounds["login"])
         self.set_scene_to_current(self.char_select)
-        self.char_select.settle_player(username, wins, losses, mission_data, ava_code)
+        self.char_select.settle_player(username, wins, losses, medals, mission_data, ava_code)
 
     def package_mission_data(self, mission_data) -> str:
         mission_strings = []
         for name, nums in mission_data.items():
-            mission_strings.append(f"{name}/{nums[0]}/{nums[1]}/{nums[2]}/{nums[3]}/{nums[4]}")
+            mission_strings.append(f"{name}/{nums[0]}/{nums[1]}/{nums[2]}/{nums[3]}/{nums[4]}/{nums[5]}")
         mission_string = "|".join(mission_strings)
         return mission_string
 
     def return_to_select(self, player):
         self.change_window_size(800, 700)
         self.set_scene_to_current(self.char_select)
-        self.char_select.settle_player(player.name, player.wins, player.losses, self.package_mission_data(player.missions))
+        self.char_select.settle_player(player.name, player.wins, player.losses, player.medals, self.package_mission_data(player.missions), mission_complete = player.missions_complete)
 
     def start_battle(self, player_team, enemy_team, player, enemy, energy):
         self.play_sound(self.sounds["game_start"])

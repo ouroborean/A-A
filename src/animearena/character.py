@@ -9,6 +9,7 @@ import os
 import sys
 import importlib.resources
 from PIL import Image
+from animearena import energy
 from animearena.ability import Ability
 if typing.TYPE_CHECKING:
     from animearena.effects import Effect
@@ -101,6 +102,32 @@ class Character:
                 self.alt_abilities.append(Ability(f"{name}alt{i + 1}"))
             except FileNotFoundError:
                 break
+
+    def clear_effects(self, final=False):
+        if not final:
+            new_effects = [eff for eff in self.current_effects if eff.system == True]
+            self.current_effects = new_effects
+        else:
+            self.current_effects.clear()
+
+    def uses_energy(self, energy_type: int) -> bool:
+        for ability in self.main_abilities:
+            if ability.all_costs[energy_type] > 0:
+                return True
+        for ability in self.alt_abilities:
+            if ability.all_costs[energy_type] > 0:
+                return True
+        return False
+
+    def uses_energy_mult(self, energy_types: list[int]) -> bool:
+        for energy_type in energy_types:
+            for ability in self.main_abilities:
+                if ability.all_costs[energy_type] > 0:
+                    return True
+            for ability in self.alt_abilities:
+                if ability.all_costs[energy_type] > 0:
+                    return True
+        return False
 
 def get_character(name: str):
     return copy.copy(character_db[name])

@@ -129,3 +129,6 @@ class Effect:
             self.waiting = False
             return False
         return True
+
+
+

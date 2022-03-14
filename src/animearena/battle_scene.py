@@ -1,4 +1,5 @@
 import math
+from msilib.schema import ProgId
 import sdl2
 import sdl2.ext
 import sdl2.surface
@@ -11,7 +12,7 @@ import os
 import importlib.resources
 from animearena import character_select_scene, engine, mission
 from animearena import character
-from animearena.character import Character, character_db
+from animearena.character import Character, character_db, get_character
 from animearena.ability import Ability, Target, one, two, three
 from animearena.energy import Energy
 from animearena.effects import Effect, EffectType
@@ -21,7 +22,7 @@ from animearena.animation import Animation, get_shake_animation
 from random import randint
 from playsound import playsound
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 import typing
 
 if typing.TYPE_CHECKING:
@@ -211,6 +212,14 @@ class BattleScene(engine.Scene):
     sharingan_reflected_effect_ticking: bool
     target_clicked: bool
     missions_to_check: list[str]
+
+    @property
+    def pteam(self):
+        return self.player_display.team.character_managers
+
+    @property
+    def eteam(self):
+        return self.enemy_display.team.character_managers
 
     def __init__(self, scene_manager, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -418,15 +427,17 @@ class BattleScene(engine.Scene):
         self.exchanging_energy = not self.exchanging_energy
         self.traded_away_energy = 5
         self.traded_for_energy = 5
+        self.window_up = False
         self.full_update()
 
     def exchange_cancel_click(self, button, sender):
         self.window_closing = True
+        self.window_up = False
         play_sound(self.scene_manager.sounds["undo"])
         self.exchanging_energy = not self.exchanging_energy
         self.traded_away_energy = 5
         self.traded_for_energy = 5
-        self.update_energy_region()
+        self.full_update()
 
     def received_click(self, button, sender):
         play_sound(self.scene_manager.sounds["select"])
@@ -748,6 +759,8 @@ class BattleScene(engine.Scene):
                 manager.used_ability.execute(
                     manager, self.player_display.team.character_managers,
                     self.enemy_display.team.character_managers)
+                manager.check_for_cost_increase_missions()
+                self.reset_id()
                 self.sharingan_reflector = None
                 self.sharingan_reflecting = False
                 expected_cd = manager.used_ability.cooldown + manager.check_for_cooldown_mod(
@@ -764,14 +777,23 @@ class BattleScene(engine.Scene):
                         break
         self.resolve_ticking_ability()
 
-    def is_allied(self, effect: Effect) -> bool:
+    def reset_id(self):
+        for i, manager in enumerate(self.player_display.team.character_managers):
+            manager.id = i
+        for i, manager in enumerate(self.enemy_display.team.character_managers):
+            manager.id = i + 3
+
+    def is_allied_effect(self, effect: Effect) -> bool:
         for manager in self.player_display.team.character_managers:
             if effect.user == manager:
                 return True
         return False
 
     def return_character(self, char_name) -> Character:
-        return character_db[char_name]
+        return Character(character_db[char_name].name, character_db[char_name].desc)
+
+    def is_allied_character(self, character: "CharacterManager"):
+        return character in self.player_display.team.character_managers
 
     def resolve_ticking_ability(self):
         """Checks all Character Managers for continuous effects.
@@ -782,19 +804,19 @@ class BattleScene(engine.Scene):
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_DMG)
             for eff in gen:
-                if eff.check_waiting() and self.is_allied(eff) and (
+                if eff.check_waiting() and self.is_allied_effect(eff) and (
                         eff.mag > 15 or not manager.deflecting()):
                     eff.user.deal_eff_damage(eff.mag, manager, eff)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_PIERCE_DMG)
             for eff in gen:
-                if eff.check_waiting() and self.is_allied(eff) and (
+                if eff.check_waiting() and self.is_allied_effect(eff) and (
                         eff.mag > 15 or not manager.deflecting()):
                     eff.user.deal_eff_pierce_damage(eff.mag, manager, eff)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_AFF_DMG)
             for eff in gen:
-                if eff.check_waiting() and self.is_allied(eff) and (
+                if eff.check_waiting() and self.is_allied_effect(eff) and (
                         eff.mag > 15 or not manager.deflecting()):
                     if eff.name == "Doping Rampage":
                         self.dying_to_doping = True
@@ -802,12 +824,12 @@ class BattleScene(engine.Scene):
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_HEAL)
             for eff in gen:
-                if eff.check_waiting() and self.is_allied(eff):
-                    eff.user.give_eff_healing(eff.mag, manager)
+                if eff.check_waiting() and self.is_allied_effect(eff):
+                    eff.user.give_eff_healing(eff.mag, manager, eff)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_DEST_DEF)
             for eff in gen:
-                if eff.check_waiting() and self.is_allied(eff):
+                if eff.check_waiting() and self.is_allied_effect(eff):
                     if manager.has_effect(EffectType.DEST_DEF, eff.name):
                         manager.get_effect(EffectType.DEST_DEF,
                                            eff.name).alter_dest_def(eff.mag)
@@ -821,37 +843,37 @@ class BattleScene(engine.Scene):
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_UNIQUE)
             for eff in gen:
-                if eff.check_waiting() and self.is_allied(eff):
+                if eff.check_waiting() and self.is_allied_effect(eff):
                     manager.check_unique_cont(eff)
 
         for manager in self.enemy_display.team.character_managers:
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_DMG)
             for eff in gen:
-                if eff.check_waiting() and self.is_allied(eff) and (
+                if eff.check_waiting() and self.is_allied_effect(eff) and (
                         eff.mag > 15 or not manager.deflecting()):
                     eff.user.deal_eff_damage(eff.mag, manager, eff)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_PIERCE_DMG)
             for eff in gen:
-                if eff.check_waiting() and self.is_allied(eff) and (
+                if eff.check_waiting() and self.is_allied_effect(eff) and (
                         eff.mag > 15 or not manager.deflecting()):
                     eff.user.deal_eff_pierce_damage(eff.mag, manager, eff)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_AFF_DMG)
             for eff in gen:
-                if eff.check_waiting() and self.is_allied(eff) and (
+                if eff.check_waiting() and self.is_allied_effect(eff) and (
                         eff.mag > 15 or not manager.deflecting()):
                     eff.user.deal_eff_aff_damage(eff.mag, manager, eff)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_HEAL)
             for eff in gen:
-                if eff.check_waiting() and self.is_allied(eff):
-                    eff.user.give_eff_healing(eff.mag, manager)
+                if eff.check_waiting() and self.is_allied_effect(eff):
+                    eff.user.give_eff_healing(eff.mag, manager, eff)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_DEST_DEF)
             for eff in gen:
-                if eff.check_waiting() and self.is_allied(eff):
+                if eff.check_waiting() and self.is_allied_effect(eff):
                     if manager.has_effect(EffectType.DEST_DEF, eff.name):
                         manager.get_effect(EffectType.DEST_DEF,
                                            eff.name).alter_dest_def(eff.mag)
@@ -865,7 +887,7 @@ class BattleScene(engine.Scene):
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_UNIQUE)
             for eff in gen:
-                if eff.check_waiting() and self.is_allied(eff):
+                if eff.check_waiting() and self.is_allied_effect(eff):
                     manager.check_unique_cont(eff)
     
     def tick_ability_cooldown(self):
@@ -880,6 +902,14 @@ class BattleScene(engine.Scene):
     def turn_end(self):
         self.sharingan_reflecting = False
         self.sharingan_reflector = None
+
+        # Kuroko invulnerability check #
+        for manager in self.player_display.team.character_managers:
+            if manager.source.name == "kuroko" and manager.check_invuln():
+                manager.progress_mission(1, 1)
+            if manager.source.name == "cmary" and manager.check_invuln() and manager.has_effect(EffectType.ALL_INVULN, "Quickdraw - Sniper"):
+                manager.progress_mission(4, 1)
+
         self.tick_effect_duration()
         self.tick_ability_cooldown()
         self.has_exchanged = False
@@ -925,6 +955,7 @@ class BattleScene(engine.Scene):
                     EffectType.MARK, "Yatsufusa"):
                 yatsu = manager.get_effect(EffectType.MARK, "Yatsufusa")
                 manager.source.dead = False
+                yatsu = manager.get_effect(EffectType.MARK, "Yatsufusa").user.progress_mission(1, 1)
                 manager.source.hp = 40
                 manager.remove_effect(
                     manager.get_effect(EffectType.MARK, "Yatsufusa"))
@@ -994,6 +1025,7 @@ class BattleScene(engine.Scene):
             character_pouch.append(manager.source.mission4complete)
             character_pouch.append(manager.source.mission5progress)
             character_pouch.append(manager.source.mission5complete)
+            character_pouch.append(manager.is_toga)
             for effect in manager.source.current_effects:
                 effect_pouch = []
                 effect_pouch.append(effect.eff_type.value)
@@ -1024,6 +1056,7 @@ class BattleScene(engine.Scene):
             character_pouch.append(manager.source.mission4complete)
             character_pouch.append(manager.source.mission5progress)
             character_pouch.append(manager.source.mission5complete)
+            character_pouch.append(manager.is_toga)
             for effect in manager.source.current_effects:
                 effect_pouch = []
                 effect_pouch.append(effect.eff_type.value)
@@ -1068,9 +1101,11 @@ class BattleScene(engine.Scene):
             self.player_display.team.character_managers[
                 i].source.mission5progress=character_pouch[10]
             self.player_display.team.character_managers[i].source.mission1complete = character_pouch[11]
+            self.player_display.team.character_managers[i].is_toga = character_pouch[12]
             self.player_display.team.character_managers[
                 i].source.current_effects.clear()
-            for j, effect_pouch in enumerate(character_pouch[12]):
+            
+            for j, effect_pouch in enumerate(character_pouch[13]):
                 if effect_pouch[5] > 2:
                     user = self.player_display.team.character_managers[
                         effect_pouch[5] - 3]
@@ -1088,6 +1123,14 @@ class BattleScene(engine.Scene):
                 effect.waiting = effect_pouch[8]
                 self.player_display.team.character_managers[
                     i].source.current_effects.append(effect)
+            if self.player_display.team.character_managers[
+                    i].has_effect(EffectType.UNIQUE, "Quirk - Transform") and self.player_display.team.character_managers[
+                    i].source.name != self.player_display.team.character_managers[
+                    i].get_effect(EffectType.SYSTEM, "TogaTransformTarget").get_desc():
+                    print("Player trigged transform!")
+                    self.player_display.team.character_managers[
+                    i].toga_transform(self.player_display.team.character_managers[
+                    i].get_effect(EffectType.SYSTEM, "TogaTransformTarget").get_desc())
         for i, character_pouch in enumerate(team2pouch):
             self.enemy_display.team.character_managers[
                 i].source.hp = character_pouch[0]
@@ -1113,9 +1156,11 @@ class BattleScene(engine.Scene):
                 i].source.mission5progress=character_pouch[10]
             self.enemy_display.team.character_managers[
                 i].source.mission5complete = character_pouch[11]
+            self.enemy_display.team.character_managers[i].is_toga = character_pouch[12]
             self.enemy_display.team.character_managers[
                 i].source.current_effects.clear()
-            for j, effect_pouch in enumerate(character_pouch[12]):
+                
+            for j, effect_pouch in enumerate(character_pouch[13]):
                 if effect_pouch[5] > 2:
                     user = self.player_display.team.character_managers[
                         effect_pouch[5] - 3]
@@ -1133,58 +1178,90 @@ class BattleScene(engine.Scene):
                 effect.waiting = effect_pouch[8]
                 self.enemy_display.team.character_managers[
                     i].source.current_effects.append(effect)
+            if self.enemy_display.team.character_managers[
+                    i].has_effect(EffectType.UNIQUE, "Quirk - Transform") and self.enemy_display.team.character_managers[
+                    i].source.name != self.enemy_display.team.character_managers[
+                    i].get_effect(EffectType.SYSTEM, "TogaTransformTarget").get_desc():
+                    self.enemy_display.team.character_managers[
+                    i].toga_transform(self.enemy_display.team.character_managers[
+                    i].get_effect(EffectType.SYSTEM, "TogaTransformTarget").get_desc())
+            elif self.enemy_display.team.character_managers[
+                    i].has_effect(EffectType.SYSTEM, "TogaReturnSignal"):
+                    self.enemy_display.team.character_managers[
+                    i].toga_transform("toga")
         if not rejoin:
             self.turn_start()
 
     def tick_effect_duration(self):
-        for manager in self.player_display.team.character_managers:
-            for eff in manager.source.current_effects:
+        player_team = self.player_display.team.character_managers
+        enemy_team = self.enemy_display.team.character_managers
 
+        for manager in player_team:
+            for eff in manager.source.current_effects:
+                
+                
                 #region Spend Turn Under Effect Mission Check
-                if not eff.check_waiting():
+                if not eff.eff_type == EffectType.SYSTEM:
+                    #region Spend Enemy Turn Under Effect
                     if eff.name == "Uzumaki Barrage" and eff.eff_type == EffectType.ALL_STUN:
                         if manager.is_stunned():
                             eff.user.progress_mission(2, 1)
                     if eff.name == "Tsukuyomi" and eff.eff_type == EffectType.ALL_STUN:
+                        if manager.is_stunned():
+                            eff.user.progress_mission(2, 1)
+                    if eff.name == "Alaudi's Handcuffs" and eff.eff_type == EffectType.ALL_STUN:
+                        if manager.is_stunned():
+                            eff.user.progress_mission(4, 1)
+                    #endregion
+                    if eff.name == "Active Combat Mode" and eff.eff_type == EffectType.CONT_DEST_DEF:
                         eff.user.progress_mission(2, 1)
-                if eff.name == "Shadow Clones" and eff.eff_type == EffectType.ALL_DR:
-                    eff.user.progress_mission(1, 1)
-                if eff.name == "Flying Raijin" and eff.eff_type == EffectType.ALL_INVULN:
-                    eff.user.progress_mission(5, 1)
-                if eff.name == "Kamui" and eff.eff_type == EffectType.IGNORE:
-                    eff.user.progress_mission(5, 1)
+                    if eff.name == "Dive":
+                        eff.user.progress_mission(4, 1)
+                    if eff.name == "Ally Mobilization":
+                        eff.user.progress_mission(2, 1)
+                    if eff.name == "Loyal Guard" and manager.check_invuln():
+                        manager.progress_mission(3, 1)
+                    if eff.name == "Fog of London" and eff.eff_type == EffectType.MARK and not eff.user.has_effect(EffectType.SYSTEM, "JackMission5Success"):
+                        if not eff.user.has_effect(EffectType.SYSTEM, "JackMission5Tracker"):
+                            eff.user.add_effect(Effect("JackMission5Tracker", EffectType.SYSTEM, eff.user, 280000, lambda eff:"", mag=0, system=True))
+                        else:
+                            eff.user.get_effect(EffectType.SYSTEM, "JackMission5Tracker").alter_mag(1)
+                            if eff.user.get_effect(EffectType.SYSTEM, "JackMission5Tracker").mag >= 10:
+                                eff.user.add_effect(Effect("JackMission5Success", EffectType.SYSTEM, eff.user, 280000, lambda eff:"", system=True))
+                                eff.user.remove_effect(EffectType.SYSTEM, "JackMission5Tracker")
+                    if eff.name == "Shadow Clones" and eff.eff_type == EffectType.ALL_DR:
+                        eff.user.progress_mission(1, 30)
+                    if eff.name == "Asari Ugetsu" and eff.eff_type == EffectType.ALL_DR:
+                        eff.user.progress_mission(5, 1)
+                    if eff.name == "Flying Raijin" and eff.eff_type == EffectType.ALL_INVULN:
+                        eff.user.progress_mission(5, 1)
+                    if eff.name == "Kamui" and eff.eff_type == EffectType.IGNORE:
+                        eff.user.progress_mission(5, 1)
+                    if eff.name == "Ice, Make Unlimited":
+                        eff.user.progress_mission(1, 1)
+                    if eff.name == "Summon Gyudon" and eff.eff_type == EffectType.MARK:
+                        eff.user.progress_mission(5, 1)
+                    
                 #endregion
                 if eff.eff_type == EffectType.CONSECUTIVE_TRACKER:
                         if not manager.has_effect(EffectType.CONSECUTIVE_BUFFER, eff.name):
                             eff.removing = True
                 eff.tick_duration()
+
+
                 if eff.duration == 0:
+                    
+                    if eff.name == "Lightning Palm" or eff.name == "Narukami" or eff.name == "Whirlwind Rush":
+                        if not eff.user.has_effect(EffectType.SYSTEM, "KilluaMission5Tracker"):
+                            eff.user.add_effect(Effect("KilluaMission5Failure", EffectType.SYSTEM, eff.user, 280000, lambda eff: "", system=True))
+
                     if eff.name == "Quirk - Transform":
                         for effect in manager.source.current_effects:
                             if effect.user == manager:
                                 manager.remove_effect(effect)
-                        swap_hp = manager.source.hp
-                        swap_effects = manager.source.current_effects
-                        manager.source = Character("toga")
-                        for i, sprite in enumerate(
-                                manager.main_ability_sprites):
-                            sprite.surface = manager.scene.get_scaled_surface(
-                                manager.scene.scene_manager.surfaces[
-                                    manager.source.main_abilities[i].db_name])
-                            sprite.ability = manager.source.main_abilities[i]
-                            sprite.null_pane.ability = manager.source.main_abilities[
-                                i]
-                            sprite.null_pane.in_battle_desc = manager.scene.create_text_display(
-                                self.font, sprite.null_pane.ability.name +
-                                ": " + sprite.null_pane.ability.desc, BLACK,
-                                WHITE, 5, 0, 520, 110)
-                            sprite.in_battle_desc = manager.scene.create_text_display(
-                                self.font, sprite.ability.name + ": " +
-                                sprite.ability.desc, BLACK, WHITE, 5, 0, 520,
-                                110)
-                        manager.alt_ability_sprites.clear()
-                        manager.source.hp = swap_hp
-                        manager.source.current_effects = swap_effects
+                        manager.toga_transform("toga")
+                        manager.add_effect(Effect("TogaReturnSignal", EffectType.SYSTEM, manager, 280000, lambda eff: "", system = True))
+
                     if eff.name == "Bunny Assault" and eff.eff_type == EffectType.CONT_USE:
                         if manager.has_effect(EffectType.DEST_DEF,
                                               "Perfect Paper - Rampage Suit"):
@@ -1192,6 +1269,7 @@ class BattleScene(engine.Scene):
                                 EffectType.DEST_DEF,
                                 "Perfect Paper - Rampage Suit").alter_dest_def(
                                     20)
+                            manager.progress_mission(3, 20)
                     if eff.name == "Thunder Palace":
                         for enemy in self.enemy_display.team.character_managers:
                             if enemy.final_can_effect(
@@ -1224,7 +1302,7 @@ class BattleScene(engine.Scene):
                                 "Quickdraw - Rifle has been replaced by Quickdraw - Sniper",
                                 mag=12))
                     if eff.name == "Illusory Breakdown" and eff.mag > 0:
-                        for emanager in self.enemy_display.team.character_managers:
+                        for emanager in enemy_team:
                             if emanager.has_effect(
                                     EffectType.MARK, "Illusory Breakdown"
                             ) and emanager.get_effect(
@@ -1241,7 +1319,7 @@ class BattleScene(engine.Scene):
                                             "This character is stunned."))
                                     manager.check_on_stun(emanager)
                     if eff.name == "Mental Immolation" and eff.mag > 0:
-                        for emanager in self.enemy_display.team.character_managers:
+                        for emanager in enemy_team:
                             if emanager.has_effect(
                                     EffectType.MARK, "Mental Immolation"
                             ) and emanager.get_effect(
@@ -1250,10 +1328,11 @@ class BattleScene(engine.Scene):
                                 if emanager.final_can_effect(
                                         manager.check_bypass_effects()):
                                     manager.deal_eff_damage(20, emanager, eff)
+                                    eff.user.progress_mission(3, 1)
                                     emanager.source.energy_contribution -= 1
                                     manager.check_on_drain(emanager)
                     if eff.name == "Mental Annihilation" and eff.mag > 0:
-                        for emanager in self.enemy_display.team.character_managers:
+                        for emanager in enemy_team:
                             if emanager.has_effect(
                                     EffectType.MARK, "Mental Annihilation"
                             ) and emanager.get_effect(
@@ -1262,7 +1341,7 @@ class BattleScene(engine.Scene):
                                 if emanager.final_can_effect("BYPASS"):
                                     manager.deal_eff_damage(35, emanager, eff)
                     if eff.name == "Illusory World Destruction" and eff.mag > 0:
-                        for emanager in self.enemy_display.team.character_managers:
+                        for emanager in enemy_team:
                             if emanager.final_can_effect(
                                     manager.check_bypass_effects()):
                                 manager.deal_eff_damage(25, emanager, eff)
@@ -1285,15 +1364,236 @@ class BattleScene(engine.Scene):
             
             manager.source.current_effects = new_list
 
-        for manager in self.enemy_display.team.character_managers:
+        for manager in enemy_team:
             for eff in manager.source.current_effects:
                 eff.tick_duration()
+
+                if eff.name == "Consecutive Normal Punches":
+                    if manager.has_effect(EffectType.SYSTEM, "SaitamaMission2Tracker") and not eff.user.source.mission2complete:
+                        manager.get_effect(EffectType.SYSTEM, "SaitamaMission2Tracker").alter_mag(1)
+                        if manager.get_effect(EffectType.SYSTEM, "SaitamaMission2Tracker").mag >= 7:
+                            eff.user.source.mission2complete = True
+                            eff.user.progress_mission(2, 1)
+                        else:
+                            manager.get_effect(EffectType.SYSTEM, "SaitamaMission2Tracker").duration += 2
                 if eff.duration == 0:
                     if eff.invisible and not manager.has_effect(
                             EffectType.INVIS_END, eff.name):
                         manager.add_effect(
                             Effect(eff.source, EffectType.INVIS_END, eff.user,
                                    2, lambda eff: f"{eff.name} has ended."))
+                    if eff.name == "In The Name Of Ruler!" and eff.eff_type == EffectType.ALL_STUN:
+                        eff.user.progress_mission(1, 1)
+                    if eff.name == "Hidden Mine" and eff.eff_Type == EffectType.UNIQUE:
+                        eff.user.progress_mission(5, 1)
+                    if eff.name == "Illusory Disorientation":
+                        eff.user.progress_mission(5, 1)
+            new_list = [
+                eff for eff in manager.source.current_effects
+                if eff.duration > 0 and not eff.removing
+            ]
+            manager.source.current_effects = new_list
+        new_reflected_list = [eff for eff in self.sharingan_reflected_effects if eff.duration > 0 and not eff.removing]
+        self.sharingan_reflected_effects = new_reflected_list
+
+    def test_enemy_tick_effect_duration(self):
+        player_team = self.enemy_display.team.character_managers
+        enemy_team = self.player_display.team.character_managers
+
+        for manager in player_team:
+            for eff in manager.source.current_effects:
+                
+                
+                #region Spend Turn Under Effect Mission Check
+                if not eff.eff_type == EffectType.SYSTEM:
+                    #region Spend Enemy Turn Under Effect
+                    
+                    if eff.name == "Uzumaki Barrage" and eff.eff_type == EffectType.ALL_STUN:
+                        if manager.is_stunned():
+                            eff.user.progress_mission(2, 1)
+                    if eff.name == "Tsukuyomi" and eff.eff_type == EffectType.ALL_STUN:
+                        if manager.is_stunned():
+                            eff.user.progress_mission(2, 1)
+                    if eff.name == "Alaudi's Handcuffs" and eff.eff_type == EffectType.ALL_STUN:
+                        if manager.is_stunned():
+                            eff.user.progress_mission(4, 1)
+                    #endregion
+                    if eff.name == "Active Combat Mode" and eff.eff_type == EffectType.CONT_DEST_DEF:
+                        eff.user.progress_mission(2, 1)
+                    if eff.name == "Dive":
+                        eff.user.progress_mission(4, 1)
+                    if eff.name == "Ally Mobilization":
+                        eff.user.progress_mission(2, 1)
+                    if eff.name == "Loyal Guard" and manager.check_invuln():
+                        manager.progress_mission(3, 1)
+                    if eff.name == "Fog of London" and eff.eff_type == EffectType.MARK and not eff.user.has_effect(EffectType.SYSTEM, "JackMission5Success"):
+                        if not eff.user.has_effect(EffectType.SYSTEM, "JackMission5Tracker"):
+                            eff.user.add_effect(Effect("JackMission5Tracker", EffectType.SYSTEM, eff.user, 280000, lambda eff:"", mag=0, system=True))
+                        else:
+                            eff.user.get_effect(EffectType.SYSTEM, "JackMission5Tracker").alter_mag(1)
+                            if eff.user.get_effect(EffectType.SYSTEM, "JackMission5Tracker").mag >= 10:
+                                eff.user.add_effect(Effect("JackMission5Success", EffectType.SYSTEM, eff.user, 280000, lambda eff:"", system=True))
+                                eff.user.remove_effect(EffectType.SYSTEM, "JackMission5Tracker")
+                    if eff.name == "Shadow Clones" and eff.eff_type == EffectType.ALL_DR:
+                        eff.user.progress_mission(1, 1)
+                    if eff.name == "Asari Ugetsu" and eff.eff_type == EffectType.ALL_DR:
+                        eff.user.progress_mission(5, 1)
+                    if eff.name == "Flying Raijin" and eff.eff_type == EffectType.ALL_INVULN:
+                        eff.user.progress_mission(5, 1)
+                    if eff.name == "Kamui" and eff.eff_type == EffectType.IGNORE:
+                        eff.user.progress_mission(5, 1)
+                    if eff.name == "Ice, Make Unlimited":
+                        eff.user.progress_mission(1, 1)
+                    if eff.name == "Summon Gyudon" and eff.eff_type == EffectType.MARK:
+                        eff.user.progress_mission(5, 1)
+                    
+                #endregion
+                if eff.eff_type == EffectType.CONSECUTIVE_TRACKER:
+                        if not manager.has_effect(EffectType.CONSECUTIVE_BUFFER, eff.name):
+                            eff.removing = True
+                if eff.name == "Tsukuyomi" and eff.eff_type == EffectType.ALL_STUN:
+                    print(f"Enemy Tsuku before tick: {eff.duration}")
+                eff.tick_duration()
+                if eff.name == "Tsukuyomi" and eff.eff_type == EffectType.ALL_STUN:
+                    print(f"Enemy Tsuku: {eff.duration}")
+                if eff.duration == 0:
+                    
+                    if eff.name == "Lightning Palm" or eff.name == "Narukami" or eff.name == "Whirlwind Rush":
+                        if not eff.user.has_effect(EffectType.SYSTEM, "KilluaMission5Tracker"):
+                            eff.user.add_effect(Effect("KilluaMission5Failure", EffectType.SYSTEM, eff.user, 280000, lambda eff: "", system=True))
+
+                    if eff.name == "Quirk - Transform":
+                        for effect in manager.source.current_effects:
+                            if effect.user == manager:
+                                manager.remove_effect(effect)
+                        manager.toga_transform("toga")
+                        manager.add_effect(Effect("TogaReturnSignal", EffectType.SYSTEM, manager, 280000, lambda eff: "", system = True))
+
+                    if eff.name == "Bunny Assault" and eff.eff_type == EffectType.CONT_USE:
+                        if manager.has_effect(EffectType.DEST_DEF,
+                                              "Perfect Paper - Rampage Suit"):
+                            manager.get_effect(
+                                EffectType.DEST_DEF,
+                                "Perfect Paper - Rampage Suit").alter_dest_def(
+                                    20)
+                            manager.progress_mission(3, 20)
+                    if eff.name == "Thunder Palace":
+                        for enemy in self.enemy_display.team.character_managers:
+                            if enemy.final_can_effect(
+                                    manager.check_bypass_effects()):
+                                eff.user.deal_eff_damage(40, enemy, eff)
+                    if eff.name == "Lightning Dragon's Roar":
+                        manager.add_effect(
+                            Effect(Ability("laxus2"),
+                                   EffectType.ALL_DR,
+                                   eff.user,
+                                   2,
+                                   lambda eff:
+                                   "This character will take 10 more damage.",
+                                   mag=-10))
+                    if eff.name == "Mahapadma" and eff.eff_type == EffectType.MARK:
+                        manager.add_effect(
+                            Effect(Ability("esdeathalt1"), EffectType.ALL_STUN,
+                                   manager, 5,
+                                   lambda eff: "Esdeath is stunned."))
+                    if eff.name == "Quickdraw - Rifle" and eff.eff_type == EffectType.CONT_USE:
+                        manager.full_remove_effect("Quickdraw - Rifle",
+                                                   manager)
+                        manager.add_effect(
+                            Effect(
+                                Ability("cmaryalt2"),
+                                EffectType.ABILITY_SWAP,
+                                manager,
+                                280000,
+                                lambda eff:
+                                "Quickdraw - Rifle has been replaced by Quickdraw - Sniper",
+                                mag=12))
+                    if eff.name == "Illusory Breakdown" and eff.mag > 0:
+                        for emanager in enemy_team:
+                            if emanager.has_effect(
+                                    EffectType.MARK, "Illusory Breakdown"
+                            ) and emanager.get_effect(
+                                    EffectType.MARK,
+                                    "Illusory Breakdown").user == manager:
+                                if emanager.final_can_effect(
+                                        manager.check_bypass_effects()):
+                                    manager.deal_eff_damage(25, emanager, eff)
+                                    emanager.add_effect(
+                                        Effect(
+                                            Ability("chrome2"),
+                                            EffectType.ALL_STUN, manager, 2,
+                                            lambda eff:
+                                            "This character is stunned."))
+                                    manager.check_on_stun(emanager)
+                    if eff.name == "Mental Immolation" and eff.mag > 0:
+                        for emanager in enemy_team:
+                            if emanager.has_effect(
+                                    EffectType.MARK, "Mental Immolation"
+                            ) and emanager.get_effect(
+                                    EffectType.MARK,
+                                    "Mental Immolation").user == manager:
+                                if emanager.final_can_effect(
+                                        manager.check_bypass_effects()):
+                                    manager.deal_eff_damage(20, emanager, eff)
+                                    eff.user.progress_mission(3, 1)
+                                    emanager.source.energy_contribution -= 1
+                                    manager.check_on_drain(emanager)
+                    if eff.name == "Mental Annihilation" and eff.mag > 0:
+                        for emanager in enemy_team:
+                            if emanager.has_effect(
+                                    EffectType.MARK, "Mental Annihilation"
+                            ) and emanager.get_effect(
+                                    EffectType.MARK,
+                                    "Mental Annihilation").user == manager:
+                                if emanager.final_can_effect("BYPASS"):
+                                    manager.deal_eff_damage(35, emanager, eff)
+                    if eff.name == "Illusory World Destruction" and eff.mag > 0:
+                        for emanager in enemy_team:
+                            if emanager.final_can_effect(
+                                    manager.check_bypass_effects()):
+                                manager.deal_eff_damage(25, emanager, eff)
+                                emanager.add_effect(
+                                    Effect(
+                                        Ability("chromealt2"),
+                                        EffectType.ALL_STUN, manager, 2, lambda
+                                        eff: "This character is stunned."))
+                                manager.check_on_stun(emanager)
+                    if not manager.has_effect(
+                            EffectType.INVIS_END,
+                            eff.name) and eff.invisible == True:
+                        manager.add_effect(
+                            Effect(eff.source, EffectType.INVIS_END, eff.user,
+                                   2, lambda eff: f"{eff.name} has ended."))
+            new_list = [
+                eff for eff in manager.source.current_effects
+                if eff.duration > 0 and not eff.removing
+            ]
+            
+            manager.source.current_effects = new_list
+
+        for manager in enemy_team:
+            for eff in manager.source.current_effects:
+                eff.tick_duration()
+                if eff.name == "Consecutive Normal Punches":
+                    if manager.has_effect(EffectType.SYSTEM, "SaitamaMission2Tracker") and not eff.user.source.mission2complete:
+                        manager.get_effect(EffectType.SYSTEM, "SaitamaMission2Tracker").alter_mag(1)
+                        if manager.get_effect(EffectType.SYSTEM, "SaitamaMission2Tracker").mag >= 7:
+                            eff.user.source.mission2complete = True
+                            eff.user.progress_mission(2, 1)
+                        else:
+                            manager.get_effect(EffectType.SYSTEM, "SaitamaMission2Tracker").duration += 2
+                if eff.duration == 0:
+                    if eff.invisible and not manager.has_effect(
+                            EffectType.INVIS_END, eff.name):
+                        manager.add_effect(
+                            Effect(eff.source, EffectType.INVIS_END, eff.user,
+                                   2, lambda eff: f"{eff.name} has ended."))
+                    if eff.name == "In The Name Of Ruler!" and eff.eff_type == EffectType.ALL_STUN:
+                        eff.user.progress_mission(1, 1)
+                    if eff.name == "Hidden Mine" and eff.eff_Type == EffectType.UNIQUE:
+                        eff.user.progress_mission(5, 1)
+                    if eff.name == "Illusory Disorientation":
+                        eff.user.progress_mission(5, 1)
             new_list = [
                 eff for eff in manager.source.current_effects
                 if eff.duration > 0 and not eff.removing
@@ -1311,6 +1611,14 @@ class BattleScene(engine.Scene):
         play_sound(self.scene_manager.sounds["turnstart"])
         game_lost = True
         for manager in self.player_display.team.character_managers:
+
+            if manager.source.name == "nemurin":
+                if manager.has_effect(EffectType.CONT_UNIQUE, "Nemurin Nap") and manager.get_effect(EffectType.CONT_UNIQUE, "Nemurin Nap").mag <= 0:
+                    if not (manager.has_effect(EffectType.SYSTEM, "NemurinMission5Tracker") or manager.has_effect(EffectType.SYSTEM, "NemurinMission5Failure")):
+                        manager.add_effect(Effect("NemurinMission5Tracker", EffectType.SYSTEM, manager, 280000, lambda eff:"", mag=1, system=True))
+                    else:
+                        manager.add_effect(Effect("NemurinMission5Failure", EffectType.SYSTEM, manager, 280000, lambda eff:"", system=True))
+
             if manager.source.hp <= 0:
                 manager.source.dead = True
             manager.refresh_character()
@@ -1324,6 +1632,9 @@ class BattleScene(engine.Scene):
             manager.refresh_character(True)
             if not manager.source.dead:
                 game_won = False
+
+
+
         #region Yatsufusa resurrection handling
         for manager in self.player_display.team.character_managers:
             if manager.source.dead and manager.has_effect(
@@ -1362,12 +1673,16 @@ class BattleScene(engine.Scene):
 
     def lose_game(self):
         self.player.losses += 1
+
+        self.lose_game_mission_check()
+
         for i in range(3):
             self.player.missions[self.player_display.team.character_managers[i].source.name][0] += self.player_display.team.character_managers[i].source.mission1progress
             self.player.missions[self.player_display.team.character_managers[i].source.name][1] += self.player_display.team.character_managers[i].source.mission2progress
             self.player.missions[self.player_display.team.character_managers[i].source.name][2] += self.player_display.team.character_managers[i].source.mission3progress
             self.player.missions[self.player_display.team.character_managers[i].source.name][3] += self.player_display.team.character_managers[i].source.mission4progress
             self.player.missions[self.player_display.team.character_managers[i].source.name][4] += self.player_display.team.character_managers[i].source.mission5progress
+            
         self.scene_manager.connection.send_player_update(self.player)
         self.scene_manager.connection.send_match_statistics([
             manager.source.name
@@ -1388,12 +1703,211 @@ class BattleScene(engine.Scene):
         play_sound(self.scene_manager.sounds["click"])
         self.scene_manager.return_to_select(self.player)
 
+    def saber_is_the_strongest_servant(self, saber: "CharacterManager") -> bool:
+        saber_damage = 0
+        manager_damage = 0
+        if saber.has_effect(EffectType.SYSTEM, "SaberDamageTracker"):
+            saber_damage = saber.get_effect(EffectType.SYSTEM, "SaberDamageTracker").mag
+            for manager in self.player_display.team.character_managers:
+                if manager != saber:
+                    if manager.has_effect(EffectType.SYSTEM, "SaberDamageTracker"):
+                        manager_damage = manager.get_effect(EffectType.SYSTEM, "SaberDamageTracker").mag
+                    else:
+                        manager_damage = 0
+                    if manager_damage > saber_damage:
+                        return False
+            for manager in self.enemy_display.team.character_managers:
+                if manager != saber:
+                    if manager.has_effect(EffectType.SYSTEM, "SaberDamageTracker"):
+                        manager_damage = manager.get_effect(EffectType.SYSTEM, "SaberDamageTracker").mag
+                    else:
+                        manager_damage = 0
+                    if manager_damage > saber_damage:
+                        return False
+            return True
+
     def win_game_mission_check(self):
         for character in self.player_display.team.character_managers:
             if "itachi" in self.missions_to_check:
                 if character.has_effect(EffectType.SYSTEM, "ItachiMission4Tracker"):
                     character.progress_mission(4, 1)
+            if "aizen" in self.missions_to_check:
+                if character.has_effect(EffectType.SYSTEM, "AizenMission5Tracker"):
+                    character.progress_mission(5, 1)
+            if "toga" in self.missions_to_check:
+                if character.has_effect(EffectType.SYSTEM, "TogaMission3Ready"):
+                    character.progress_mission(3, 1)
+                if not character.has_effect(EffectType.UNIQUE, "Quirk - Transform") and character.source.name == "toga":
+                    character.progress_mission(5, 1)
+                if character.has_effect(EffectType.UNIQUE, "Quirk - Transform"):
+                    character.progress_mission(4, 1)
+            if "mirio" in self.missions_to_check:
+                if self.get_character_from_team("mirio", self.player_display.team.character_managers):
+                    mission4check = False
+                    for character in self.player_display.team.character_managers:
+                        if character.source.current_hp == 100:
+                            mission4check = True
+                    if mission4check:
+                        self.get_character_from_team("mirio", self.player_display.team.character_managers).progress_mission(4, 1)
+            if "shigaraki" in self.missions_to_check:
+                if character.has_effect(EffectType.SYSTEM, "ShigarakiMission3Tracker"):
+                    character.progress_mission(3, 1)
+                if character.has_effect(EffectType.SYSTEM, "ShigarakiMission4Tracker") and character.get_effect(EffectType.SYSTEM, "ShigarakiMission4Tracker").mag >= 3:
+                    character.progress_mission(4, 1)
+            if "uraraka" in self.missions_to_check:
+                if not character.has_effect(EffectType.SYSTEM, "UrarakaMission5Tracker") and character.source.name == "uraraka":
+                    character.progress_mission(5, 1)
+            if "todoroki" in self.missions_to_check:
+                if character.has_effect(EffectType.SYSTEM, "TodorokiMission1Tracker") and character.get_effect(EffectType.SYSTEM, "TodorokiMission1Tracker").mag >= 3:
+                    character.progress_mission(1, 1)
+            if "jiro" in self.missions_to_check:
+                if character.has_effect(EffectType.SYSTEM, "JiroMission5Tracker"):
+                    character.progress_mission(5, 1)
+            if "natsu" in self.missions_to_check:
+                if character.has_effect(EffectType.SYSTEM, "NatsuMission3TrackerSuccess"):
+                    character.progress_mission(3, 1)
+            if "gray" in self.missions_to_check:
+                if character.has_effect(EffectType.SYSTEM, "GrayMission3Tracker") and character.get_effect(EffectType.SYSTEM, "GrayMission3Tracker").mag >= 4:
+                    character.progress_mission(3, 1)
+                if character.has_effect(EffectType.SYSTEM, "GrayMission4TrackerSuccess"):
+                    character.progress_mission(4, 1)
+            if "erza" in self.missions_to_check:
+                if character.has_effect(EffectType.SYSTEM, "ErzaMission5Tracker"):
+                    character.progress_mission(5, 1)
+            if "lucy" in self.missions_to_check:
+                if self.get_character_from_team("lucy", self.player_display.team.character_managers) and not character.has_effect(EffectType.SYSTEM, "LucyMission5Failure"):
+                    character.progress_mission(5, 1)
+            if "saber" in self.missions_to_check:
+                if self.get_character_from_team("saber", self.player_display.team.character_managers) and self.saber_is_the_strongest_servant(character):
+                    character.progress_mission(3, 1)
+            if "jack" in self.missions_to_check:
+                if character.has_effect(EffectType.SYSTEM, "JackMission5Success"):
+                    character.progress_mission(5, 1)
+            if "gunha" in self.missions_to_check:
+                if character.has_effect(EffectType.SYSTEM, "GunhaMission3Tracker"):
+                    character.progress_mission(3, 1)
+            if "misaki" in self.missions_to_check:
+                if character.has_effect(EffectType.SYSTEM, "MisakiMission4Success"):
+                    character.progress_mission(4, 1)
+                if character.has_effect(EffectType.SYSTEM, "MisakiMission5Success"):
+                    character.progress_mission(5, 1)
+            if "frenda" in self.missions_to_check:
+                if character.has_effect(EffectType.SYSTEM, "FrendaMission2Tracker") and character.get_effect(EffectType.SYSTEM, "FrendaMission2Tracker").mag >= 3:
+                    character.progress_mission(2, 1)
+                if character.source.name == "frenda":
+                    mission_complete = True
+                    for ally in self.player_display.team.character_managers:
+                        if ally.source.name != "frenda" and not ally.source.dead:
+                            mission_complete = False
+                        if ally.source.name == "frenda" and not ally.source.hp < 25:
+                            mission_complete = False
+                    if mission_complete:
+                        character.progress_mission(5, 1)
+            if "naruha" in self.missions_to_check:
+                if not character.has_effect(EffectType.UNIQUE, "Perfect Paper - Rampage Suit"):
+                    character.progress_mission(1, 1)
+                if character.has_effect(EffectType.UNIQUE, "Perfect Paper - Rampage Suit"):
+                    character.progress_mission(2, 1)
+            if "frenda" in self.missions_to_check:
+                if character.has_effect(EffectType.SYSTEM, "FrendaMission4Tracker") and character.get_effect(EffectType.SYSTEM, "FrendaMission4Tracker").mag >= 3:
+                    character.progress_mission(4, 1)
+            if "lambo" in self.missions_to_check:
+                if self.get_character_from_team("lambo", self.player_display.team.character_managers) and not character.has_effect(EffectType.SYSTEM, "LamboMission1Failure"):
+                    character.progress_mission(1, 1)
+                if self.has_effect(EffectType.PROF_SWAP, "Ten-Year Bazooka"):
+                    if self.get_effect(EffectType.PROF_SWAP, "Ten-YearBazooka").mag == 1:
+                        character.progress_mission(2, 1)
+                    else:
+                        character.progress_mission(3, 1)
+            if "chrome" in self.missions_to_check:
+                if self.get_character_from_team("chrome", self.player_display.team.character_managers):
+                    if character.has_effect(EffectType.PROF_SWAP, "You Are Needed"):
+                        character.progress_mission(2, 1)
+                    else:
+                        character.progress_mission(1, 1)
+                    if character.has_effect(EffectType.SYSTEM, "ChromeMission5Tracker") and character.get_effect(EffectType.SYSTEM, "ChromeMission5Tracker").mag >= 3:
+                        character.progress_mission(5, 1)
+            if "tatsumi" in self.missions_to_check:
+                if character.has_effect(EffectType.SYSTEM, "TatsumiMission5Tracker") and character.get_effect(EffectType.SYSTEM, "TatsumiMission5Tracker").mag >= 3:
+                    character.progress_mission(4, 1)
+            if "mine" in self.missions_to_check:
+                if character.has_effect(EffectType.SYSTEM, "MineMission4Tracker") and character.get_effect(EffectType.SYSTEM, "MineMission4Tracker").mag >= 3:
+                    character.progress_mission(4, 1)
+                if character.has_effect(EffectType.SYSTEM, "SaberDamageTracker") and character.get_effect(EffectType.SYSTEM, "SaberDamageTracker").mag >= 225:
+                    character.progress_mission(5, 1)
+            if "tsuna" in self.missions_to_check:
+                if character.has_effect(EffectType.SYSTEM, "TsunaMission4Tracker") and character.get_effect(EffectType.SYSTEM, "TsunaMission4Tracker").mag >= 3:
+                    character.progress_mission(4, 1)
+            if "akame" in self.missions_to_check:
+                if character.has_effect(EffectType.SYSTEM, "AkameMission3Tracker"):
+                    character.progress_mission(3, 1)
+                if character.has_effect(EffectType.SYSTEM, "AkameMission5Tracker") and character.get_effect(EffectType.SYSTEM, "AkameMission5Tracker").mag >= 3:
+                    character.progress_mission(5, 1)
+            if character.source.name == "leone":
+                if character.has_effect(EffectType.SYSTEM, "LeoneMission5Tracker") and character.get_effect(EffectType.SYSTEM, "LeoneMission5Tracker").mag >= 200:
+                    character.progress_mission(5, 1)
+            if character.source.name == "lubbock":
+                if not character.has_effect(EffectType.SYSTEM, "LubbockMission4Failure"):
+                    character.progress_mission(4, 1)
+                if not character.has_effect(EffectType.SYSTEM, "LubbockMission5Failure"):
+                    character.progress_mission(5, 1)
+            if character.source.name == "esdeath":
+                character.progress_mission(2, 1)
+                if not character.has_effect(EffectType.SYSTEM, "EsdeathMission3Failure"):
+                    character.progress_mission(3, 1)
+                if character.has_effect(EffectType.SYSTEM, "EsdeathMission5Tracker"):
+                    character.progress_mission(5, 1)
+            if character.source.name == "snowwhite":
+                if not character.has_effect(EffectType.SYSTEM, "SnowWhiteMission4Failure"):
+                    character.progress_mission(4, 1)
+            if character.source.name == "ripple":
+                if character.has_effect(EffectType.SYSTEM, "RippleMission5Tracker") and character.get_effect(EffectType.SYSTEM, "RippleMission5Tracker").mag >= 3:
+                    character.progress_mission(5, 1)
+            if character.source.name == "nemurin":
+                if not character.has_effect(EffectType.SYSTEM, "NemurinMission5Failure"):
+                    character.progress_mission(5, 1)
+            if character.source.name == "swimswim":
+                if character.last_man_standing():
+                    character.progress_mission(3, 1)
+                if character.has_effect(EffectType.SYSTEM, "SwimSwimMission5Tracker") and character.get_effect(EffectType.SYSTEM, "SwimSwimMission5Tracker").mag >= 5:
+                    character.progress_mission(5, 1)
+            if character.source.name == "pucelle":
+                if character.has_effect(EffectType.SYSTEM, "PucelleMission5Tracker"):
+                    character.progress_mission(5, 1)
+            if character.source.name == "chachamaru":
+                if character.has_effect(EffectType.SYSTEM, "ChachamaruMission4Tracker") and character.get_effect(EffectType.SYSTEM, "ChachamaruMission4Tracker").mag >= 3:
+                    character.progress_mission(4, 1)
+            if character.source.name == "saitama":
+                if character.has_effect(EffectType.SYSTEM, "SaitamaMission4Tracker") and not character.has_effect(EffectType.SYSTEM, "SaitamaMission4Failure"):
+                    character.progress_mission(4, 1)
+            if character.source.name == "saitama":
+                if character.has_effect(EffectType.SYSTEM, "SaitamaMission5Tracker") and character.get_effect(EffectType.SYSTEM, "SaitamaMission5Tracker").mag >= 3:
+                    character.progress_mission(5, 1)
+            if character.source.name == "touka":
+                if not character.has_effect(EffectType.SYSTEM, "ToukaMission5Failure"):
+                    character.progress_mission(5, 1)
+            if character.source.name == "killua":
+                if not character.has_effect(EffectType.SYSTEM, "KilluaMission5Failure"):
+                    character.progress_mission(5, 1)
+                
+                
+    def lose_game_mission_check(self):
+        for character in self.player_display.team.character_managers:   
+            if "saber" in self.missions_to_check:
+                if self.get_character_from_team("saber", self.player_display.team.character_managers) and self.saber_is_the_strongest_servant(character):
+                    character.progress_mission(4, 1)
+            if "mine" in self.missions_to_check:
+                if self.get_character_from_team("mine", self.player_display.team.character_managers) and character.has_effect(EffectType.SYSTEM, "SaberDamageTracker") and character.get_effect(EffectType.SYSTEM, "SaberDamageTracker").mag >= 225:
+                    character.progress_mission(5, 1)
+            if character.source.name == "leone":
+                if character.has_effect(EffectType.SYSTEM, "LeoneMission5Tracker") and character.get_effect(EffectType.SYSTEM, "LeoneMission5Tracker").mag >= 200:
+                    character.progress_mission(5, 1)
 
+    def get_character_from_team(self, name: str, team: list["CharacterManager"]):
+        for character in team:
+            if character.source.name == name:
+                return character
+        return None
 
     def win_game(self, surrendered=False):
         self.player.wins += 1
@@ -1643,6 +2157,12 @@ class BattleScene(engine.Scene):
                     280000,
                     lambda eff: f"The Sistema C.A.I. is at Stage {eff.mag}.",
                     mag=1))
+        if character.source.name == "aizen":
+            character.add_effect(Effect("AizenMission5Tracker", EffectType.SYSTEM, character, 280000, lambda eff: "", mag = 0, system = True))
+        if character.source.name == "jiro":
+            character.add_effect(Effect("JiroMission5Tracker", EffectType.SYSTEM, character, 2, lambda eff:"", system=True))
+        if character.source.name == "toga":
+            character.is_toga = True
 
     def setup_scene(self,
                     ally_team: list[Character],
@@ -1724,7 +2244,7 @@ class BattleScene(engine.Scene):
                     sdl2.ext.BUTTON,
                     self.get_scaled_surface(self.scene_manager.surfaces[
                         char_manager.source.alt_abilities[j].db_name]))
-                for j in range(len(char_manager.source.alt_abilities) - 1)
+                for j in range(len(char_manager.source.alt_abilities))
             ]
             for j, sprite in enumerate(char_manager.alt_ability_sprites):
                 sprite.selected_pane = self.ui_factory.from_surface(
@@ -1947,6 +2467,7 @@ class CharacterManager():
     hp_bar_region: engine.Region
     effect_region: engine.Region
     hover_effect_region: engine.Region
+    is_toga: bool
     id: int
 
     def __init__(self, source: character.Character, scene: BattleScene):
@@ -1957,8 +2478,17 @@ class CharacterManager():
         self.used_ability = None
         self.targeted = False
         self.acted = False
+        self.is_toga = False
         self.received_ability = []
         self.current_targets = []
+
+    @property
+    def player_team(self):
+        return self.scene.player_display.team.character_managers
+    
+    @property
+    def enemy_team(self):
+        return self.scene.enemy_display.team.character_managers
 
     def get_ability_by_name(self, name: str) -> Optional[Ability]:
         for ability in self.source.current_abilities:
@@ -2077,8 +2607,21 @@ class CharacterManager():
     def check_on_harm(self):
         for character in self.current_targets:
             if character.id > 2:
+
+                if character.source.name == "gajeel":
+                    if not character.has_effect(EffectType.SYSTEM, "GajeelMission5Tracker"):
+                        character.add_effect(Effect("GajeelMission5Tracker", EffectType.SYSTEM, character, 280000, lambda eff:"", mag=1, system=True))
+                    else:
+                        character.get_effect(EffectType.SYSTEM, "GajeelMission5Tracker").alter_mag(1)
+                    if character.get_effect(EffectType.SYSTEM, "GajeelMission5Tracker").mag >= 15 and not character.source.mission5complete:
+                        character.progress_mission(5, 1)
+                        character.source.mission5complete = True
+                if character.has_effect(EffectType.IGNORE, "Serious Series - Serious Punch"):
+                    character.progress_mission(3, 1)
+
                 if character.has_effect(EffectType.UNIQUE, "Hear Distress"):
                     character.source.energy_contribution += 1
+                    character.get_effect(EffectType.UNIQUE, "Hear Distress").user.progress_mission(1, 1)
                 if character.has_effect(
                         EffectType.UNIQUE,
                         "Iron Shadow Dragon") and not character.is_ignoring():
@@ -2086,6 +2629,8 @@ class CharacterManager():
                         Effect(Ability("gajeel3"), EffectType.IGNORE,
                                character, 1, lambda eff: ""))
                 if character.has_effect(EffectType.MARK, "Quirk - Permeation"):
+                    character.get_effect(EffectType.MARK, "Quirk - Permeation").user.progress_mission(1, 1)
+
                     self.add_effect(
                         Effect(
                             Ability("mirio2"), EffectType.MARK, character, 2,
@@ -2093,6 +2638,8 @@ class CharacterManager():
                             "This character will take 15 more piercing damage from Phantom Menace, and it will automatically target them."
                         ))
                 if character.has_effect(EffectType.MARK, "Protect Ally"):
+                    character.get_effect(EffectType.MARK, "Protect Ally").user.progress_mission(2, 1)
+
                     self.add_effect(
                         Effect(
                             Ability("mirio2"), EffectType.MARK, character, 2,
@@ -2112,6 +2659,11 @@ class CharacterManager():
 
     def check_on_help(self):
         for target in self.current_targets:
+            if target.source.name == "swimswim":
+                if not target.has_effect(EffectType.SYSTEM, "SwimSwimMission5Tracker"):
+                    target.add_effect(Effect("SwimSwimMission5Tracker", EffectType.SYSTEM, target, 280000, lambda eff:"", mag=1, system=True))
+                else:
+                    target.get_effect(EffectType.SYSTEM, "SwimSwimMission5Tracker").alter_mag(1)
             if target.has_effect(EffectType.UNIQUE, "Tsukuyomi"):
                 target.full_remove_effect(
                     "Tsukuyomi",
@@ -2121,15 +2673,20 @@ class CharacterManager():
         for target in self.current_targets:
 
             #region Receive Ability Mission Tracking
-            if target.has_effect(EffectType.ALL_DR, "Eight Trigrams - 64 Palms"):
+            if target.has_effect(EffectType.ALL_DR, "Eight Trigrams - 64 Palms") and self.used_ability.name != "Eight Trigrams - 64 Palms":
                 target.get_effect(EffectType.ALL_DR, "Eight Trigrams - 64 Palms").user.progress_mission(4, 1)
+            if self.mission_active("lucy", self):
+                if self.has_effect(EffectType.MARK, "Gemini"):
+                    self.progress_mission(2, 1)
+                else:
+                    self.add_effect(Effect("LucyMission5Failure", EffectType.SYSTEM, self, 280000, lambda eff:"", system=True))
             #endregion
 
             if target.has_effect(EffectType.MARK,
                                  "Shredding Wedding") and not self.has_effect(
                                      EffectType.MARK, "Shredding Wedding"):
                 if self.final_can_effect():
-                    self.receive_pierce_damage(
+                    self.receive_eff_pierce_damage(
                         20,
                         target.get_effect(EffectType.MARK,
                                           "Shredding Wedding").user)
@@ -2137,7 +2694,7 @@ class CharacterManager():
                                "Shredding Wedding") and not target.has_effect(
                                    EffectType.MARK, "Shredding Wedding"):
                 if self.final_can_effect():
-                    self.receive_pierce_damage(
+                    self.receive_eff_pierce_damage(
                         20,
                         self.get_effect(EffectType.MARK,
                                         "Shredding Wedding").user)
@@ -2160,6 +2717,7 @@ class CharacterManager():
                 self.get_effect(EffectType.MARK,
                                 "Illusory Disorientation").user)
         if self.has_effect(EffectType.MARK, "Solid Script - Fire"):
+            self.get_effect(EffectType.MARK, "Solid Script - Fire").user.progress_mission(1, 1)
             self.receive_eff_aff_damage(
                 10,
                 self.get_effect(EffectType.MARK, "Solid Script - Fire"))
@@ -2180,6 +2738,8 @@ class CharacterManager():
 
         if target.has_effect(EffectType.MARK, "Counter-Balance"):
             self.source.energy_contribution -= 1
+            self.add_effect(Effect("JiroMission4Tracker", EffectType.SYSTEM, target.get_effect(EffectType.MARK, "Counter-Balance").user, 2, lambda eff:"", system=True))
+            target.get_effect(EffectType.MARK, "Counter-Balance").user.progress_mission(1, 1)
 
         if target.is_stunned():
             target.cancel_control_effects()
@@ -2212,6 +2772,8 @@ class CharacterManager():
                     Ability("jiro1"), EffectType.ALL_STUN,
                     target.get_effect(EffectType.MARK, "Counter-Balance").user,
                     3, lambda eff: "This character is stunned."))
+            self.add_effect(Effect("JiroMission4Tracker", EffectType.SYSTEM, target.get_effect(EffectType.MARK, "Counter-Balance").user, 2, lambda eff:"", system=True))
+            target.get_effect(EffectType.MARK, "Counter-Balance").user.progress_mission(1, 1)
 
     def check_damage_drain(self) -> int:
         gen = [
@@ -2240,6 +2802,7 @@ class CharacterManager():
                             f"Yamamoto has {eff.mag} stack(s) of Asari Ugetsu.",
                             mag=1), eff.user)
                 else:
+                    eff.user.progress_mission(1, 1)
                     eff.user.apply_stack_effect(
                         Effect(
                             Ability("yamamoto3"),
@@ -2249,6 +2812,8 @@ class CharacterManager():
                             lambda eff:
                             f"Yamamoto has {eff.mag} stack(s) of Asari Ugetsu.",
                             mag=3), eff.user)
+                if eff.user.get_effect(EffectType.STACK, "Asari Ugetsu").mag >= 10:
+                    eff.user.progress_mission(3, 1)
         if eff.name == "Vacuum Syringe":
             if self.final_can_effect(eff.user.check_bypass_effects()):
                 self.receive_eff_aff_damage(10, eff.user)
@@ -2261,6 +2826,7 @@ class CharacterManager():
                         lambda eff:
                         f"Toga has drawn blood from this character {eff.mag} time(s).",
                         mag=1), eff.user)
+                eff.user.progress_mission(2, 1)
         if eff.name == "Decaying Touch":
             if self.final_can_effect(eff.user.check_bypass_effects()):
                 self.receive_eff_aff_damage((5 * (2**eff.mag)), eff.user)
@@ -2340,6 +2906,12 @@ class CharacterManager():
                                           ) and not enemy.deflecting():
                     self.deal_eff_damage(15, enemy, eff)
         if eff.name == "Butou Renjin":
+            
+            eff.user.get_effect(EffectType.SYSTEM, "IchimaruMission4Tracker").duration = 3
+            eff.user.get_effect(EffectType.SYSTEM, "IchimaruMission4Tracker").alter_mag(1)
+            if eff.user.get_effect(EffectType.SYSTEM, "IchimaruMission4Tracker").mag >= 8:
+                eff.user.remove_effect(eff.user.get_effect(EffectType.SYSTEM, "IchimaruMission4Tracker"))
+                eff.user.progress_mission(4, 1)
             if self.final_can_effect(
                     eff.user.check_bypass_effects()) and not self.deflecting():
                 eff.user.deal_eff_damage(15, self, eff)
@@ -2370,6 +2942,40 @@ class CharacterManager():
             return True
         return False
 
+    def shirafune_check(self, counter: Effect):
+        if self.has_effect(EffectType.MARK,
+                                           "Third Dance - Shirafune"):
+                            counter.user.progress_mission(4, 1)
+                            if not self.has_effect(EffectType.SYSTEM, "RukiaMission5Tracker"):
+                                self.add_effect(Effect("RukiaMission5Tracker", EffectType.SYSTEM, counter.user, 280000, lambda eff: "", system = True))
+                            else:
+                                counter.user.progress_mission(5, 1)
+                                counter.user.mission5complete = True
+                            if counter.user.final_can_effect():
+                                counter.user.receive_eff_damage(30, self.get_effect(EffectType.MARK, "Third Dance - Shirafune"))
+                                counter.user.add_effect(
+                                    Effect(
+                                        Ability("rukia3"), EffectType.ALL_STUN,
+                                        self.get_effect(EffectType.MARK, "Third Dance - Shirafune").user, 2, lambda eff:
+                                        "This character is stunned."))
+                                self.check_on_stun(counter.user)
+                            self.full_remove_effect("Third Dance - Shirafune",
+                                                    self)
+
+    def check_for_cost_increase_missions(self):
+        gen = [eff for eff in self.source.current_effects if eff.eff_type == EffectType.COST_ADJUST and eff.mag > 0]
+        for eff in gen:
+            if eff.name == "Shatter, Kyoka Suigetsu":
+                eff.user.progress_mission(2, 1)
+            if eff.name == "Quirk - Half-Cold":
+                eff.user.progress_mission(3, 1)
+            if eff.name == "Illusory Disorientation":
+                eff.user.progress_mission(1, 1)
+        gen = [eff for eff in self.source.current_effects if eff.eff_type == EffectType.COOLDOWN_MOD]
+        for eff in gen:
+            if eff.name == "Raiou":
+                eff.user.progress_mission(2, 1)
+
     def check_countered(self, pteam: list["CharacterManager"],
                         eteam: list["CharacterManager"]) -> bool:
         def is_harmful(self: "CharacterManager",
@@ -2385,14 +2991,14 @@ class CharacterManager():
                 #self reflect effects:
                 gen = (eff for eff in self.source.current_effects
                        if eff.eff_type == EffectType.REFLECT
-                       and not self.scene.is_allied(eff))
+                       and not self.scene.is_allied_effect(eff))
                 for eff in gen:
                     pass
 
                 #self counter check
                 gen = (eff for eff in self.source.current_effects
                        if eff.eff_type == EffectType.COUNTER
-                       and not self.scene.is_allied(eff))
+                       and not self.scene.is_allied_effect(eff))
                 for eff in gen:
                     if eff.name == "Hear Distress":
                         src = Ability("snowwhite2")
@@ -2403,20 +3009,10 @@ class CharacterManager():
                                 lambda eff:
                                 "This character was countered by Hear Distress."
                             ))
+                        eff.user.progress_mission(2, 1)
                         self.source.energy_contribution -= 1
                         eff.user.check_on_drain(self)
-                        if self.has_effect(EffectType.MARK,
-                                           "Third Dance - Shirafune"):
-                            if eff.user.final_can_effect():
-                                eff.user.receive_eff_damage(30, self.get_effect(EffectType.MARK, "Third Dance - Shirafune"))
-                                eff.user.add_effect(
-                                    Effect(
-                                        Ability("rukia3"), EffectType.ALL_STUN,
-                                        self.get_effect(EffectType.MARK, "Third Dance - Shirafune").user, 2, lambda eff:
-                                        "This character is stunned."))
-                                self.check_on_stun(eff.user)
-                            self.full_remove_effect("Third Dance - Shirafune",
-                                                    self)
+                        self.shirafune_check(eff)
                         return True
 
                 #target counter check
@@ -2424,7 +3020,7 @@ class CharacterManager():
 
                     gen = (eff for eff in target.source.current_effects
                            if eff.eff_type == EffectType.COUNTER
-                           and not self.scene.is_allied(eff))
+                           and not self.scene.is_allied_effect(eff))
                     for eff in gen:
                         if eff.name == "Draw Stance":
                             src = Ability("touka1")
@@ -2434,25 +3030,23 @@ class CharacterManager():
                                     lambda eff:
                                     "This character was countered by Draw Stance."
                                 ))
+                            eff.user.progress_mission(1, 1)
+                            if not eff.user.has_effect(EffectType.SYSTEM, "ToukaMission5Failure"):
+                                eff.user.add_effect(Effect("ToukaMission5Failure", EffectType.SYSTEM, eff.user, 280000, lambda eff: "", system=True))
+                        
                             if self.final_can_effect(
                             ) and not self.deflecting():
                                 self.receive_eff_damage(15, eff)
                             target.full_remove_effect("Draw Stance", eff.user)
-                            if self.has_effect(EffectType.MARK,
-                                               "Third Dance - Shirafune"):
-                                if target.final_can_effect():
-                                    target.receive_eff_damage(30, self.get_effect(EffectType.MARK, "Third Dance - Shirafune"))
-                                    target.add_effect(
-                                        Effect(
-                                            Ability("rukia3"),
-                                            EffectType.ALL_STUN, self.get_effect(EffectType.MARK, "Third Dance - Shirafune").user, 2,
-                                            lambda eff:
-                                            "This character is stunned."))
-                                    self.check_on_stun(target)
-                                self.full_remove_effect(
-                                    "Third Dance - Shirafune", self)
+                            self.shirafune_check(eff)
                             return True
                         if eff.name == "Zero Point Breakthrough":
+                            eff.user.progress_mission(2, 1)
+                            if not self.has_effect(EffectType.SYSTEM, "TsunaMission5Tracker"):
+                                self.add_effect(Effect("TsunaMission5Tracker", EffectType.SYSTEM, eff.user, 280000, lambda eff:"", system=True))
+                            else:
+                                eff.user.progress_mission(5, 1)
+                                eff.user.source.mission5complete = True
                             src = Ability("tsunayoshi3")
                             target.full_remove_effect(
                                 "Zero Point Breakthrough", eff.user)
@@ -2474,21 +3068,10 @@ class CharacterManager():
                                        lambda eff:
                                        "X-Burner will deal 10 more damage.",
                                        mag=110))
-                            if self.has_effect(EffectType.MARK,
-                                               "Third Dance - Shirafune"):
-                                if target.final_can_effect():
-                                    target.receive_eff_damage(30, self.get_effect(EffectType.MARK, "Third Dance - Shirafune"))
-                                    target.add_effect(
-                                        Effect(
-                                            Ability("rukia3"),
-                                            EffectType.ALL_STUN, self.get_effect(EffectType.MARK, "Third Dance - Shirafune").user, 2,
-                                            lambda eff:
-                                            "This character is stunned."))
-                                    self.check_on_stun(target)
-                                self.full_remove_effect(
-                                    "Third Dance - Shirafune", self)
+                            self.shirafune_check(eff)
                             return True
                         if eff.name == "One For All - Shoot Style":
+                            eff.user.progress_mission(3, 1)
                             src = Ability("midoriya3")
                             target.full_remove_effect(
                                 "One For All - Shoot Style", eff.user)
@@ -2498,19 +3081,7 @@ class CharacterManager():
                                     lambda eff:
                                     "This character was countered by One For All - Shoot Style."
                                 ))
-                            if self.has_effect(EffectType.MARK,
-                                               "Third Dance - Shirafune"):
-                                if target.final_can_effect():
-                                    target.receive_eff_damage(30, self.get_effect(EffectType.MARK, "Third Dance - Shirafune"))
-                                    target.add_effect(
-                                        Effect(
-                                            Ability("rukia3"),
-                                            EffectType.ALL_STUN, self.get_effect(EffectType.MARK, "Third Dance - Shirafune").user, 2,
-                                            lambda eff:
-                                            "This character is stunned."))
-                                    self.check_on_stun(target)
-                                self.full_remove_effect(
-                                    "Third Dance - Shirafune", self)
+                            self.shirafune_check(eff)
                             return True
                         if eff.name == "Minion - Tama":
                             src = Ability("ruler3")
@@ -2524,23 +3095,12 @@ class CharacterManager():
                                     lambda eff:
                                     "This character was countered by Minion - Tama."
                                 ))
+                            eff.user.progress_mission(3, 1)
                             eff.user.source.main_abilities[
                                 2].cooldown_remaining = 2
                             if not self.final_can_effect():
                                 self.receive_eff_pierce_damage(20, eff.user)
-                            if self.has_effect(EffectType.MARK,
-                                               "Third Dance - Shirafune"):
-                                if eff.user.final_can_effect():
-                                    eff.user.receive_eff_damage(30, self.get_effect(EffectType.MARK, "Third Dance - Shirafune"))
-                                    eff.user.add_effect(
-                                        Effect(
-                                            Ability("rukia3"),
-                                            EffectType.ALL_STUN, self.get_effect(EffectType.MARK, "Third Dance - Shirafune").user, 2,
-                                            lambda eff:
-                                            "This character is stunned."))
-                                    self.check_on_stun(eff.user)
-                                self.full_remove_effect(
-                                    "Third Dance - Shirafune", self)
+                            self.shirafune_check(eff)
                             return True
                         if eff.name == "Casseur de Logistille":
                             src = Ability("astolfo1")
@@ -2554,6 +3114,7 @@ class CharacterManager():
                                         lambda eff:
                                         "This character was countered by Casseur de Logistille."
                                     ))
+                                eff.user.progress_mission(1, 1)
                                 target.full_remove_effect(
                                     "Casseur de Logistille", eff.user)
                                 if self.final_can_effect():
@@ -2568,24 +3129,12 @@ class CharacterManager():
                                             3, lambda eff:
                                             "This character is isolated."))
                                     eff.user.check_on_stun(self)
-                                if self.has_effect(EffectType.MARK,
-                                                   "Third Dance - Shirafune"):
-                                    if eff.user.final_can_effect():
-                                        eff.user.receive_eff_damage(30, self.get_effect(EffectType.MARK, "Third Dance - Shirafune"))
-                                        eff.user.add_effect(
-                                            Effect(
-                                                Ability("rukia3"),
-                                                EffectType.ALL_STUN, self.get_effect(EffectType.MARK, "Third Dance - Shirafune").user, 2,
-                                                lambda eff:
-                                                "This character is stunned."))
-                                        self.check_on_stun(eff.user)
-                                self.full_remove_effect(
-                                        "Third Dance - Shirafune", self)
+                                self.shirafune_check(eff)
                                 return True
 
                     gen = (eff for eff in target.source.current_effects
                            if eff.eff_type == EffectType.REFLECT
-                           and not self.scene.is_allied(eff))
+                           and not self.scene.is_allied_effect(eff))
                     for eff in gen:
                         if eff.name == "Copy Ninja Kakashi":
                             self.scene.sharingan_reflecting = True
@@ -2596,11 +3145,14 @@ class CharacterManager():
                                 char for char in self.current_targets
                                 if char != target
                             ]
+                            self.id = self.id + 3
                             alt_targets.append(self)
                             self.current_targets = alt_targets
                             self.used_ability.execute(self, pteam, eteam)
                             return True
-
+            else:
+                if self.has_effect(EffectType.COUNTER_IMMUNE, "Mental Radar"):
+                    self.get_effect(EffectType.COUNTER_IMMUNE, "Mental Radar").user.progress_mission(3, 1)
         return False
 
     def check_on_damage_dealt(self, target: "CharacterManager", damage: int):
@@ -2609,6 +3161,8 @@ class CharacterManager():
         #TODO check target effects
         if target.has_effect(EffectType.MARK, "Lightning Palm"):
             src = target.get_effect(EffectType.MARK, "Lightning Palm")
+            src.user.progress_mission(1, 1)
+            src.user.add_effect(Effect("KilluaMission5Tracker", EffectType.MARK, src.user, 2, lambda eff: "", system=True))
             if not self.has_effect(EffectType.STUN_IMMUNE, "Lightning Palm"):
                 self.add_effect(
                     Effect(
@@ -2616,6 +3170,8 @@ class CharacterManager():
                         eff: "This character will ignore stun effects."))
         if target.has_effect(EffectType.MARK, "Narukami"):
             src = target.get_effect(EffectType.MARK, "Narukami")
+            src.user.progress_mission(2, 1)
+            src.user.add_effect(Effect("KilluaMission5Tracker", EffectType.MARK, src.user, 2, lambda eff: "", system=True))
             if not self.has_effect(EffectType.COUNTER_IMMUNE, "Narukami"):
                 self.add_effect(
                     Effect(
@@ -2624,11 +3180,15 @@ class CharacterManager():
                         "This character will ignore counter effects."))
         if target.has_effect(EffectType.MARK, "Whirlwind Rush"):
             src = target.get_effect(EffectType.MARK, "Whirlwind Rush")
+            src.user.progress_mission(3, 1)
+            src.user.add_effect(Effect("KilluaMission5Tracker", EffectType.MARK, src.user, 2, lambda eff: "", system=True))
             self.add_effect(
                 Effect(src.source, EffectType.ALL_INVULN, src.user, 2,
                        lambda eff: "This character is invulnerable."))
 
         if target.has_effect(EffectType.ALL_DR, "Arrest Assault"):
+            target.get_effect(EffectType.ALL_DR,
+                              "Arrest Assault").user.progress_mission(2, 1)
             target.get_effect(EffectType.ALL_DR,
                               "Arrest Assault").user.get_effect(
                                   EffectType.UNIQUE,
@@ -2660,6 +3220,7 @@ class CharacterManager():
                         f"Detonate will deal {20 * leff.mag} damage to this character.",
                         mag=eff.mag,
                         invisible=True), eff.user)
+                eff.user.progress_mission(1, eff.mag)
                 target.full_remove_effect("Doll Trap", eff.user)
         if target.has_effect(EffectType.ALL_DR, "Conductivity"):
             target.get_effect(EffectType.ALL_DR,
@@ -2720,10 +3281,16 @@ class CharacterManager():
     def deal_damage(self, damage: int, target: "CharacterManager"):
         mod_damage = self.get_boosts(damage)
 
+        if self.mission_active("ryohei", self):
+            if mod_damage >= 100 and self.used_ability.name == "Maximum Cannon":
+                self.progress_mission(5, 1)
+
+
         if mod_damage > target.check_for_dmg_reduction():
             if self.has_effect(EffectType.UNIQUE,
                                "Three-God Empowering Shield"):
-                self.receive_eff_healing(10)
+                self.receive_eff_healing(10, self.get_effect(EffectType.UNIQUE,
+                               "Three-God Empowering Shield"))
 
         target.receive_damage(mod_damage, self)
 
@@ -2736,7 +3303,9 @@ class CharacterManager():
             target.add_effect(
                 Effect(Ability("tsunayoshi3"), EffectType.ALL_STUN, user, 2,
                        lambda eff: "This character is stunned."))
-            user.check_on_stun(target)
+            if target.is_stunned():
+                user.check_on_stun(target)
+                user.progress_mission(3, 1)
 
 
     def receive_damage(self, damage: int, dealer: "CharacterManager"):
@@ -2745,15 +3314,116 @@ class CharacterManager():
         if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
             mod_damage = mod_damage * 2
 
+        if mod_damage < 0:
+            mod_damage = 0
+
         #region Damage Dealt Mission Check
 
         if "hinata" in self.scene.missions_to_check:
             if dealer.source.name == "hinata" and dealer.used_ability.name == "Eight Trigrams - 64 Palms":
-                dealer.source.mission5progress += mod_damage
+                dealer.progress_mission(5, mod_damage)
         if "neji" in self.scene.missions_to_check:
             if dealer.used_ability.name == "Eight Trigrams - 128 Palms":
-                dealer.source.mission3progress += damage
-
+                dealer.progress_mission(3, mod_damage)
+        if "rukia" in self.scene.missions_to_check:
+            if dealer.used_ability.name == "Second Dance - Hakuren":
+                dealer.progress_mission(2, mod_damage)
+        if "midoriya" in self.scene.missions_to_check:
+            if dealer.used_ability.name == "SMASH!":
+                dealer.progress_mission(1, mod_damage)
+            if dealer.used_ability.name == "One For All - Shoot Style":
+                dealer.progress_mission(2, mod_damage)
+        if "uraraka" in self.scene.missions_to_check:
+            if dealer.has_effect(EffectType.UNIQUE, "Quirk - Zero Gravity"):
+                dealer.get_effect(EffectType.UNIQUE, "Quirk - Zero Gravity").user.progress_mission(4, mod_damage)
+        if "todoroki" in self.scene.missions_to_check:
+            if dealer.used_ability.name == "Quirk - Half-Cold":
+                dealer.progress_mission(2, mod_damage)
+            if dealer.used_ability.name == "Quirk - Half-Hot" and self.scene.is_allied_character(dealer):
+                dealer.progress_mission(4, mod_damage)
+        if "natsu" in self.scene.missions_to_check:
+            if dealer.source.name == "natsu":
+                if not self.has_effect(EffectType.SYSTEM, "NatsuMission5Tracker"):
+                    self.add_effect(Effect("NatsuMission5Tracker", EffectType.SYSTEM, dealer, 280000, lambda eff:"", system=True))
+                mission5_complete = True
+                for manager in self.enemy_team:
+                    if not manager.has_effect(EffectType.SYSTEM, "NatsuMission5Tracker"):
+                        mission5_complete = False
+                if mission5_complete:
+                    dealer.progress_mission(5, 1)
+        if "gray" in self.scene.missions_to_check:
+            if dealer.source.name == "gray" and dealer.used_ability.name == "Ice, Make Freeze Lancer":
+                if not self.has_effect(EffectType.SYSTEM, "GrayMission4Tracker"):
+                    self.add_effect(Effect("GrayMission4Tracker", EffectType.SYSTEM, dealer, 280000, lambda eff:"", mag = mod_damage, system=True))
+                else:
+                    self.get_effect(EffectType.SYSTEM, "GrayMission4Tracker").alter_mag(mod_damage)
+                mission4_complete = True
+                for character in self.enemy_team:
+                    if not character.has_effect(EffectType.SYSTEM, "GrayMission4Tracker"):
+                        mission4_complete = False
+                    else:
+                        if character.get_effect(EffectType.SYSTEM, "GrayMission4Tracker").mag < 50:
+                            mission4_complete = False
+                if mission4_complete:
+                    dealer.add_effect(Effect("GrayMission4TrackerSuccess", EffectType.SYSTEM, dealer, 280000, lambda eff:"", system=True))
+        if self.mission_active("gajeel", dealer):
+            if dealer.has_effect(EffectType.ALL_DR, "Blacksteel Gajeel"):
+                dealer.progress_mission(2, mod_damage)
+        if "lucy" in self.scene.missions_to_check:
+            if self.can_defend() and self.has_effect(EffectType.ALL_DR, "Aquarius"):
+                self.get_effect(EffectType.ALL_DR, "Aquarius").user.progress_mission(1, mod_damage)
+        if "saber" in self.scene.missions_to_check or "mine" in self.scene.missions_to_check:
+            if not dealer.has_effect(EffectType.SYSTEM, "SaberDamageTracker"):
+                dealer.add_effect(Effect("SaberDamageTracker", EffectType.SYSTEM, dealer, 280000, lambda eff:"", mag=mod_damage, system=True))
+            else:
+                dealer.get_effect(EffectType.SYSTEM, "SaberDamageTracker").alter_mag(mod_damage)
+        if "jack" in self.scene.missions_to_check and not dealer.source.name == "jack":
+            if not self.has_effect(EffectType.SYSTEM, "JackMission1Failure"):
+                self.add_effect(Effect("JackMission1Failure", EffectType.SYSTEM, self, 280000, lambda eff:"", system=True))
+        if "chu" in self.scene.missions_to_check:
+            if self.has_effect(EffectType.ALL_DR, "Flashing Deflection"):
+                self.progress_mission(2, 1)
+        if self.mission_active("misaka", dealer):
+            if dealer.used_ability.name == "Iron Sand":
+                dealer.progress_mission(3, mod_damage)
+            if dealer.used_ability.name == "Railgun":
+                dealer.progress_mission(5, mod_damage)
+        if self.mission_active("tsunayoshi", dealer):
+            if dealer.used_ability.name == "X-Burner":
+                dealer.progress_mission(1, mod_damage)
+        if self.mission_active("hibari", dealer):
+            if dealer.used_ability.name == "Bite You To Death":
+                dealer.progress_mission(1, mod_damage)
+            if self.has_effect(EffectType.ALL_STUN, "Alaudi's Handcuffs"):
+                dealer.progress_mission(2, 1)
+            if self.has_effect(EffectType.UNIQUE, "Porcospino Nuvola"):
+                dealer.progress_mission(3, 1)
+        if self.mission_active("gokudera", dealer):
+            if dealer.used_ability.name == "Sistema C.A.I.":
+                dealer.progress_mission(2, mod_damage)
+        if self.mission_active("seryu", dealer):
+            if dealer.used_ability.name == "Raging Koro":
+                dealer.progress_mission(1, mod_damage)
+                if not self.has_effect(EffectType.SYSTEM, "SeryuKoroTracker"):
+                    self.add_effect(Effect("SeryuKoroTracker", EffectType.SYSTEM, dealer, 280000, lambda eff:"", system=True))
+            if dealer.used_ability.name == "Body Modification - Arm Gun":
+                if not self.has_effect(EffectType.SYSTEM, "SeryuArmGunTracker"):
+                    self.add_effect(Effect("SeryuArmGunTracker", EffectType.SYSTEM, dealer, 280000, lambda eff:"", system=True))
+        if self.mission_active("ruler", dealer):
+            if dealer.used_ability.name == "Minion - Minael and Yunael":
+                dealer.progress_mission(2, mod_damage)
+        if self.mission_active("cranberry", dealer):
+            if dealer.used_ability.name == "Fortissimo" and (self.check_invuln() or self.is_ignoring()):
+                dealer.progress_mission(4, mod_damage)
+        if self.mission_active("pucelle", dealer):
+            if dealer.used_ability.name == "Knight's Sword" and mod_damage >= 100:
+                dealer.progress_mission(4, 1)
+        if "mirai" in self.scene.missions_to_check:
+            if self.has_effect(EffectType.ALL_DR, "Blood Shield"):
+                dealer.progress_mission(5, 1)
+        if self.mission_active("byakuya", dealer):
+            if dealer.used_ability.name == "Scatter, Senbonzakura":
+                dealer.progress_mission(2, mod_damage)
         #endregion
 
         if self.will_die(mod_damage):
@@ -2779,11 +3449,13 @@ class CharacterManager():
                 if self.get_effect(EffectType.MARK,
                                    "Selfless Genius").user.has_effect(
                                        EffectType.MARK, "Yatsufusa"):
+                    
                     temp_yatsufusa_storage = self.get_effect(
                         EffectType.MARK, "Yatsufusa")
+                    temp_yatsufusa_storage.user.progress_mission(1, 1)
                 self.get_effect(
                     EffectType.MARK,
-                    "Selfless Genius").user.source.current_effects.clear()
+                    "Selfless Genius").user.source.clear_effects()
                 if temp_yatsufusa_storage:
                     self.get_effect(
                         EffectType.MARK,
@@ -2791,6 +3463,11 @@ class CharacterManager():
                             temp_yatsufusa_storage)
 
         mod_damage = self.pass_through_dest_def(mod_damage)
+
+        if self.has_effect(EffectType.SYSTEM, "SheelePunctureCounter"):
+            if dealer.source.name == "sheele" and dealer.used_ability.name == "Extase - Bisector of Creation":
+                dealer.progress_mission(4, self.get_effect(EffectType.SYSTEM, "SheelePunctureCounter").mag)
+
         self.apply_active_damage_taken(mod_damage, dealer)
         self.death_check(dealer)
 
@@ -2798,30 +3475,21 @@ class CharacterManager():
         damage = self.get_boosts(damage)
         target.receive_eff_damage(damage, source)
 
-    def progress_mission(self, mission_number: int, progress: int, isToga: bool = False):
-        if not isToga:
-            if mission_number == 1:
+    def progress_mission(self, mission_number: int, progress: int):
+        if not self.has_effect(EffectType.UNIQUE, "Quirk - Transform"):
+            if mission_number == 1 and not self.source.mission1complete:
                 self.source.mission1progress += progress
-            elif mission_number == 2:
+            elif mission_number == 2 and not self.source.mission2complete:
                 self.source.mission2progress += progress
-            elif mission_number == 3:
+            elif mission_number == 3 and not self.source.mission3complete:
                 self.source.mission3progress += progress
-            elif mission_number == 4:
+            elif mission_number == 4 and not self.source.mission4complete:
                 self.source.mission4progress += progress
-            elif mission_number == 5:
+            elif mission_number == 5 and not self.source.mission5complete:
                 self.source.mission5progress += progress
         else:
             self.source.mission1progress += 1
-    
-    def progress_toga_mission(self, mission_number: int, progress: int):
-        if mission_number == 2:
-            self.source.mission2progress += progress
-        elif mission_number == 3:
-            self.source.mission3progress += progress
-        elif mission_number == 4:
-            self.source.mission4progress += progress
-        elif mission_number == 5:
-            self.source.mission5progress += progress
+
 
     def receive_eff_damage(self, damage: int, source: Effect):
         mod_damage = damage - self.check_for_dmg_reduction()
@@ -2829,9 +3497,44 @@ class CharacterManager():
         if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
             mod_damage = mod_damage * 2
 
+        if mod_damage < 0:
+            mod_damage = 0
+
         if "neji" in self.scene.missions_to_check:
             if source.name == "Eight Trigrams - 128 Palms":
-                source.user.source.mission3progress += mod_damage
+                source.user.progress_mission(3, mod_damage)
+        if "uraraka" in self.scene.missions_to_check:
+            if source.user.has_effect(EffectType.UNIQUE, "Quirk - Zero Gravity"):
+                source.user.get_effect(EffectType.UNIQUE, "Quirk - Zero Gravity").user.progress_mission(4, mod_damage)
+        if "gray" in self.scene.missions_to_check:
+            if source.user.source.name == "gray" and source.user.used_ability.name == "Ice, Make Freeze Lancer":
+                if not self.has_effect(EffectType.SYSTEM, "GrayMission4Tracker"):
+                    self.add_effect(Effect("GrayMission4Tracker", EffectType.SYSTEM, source.user, 280000, lambda eff:"", mag = mod_damage, system=True))
+                else:
+                    self.get_effect(EffectType.SYSTEM, "GrayMission4Tracker").alter_mag(mod_damage)
+        if "lucy" in self.scene.missions_to_check:
+            if self.can_defend() and self.has_effect(EffectType.ALL_DR, "Aquarius"):
+                self.get_effect(EffectType.ALL_DR, "Aquarius").user.progress_mission(1, mod_damage)
+        if "saber" in self.scene.missions_to_check or "mine" in self.scene.missions_to_check:
+            if not source.user.has_effect(EffectType.SYSTEM, "SaberDamageTracker"):
+                source.user.add_effect(Effect("SaberDamageTracker", EffectType.SYSTEM, source.user, 280000, lambda eff:"", mag=mod_damage, system=True))
+            else:
+                source.user.get_effect(EffectType.SYSTEM, "SaberDamageTracker").alter_mag(mod_damage)
+        if "jack" in self.scene.missions_to_check and source.user.source.name != "jack":
+            if not self.has_effect(EffectType.SYSTEM, "JackMission1Failure"):
+                self.add_effect(Effect("JackMission1Failure", EffectType.SYSTEM, self, 280000, lambda eff:"", system=True))
+        if self.mission_active("hibari", source.user):
+            if source.name == "Porcospino Nuvola":
+                source.user.progress_mission(5, mod_damage)
+        if "lambo" in self.scene.missions_to_check:
+            if source.name == "Conductivity":
+                source.user.progress_mission(4, mod_damage)
+        if self.mission_active("seryu", source.user):
+            if source.user.used_ability.name == "Raging Koro":
+                source.user.progress_mission(1, mod_damage)
+                if not self.has_effect(EffectType.SYSTEM, "SeryuKoroTracker"):
+                    self.add_effect(Effect("SeryuKoroTracker", EffectType.SYSTEM, source.user, 280000, lambda eff:"", system=True))
+                
 
         if self.will_die(mod_damage):
             if self.has_effect(EffectType.MARK, "Selfless Genius"):
@@ -2860,7 +3563,7 @@ class CharacterManager():
                         EffectType.MARK, "Yatsufusa")
                 self.get_effect(
                     EffectType.MARK,
-                    "Selfless Genius").user.source.current_effects.clear()
+                    "Selfless Genius").user.source.clear_effects()
                 if temp_yatsufusa_storage:
                     self.get_effect(
                         EffectType.MARK,
@@ -2877,7 +3580,8 @@ class CharacterManager():
         if mod_damage > target.check_for_dmg_reduction():
             if self.has_effect(EffectType.UNIQUE,
                                "Three-God Empowering Shield"):
-                self.receive_eff_healing(10)
+                self.receive_eff_healing(10, self.get_effect(EffectType.UNIQUE,
+                               "Three-God Empowering Shield"))
 
         target.receive_pierce_damage(mod_damage, self)
 
@@ -2890,13 +3594,43 @@ class CharacterManager():
             target.add_effect(
                 Effect(Ability("tsunayoshi3"), EffectType.ALL_STUN, user, 2,
                        lambda eff: "This character is stunned."))
-            user.check_on_stun(target)
+            if target.is_stunned():
+                user.check_on_stun(target)
+                user.progress_mission(3, 1)
 
 
     def receive_pierce_damage(self, damage: int, dealer: "CharacterManager"):
         mod_damage = damage
         if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
             mod_damage = mod_damage * 2
+
+        if mod_damage < 0:
+            mod_damage = 0
+
+        if "uraraka" in self.scene.missions_to_check:
+            if dealer.has_effect(EffectType.UNIQUE, "Quirk - Zero Gravity"):
+                dealer.get_effect(EffectType.UNIQUE, "Quirk - Zero Gravity").user.progress_mission(4, mod_damage)
+        if self.mission_active("gajeel", dealer):
+            if dealer.has_effect(EffectType.UNIQUE, "Iron Shadow Dragon"):
+                dealer.progress_mission(3, mod_damage)
+        if "saber" in self.scene.missions_to_check or "mine" in self.scene.missions_to_check:
+            if not dealer.has_effect(EffectType.SYSTEM, "SaberDamageTracker"):
+                dealer.add_effect(Effect("SaberDamageTracker", EffectType.SYSTEM, dealer, 280000, lambda eff:"", mag=mod_damage, system=True))
+            else:
+                dealer.get_effect(EffectType.SYSTEM, "SaberDamageTracker").alter_mag(mod_damage)
+        if "jack" in self.scene.missions_to_check and not dealer.source.name == "jack":
+            if not self.has_effect(EffectType.SYSTEM, "JackMission1Failure"):
+                self.add_effect(Effect("JackMission1Failure", EffectType.SYSTEM, self, 280000, lambda eff:"", system=True))
+        if self.mission_active("chu", dealer):
+            if dealer.used_ability.name == "Relentless Assault":
+                dealer.progress_mission(1, mod_damage)
+        if "chu" in self.scene.missions_to_check:
+            if self.has_effect(EffectType.ALL_DR, "Flashing Deflection"):
+                self.progress_mission(2, 1)
+        if "mirai" in self.scene.missions_to_check:
+            if self.has_effect(EffectType.ALL_DR, "Blood Shield"):
+                dealer.progress_mission(5, 1)
+
         if self.will_die(mod_damage):
             if self.has_effect(EffectType.MARK, "Selfless Genius"):
                 mod_damage = 0
@@ -2922,9 +3656,10 @@ class CharacterManager():
                                        EffectType.MARK, "Yatsufusa"):
                     temp_yatsufusa_storage = self.get_effect(
                         EffectType.MARK, "Yatsufusa")
+                    temp_yatsufusa_storage.user.progress_mission(1, 1)
                 self.get_effect(
                     EffectType.MARK,
-                    "Selfless Genius").user.source.current_effects.clear()
+                    "Selfless Genius").user.source.clear_effects()
                 if temp_yatsufusa_storage:
                     self.get_effect(
                         EffectType.MARK,
@@ -2946,6 +3681,30 @@ class CharacterManager():
         if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
             mod_damage = mod_damage * 2
 
+        if mod_damage < 0:
+            mod_damage = 0
+
+        if "uraraka" in self.scene.missions_to_check:
+            if source.user.has_effect(EffectType.UNIQUE, "Quirk - Zero Gravity"):
+                source.user.get_effect(EffectType.UNIQUE, "Quirk - Zero Gravity").user.progress_mission(4, mod_damage)
+        if self.mission_active("wendy", source.user):
+            if source.name == "Shredding Wedding":
+                source.user.progress_mission(3, mod_damage)
+        if "saber" in self.scene.missions_to_check or "mine" in self.scene.missions_to_check:
+            if not source.user.has_effect(EffectType.SYSTEM, "SaberDamageTracker"):
+                source.user.add_effect(Effect("SaberDamageTracker", EffectType.SYSTEM, source.user, 280000, lambda eff:"", mag=mod_damage, system=True))
+            else:
+                source.user.get_effect(EffectType.SYSTEM, "SaberDamageTracker").alter_mag(mod_damage)
+        if "jack" in self.scene.missions_to_check and source.user.source.name != "jack":
+            if not self.has_effect(EffectType.SYSTEM, "JackMission1Failure"):
+                self.add_effect(Effect("JackMission1Failure", EffectType.SYSTEM, self, 280000, lambda eff:"", system=True))
+        if self.mission_active("chu", source.user):
+            if source.name == "Relentless Assault":
+                source.user.progress_mission(1, mod_damage)
+        if self.mission_active("cmary", source.user):
+            if source.name == "Hidden Mine":
+                source.user.progress_mission(1, mod_damage)
+
         if self.will_die(mod_damage):
             if self.has_effect(EffectType.MARK, "Selfless Genius"):
                 mod_damage = 0
@@ -2971,9 +3730,10 @@ class CharacterManager():
                                        EffectType.MARK, "Yatsufusa"):
                     temp_yatsufusa_storage = self.get_effect(
                         EffectType.MARK, "Yatsufusa")
+                    temp_yatsufusa_storage.user.progress_mission(1, 1)
                 self.get_effect(
                     EffectType.MARK,
-                    "Selfless Genius").user.source.current_effects.clear()
+                    "Selfless Genius").user.source.clear_effects()
                 if temp_yatsufusa_storage:
                     self.get_effect(
                         EffectType.MARK,
@@ -2990,7 +3750,8 @@ class CharacterManager():
 
             if self.has_effect(EffectType.UNIQUE,
                                "Three-God Empowering Shield"):
-                self.receive_eff_healing(10)
+                self.receive_eff_healing(10, self.get_effect(EffectType.UNIQUE,
+                               "Three-God Empowering Shield"))
 
             target.receive_aff_dmg(damage, self)
 
@@ -3004,7 +3765,19 @@ class CharacterManager():
                 target.add_effect(
                     Effect(Ability("tsunayoshi3"), EffectType.ALL_STUN, user,
                            2, lambda eff: "This character is stunned."))
-                user.check_on_stun(target)
+                if target.is_stunned():
+                    user.check_on_stun(target)
+                    user.progress_mission(3, 1)
+        else:
+            #Check for affliction negation missions
+            #TODO add affliction damage received boosts
+            mod_damage = damage
+
+            if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
+                mod_damage = mod_damage * 2
+            if target.has_effect(EffectType.AFF_IMMUNE, "Heaven's Wheel Armor"):
+                target.progress_mission(2, mod_damage)
+
 
 
     def receive_aff_dmg(self, damage: int, dealer: "CharacterManager"):
@@ -3014,13 +3787,50 @@ class CharacterManager():
         if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
             mod_damage = mod_damage * 2
 
+        if mod_damage < 0:
+            mod_damage = 0
 
         #region Affliction Damage Mission Progress
 
-        if "shikamaru" in self.scene.missions_to_check:
-            if dealer.source.name == "shikamaru" and dealer.used_ability.name == "Shadow Neck Bind":
-                dealer.source.mission1progress += mod_damage
-
+        if self.mission_active("shikamaru", dealer):
+            if dealer.used_ability.name == "Shadow Neck Bind":
+                dealer.progress_mission(1, mod_damage)
+        if self.mission_active("shigaraki", dealer):
+            dealer.progress_mission(1, mod_damage)
+        if "uraraka" in self.scene.missions_to_check:
+            if dealer.has_effect(EffectType.UNIQUE, "Quirk - Zero Gravity"):
+                dealer.get_effect(EffectType.UNIQUE, "Quirk - Zero Gravity").user.progress_mission(4, mod_damage)
+        if self.mission_active("natsu", dealer):
+            dealer.progress_mission(1, mod_damage)
+            if not self.has_effect(EffectType.SYSTEM, "NatsuMission5Tracker"):
+                self.add_effect(Effect("NatsuMission5Tracker", EffectType.SYSTEM, dealer, 280000, lambda eff:"", system=True))
+            mission5_complete = True
+            for manager in self.enemy_team:
+                if not manager.has_effect(EffectType.SYSTEM, "NatsuMission5Tracker"):
+                    mission5_complete = False
+            if mission5_complete:
+                dealer.progress_mission(5, 1)
+        if self.mission_active("levy", dealer):
+            if dealer == "Solid Script - Fire":
+                dealer.progress_mission(4, mod_damage)
+        if "saber" in self.scene.missions_to_check or "mine" in self.scene.missions_to_check:
+            if not dealer.has_effect(EffectType.SYSTEM, "SaberDamageTracker"):
+                dealer.add_effect(Effect("SaberDamageTracker", EffectType.SYSTEM, dealer, 280000, lambda eff:"", mag=mod_damage, system=True))
+            else:
+                dealer.get_effect(EffectType.SYSTEM, "SaberDamageTracker").alter_mag(mod_damage)
+        if self.mission_active("jack", dealer):
+            dealer.progress_mission(3, mod_damage)
+        if "jack" in self.scene.missions_to_check and not dealer.source.name == "jack":
+            if not self.has_effect(EffectType.SYSTEM, "JackMission1Failure"):
+                self.add_effect(Effect("JackMission1Failure", EffectType.SYSTEM, self, 280000, lambda eff:"", system=True))
+        if "chu" in self.scene.missions_to_check:
+            if self.has_effect(EffectType.ALL_DR, "Flashing Deflection"):
+                self.progress_mission(2, 1)
+        if self.mission_active("mirai", dealer):
+            dealer.progress_mission(1, mod_damage)
+        if "mirai" in self.scene.missions_to_check:
+            if self.has_effect(EffectType.ALL_DR, "Blood Shield"):
+                dealer.progress_mission(5, 1)
         #endregion
 
 
@@ -3049,9 +3859,10 @@ class CharacterManager():
                                        EffectType.MARK, "Yatsufusa"):
                     temp_yatsufusa_storage = self.get_effect(
                         EffectType.MARK, "Yatsufusa")
+                    temp_yatsufusa_storage.user.progress_mission(1, 1)
                 self.get_effect(
                     EffectType.MARK,
-                    "Selfless Genius").user.source.current_effects.clear()
+                    "Selfless Genius").user.source.clear_effects()
                 if temp_yatsufusa_storage:
                     self.get_effect(
                         EffectType.MARK,
@@ -3065,20 +3876,63 @@ class CharacterManager():
         #TODO add affliction damage boosts
         if not target.is_aff_immune():
             target.receive_eff_aff_damage(damage, source)
+        else:
+            #Check for affliction negation missions
+            #TODO add affliction damage received boosts
+            mod_damage = damage
+
+            if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
+                mod_damage = mod_damage * 2
+            if target.has_effect(EffectType.AFF_IMMUNE, "Heaven's Wheel Armor"):
+                target.progress_mission(2, mod_damage)
 
     def receive_eff_aff_damage(self, damage: int, source: Effect):
         #TODO add affliction damage received boosts
         mod_damage = damage
+
+        if mod_damage < 0:
+            mod_damage = 0
 
         if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
             mod_damage = mod_damage * 2
 
         #region Effect Affliction Damage Mission Check:
 
-        if "shikamaru" in self.scene.missions_to_check:
-            if source.user.source.name == "shikamaru" and source.name == "Shadow Neck Bind":
-                source.user.source.mission1progress += mod_damage
-
+        if self.mission_active("shikamaru", source.user):
+            if source.name == "Shadow Neck Bind":
+                source.user.progress_mission(1, mod_damage)
+        if self.mission_active("shigaraki", source.user):
+            source.user.progress_mission(1, mod_damage)
+        if "uraraka" in self.scene.missions_to_check:
+            if source.user.has_effect(EffectType.UNIQUE, "Quirk - Zero Gravity"):
+                source.user.get_effect(EffectType.UNIQUE, "Quirk - Zero Gravity").user.progress_mission(4, mod_damage)
+        if self.mission_active("natsu", source.user):
+            source.user.progress_mission(1, mod_damage)
+            if not self.has_effect(EffectType.SYSTEM, "NatsuMission5Tracker"):
+                self.add_effect(Effect("NatsuMission5Tracker", EffectType.SYSTEM, source.user, 280000, lambda eff:"", system=True))
+            mission5_complete = True
+            for manager in self.enemy_team:
+                if not manager.has_effect(EffectType.SYSTEM, "NatsuMission5Tracker"):
+                    mission5_complete = False
+            if mission5_complete:
+                source.user.progress_mission(5, 1)
+        if self.mission_active("levy", source.user):
+            if source.name == "Solid Script - Fire":
+                source.user.progress_mission(4, mod_damage)
+        if "saber" in self.scene.missions_to_check or "mine" in self.scene.missions_to_check:
+            if not source.user.has_effect(EffectType.SYSTEM, "SaberDamageTracker"):
+                source.user.add_effect(Effect("SaberDamageTracker", EffectType.SYSTEM, source.user, 280000, lambda eff:"", mag=mod_damage, system=True))
+            else:
+                source.user.get_effect(EffectType.SYSTEM, "SaberDamageTracker").alter_mag(mod_damage)
+        if self.mission_active("jack", source.user):
+            source.user.progress_mission(3, mod_damage)
+        if "jack" in self.scene.missions_to_check and source.user.source.name != "jack":
+            if not self.has_effect(EffectType.SYSTEM, "JackMission1Failure"):
+                self.add_effect(Effect("JackMission1Failure", EffectType.SYSTEM, self, 280000, lambda eff:"", system=True))
+        if self.mission_active("mirai", source.user):
+            source.user.progress_mission(1, mod_damage)
+            if source.name == "Blood Suppression Removal":
+                source.user.progress_mission(3, mod_damage)
         #endregion
 
         if self.will_die(mod_damage):
@@ -3106,9 +3960,10 @@ class CharacterManager():
                                        EffectType.MARK, "Yatsufusa"):
                     temp_yatsufusa_storage = self.get_effect(
                         EffectType.MARK, "Yatsufusa")
+                    temp_yatsufusa_storage.user.progress_mission(1, 1)
                 self.get_effect(
                     EffectType.MARK,
-                    "Selfless Genius").user.source.current_effects.clear()
+                    "Selfless Genius").user.source.clear_effects()
                 if temp_yatsufusa_storage:
                     self.get_effect(
                         EffectType.MARK,
@@ -3127,6 +3982,12 @@ class CharacterManager():
         self.source.hp -= mod_damage
         self.death_check(self)
 
+    def receive_system_healing(self, healing: int):
+        #TODO check heal immune/heal boosts
+        self.source.hp += healing
+        if self.source.hp > 100:
+            self.source.hp = 100
+
     def apply_eff_damage_taken(self, damage: int, source: "Effect"):
         if damage < 0:
             damage = 0
@@ -3139,6 +4000,39 @@ class CharacterManager():
 
             #endregion
 
+    def toga_transform(self, target_name: str):
+        swap_hp = self.source.hp
+        swap_effects = self.source.current_effects
+        self.source = self.scene.return_character(target_name)
+        try:
+            for i, sprite in enumerate(self.main_ability_sprites):
+                sprite.surface = self.scene.get_scaled_surface(self.scene.scene_manager.surfaces[self.source.main_abilities[i].db_name])
+                sprite.ability = self.source.main_abilities[i]
+                sprite.null_pane.ability = self.source.main_abilities[i]
+                sprite.null_pane.in_battle_desc = self.scene.create_text_display(self.scene.font, sprite.null_pane.ability.name + ": " + sprite.null_pane.ability.desc, BLACK, WHITE, 5, 0, 520, 110)
+                sprite.in_battle_desc = self.scene.create_text_display(self.scene.font, sprite.ability.name + ": " + sprite.ability.desc, BLACK, WHITE, 5, 0, 520, 110)
+            
+            self.alt_ability_sprites.clear()
+            for ability in self.source.alt_abilities:
+                self.alt_ability_sprites.append(self.scene.ui_factory.from_surface(sdl2.ext.BUTTON, self.scene.get_scaled_surface(self.scene.scene_manager.surfaces[ability.db_name]), free=True))
+            for j, sprite in enumerate(self.alt_ability_sprites):
+                    sprite.selected_pane = self.scene.ui_factory.from_surface(sdl2.ext.BUTTON, self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["selected"]), free=True)
+                    sprite.ability = self.source.alt_abilities[j]
+                    sprite.null_pane = self.scene.ui_factory.from_surface(sdl2.ext.BUTTON, self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["locked"]), free=True)
+                    sprite.null_pane.ability = self.source.main_abilities[j]
+                    sprite.null_pane.in_battle_desc = self.scene.create_text_display(self.scene.font, sprite.null_pane.ability.name + ": " + sprite.null_pane.ability.desc, BLACK, WHITE, 5, 0, 520, 110)
+                    sprite.null_pane.text_border = self.scene.ui_factory.from_color(sdl2.ext.BUTTON, BLACK, (524, 129))
+                    sprite.null_pane.click += self.set_selected_ability
+                    sprite.in_battle_desc = self.scene.create_text_display(self.scene.font, sprite.ability.name + ": " + sprite.ability.desc, BLACK, WHITE, 5, 0, 520, 110)
+                    sprite.border = self.scene.ui_factory.from_color(sdl2.ext.BUTTON, BLACK, (104, 104))
+                    sprite.text_border = self.scene.ui_factory.from_color(sdl2.ext.BUTTON, BLACK, (524, 129))
+                    sprite.click += self.set_selected_ability
+        except AttributeError:
+            pass
+
+        self.source.hp = swap_hp
+        self.source.current_effects = swap_effects
+
     def apply_active_damage_taken(self, damage: int, dealer: "CharacterManager"):
         if damage < 0:
             damage = 0
@@ -3146,6 +4040,9 @@ class CharacterManager():
 
         
         self.source.hp -= damage
+
+        if dealer.has_effect(EffectType.ALL_BOOST, "Nemurin Beam"):
+            dealer.progress_mission(2, 1)
 
         if damage > 0:
             self.damage_taken_check(damage, dealer)
@@ -3173,8 +4070,11 @@ class CharacterManager():
                         self.get_effect(EffectType.STACK, "Magic Sword").mag)
                 if ability.name == "Maximum Cannon" and self.has_effect(
                         EffectType.STACK, "Maximum Cannon"):
-                    mod_damage += (15 * self.get_effect(
-                        EffectType.STACK, "Maximum Cannon").mag)
+                    guts = self.get_effect(
+                        EffectType.STACK, "Maximum Cannon")
+                    if guts.mag >= 5:
+                        self.progress_mission(4, 1)
+                    mod_damage += (15 * guts.mag)
 
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.ALL_BOOST)
@@ -3228,6 +4128,13 @@ class CharacterManager():
         if self.has_effect(EffectType.STACK, "Yatsufusa"):
             return True
         if self.has_effect(EffectType.STACK, "Maximum Cannon"):
+            return True
+        return False
+
+    def can_defend(self) -> bool:
+        gen = (eff for eff in self.source.current_effects
+               if eff.eff_type == EffectType.DEF_NEGATE)
+        for _ in gen:
             return True
         return False
 
@@ -3341,6 +4248,7 @@ class CharacterManager():
                         eff.source, EffectType.UNIQUE, self, 280000,
                         lambda eff:
                         "Naruha cannot use Perfect Paper - Rampage Suit."))
+                
             if eff.name == "Illusory Breakdown":
                 self.full_remove_effect("Illusory Breakdown", self)
                 for manager in self.scene.enemy_display.team.character_managers:
@@ -3370,6 +4278,11 @@ class CharacterManager():
             current_def = eff.mag
             self.check_for_absorb_missions(eff, dmg)
             eff.alter_dest_def(-dmg)
+            if eff.mag <= 0:
+                if not self.has_effect(EffectType.SYSTEM, "SheelePunctureCounter"):
+                    self.add_effect(Effect("SheelePunctureCounter", EffectType.SYSTEM, self, 1, lambda eff:"", mag=1, system=True))
+                else:
+                    self.get_effect(EffectType.SYSTEM, "SheelePunctureCounter").alter_mag(1)
             self.check_for_collapsing_dest_def(eff)
             dmg = engine.sat_subtract(current_def, dmg)
             if dmg == 0:
@@ -3384,7 +4297,25 @@ class CharacterManager():
         
         if "itachi" in self.scene.missions_to_check:
             if self.source.name == "itachi" and eff.name == "Susano'o":
-                self.source.mission5progress += progress
+                eff.user.progress_mission(5, progress)
+        if "orihime" in self.scene.missions_to_check:
+            if eff.user.source.name == "orihime":
+                eff.user.progress_mission(4, progress)
+        if "misaka" in self.scene.missions_to_check:
+            if eff.user.source.name == "misaka" and eff.name == "Iron Sand":
+                eff.user.progress_mission(3, progress)
+        if "tatsumi" in self.scene.missions_to_check:
+            if eff.user.source.name == "tatsumi" and eff.name == "Incursio":
+                eff.user.progress_mission(3, progress)
+        if "ruler" in self.scene.missions_to_check:
+            if eff.user.source.name == "ruler" and eff.name == "Minion - Minael and Yunael":
+                eff.user.progress_mission(2, progress)
+        if "chachamaru" in self.scene.missions_to_check:
+            if eff.user.source.name == "chachamaru" and eff.name == "Active Combat Mode":
+                eff.user.progress_mission(5, progress)
+        if "byakuya" in self.scene.missions_to_check:
+            if eff.user.source.name == "byakuya" and eff.name == "Scatter, Senbonzakura":
+                eff.user.progress_mission(2, progress)
 
     def can_act(self) -> bool:
         if self.is_stunned():
@@ -3422,10 +4353,10 @@ class CharacterManager():
             if not self.has_effect(EffectType.SYSTEM, "KakashiMission4Tracker"):
                 self.add_effect(Effect("KakashiMission4Tracker", EffectType.SYSTEM, source.user, 280000, lambda eff: "", system = True))
         
-        if self.source.name == "seiryu" and self.source.hp < 30:
+        if self.source.name == "seryu" and self.source.hp < 30:
             self.add_effect(
                 Effect(
-                    Ability("seiryualt1"),
+                    Ability("seryualt1"),
                     EffectType.ABILITY_SWAP,
                     self,
                     280000,
@@ -3437,6 +4368,7 @@ class CharacterManager():
             extreme.alter_mag(damage)
             if extreme.mag >= 20:
                 stacks = extreme.mag // 20
+                extreme.user.progress_mission(3, stacks)
                 extreme.alter_mag(-(stacks * 20))
                 self.apply_stack_effect(
                     Effect(
@@ -3544,6 +4476,12 @@ class CharacterManager():
         if "kakashi" in self.scene.missions_to_check:
             if not self.has_effect(EffectType.SYSTEM, "KakashiMission4Tracker") and damager.source.name != "kakashi":
                 self.add_effect(Effect("KakashiMission4Tracker", EffectType.SYSTEM, damager, 280000, lambda eff:"", system = True))
+        if "leone" in self.scene.missions_to_check:
+            if self.source.name == "leone":
+                if not self.has_effect(EffectType.SYSTEM, "LeoneMission5Tracker"):
+                    self.add_effect(Effect("LeoneMission5Tracker", EffectType.SYSTEM, self, 280000, lambda eff:"", mag=damage, system=True))
+                else:
+                    self.get_effect(EffectType.SYSTEM, "LeoneMission5Tracker").alter_mag(damage)
 
         if self.has_effect(EffectType.UNIQUE, "In The Name Of Ruler!"):
             for manager in self.scene.player_display.team.character_managers:
@@ -3575,6 +4513,7 @@ class CharacterManager():
             extreme.alter_mag(damage)
             if extreme.mag >= 20:
                 stacks = extreme.mag // 20
+                extreme.user.progress_mission(3, stacks)
                 extreme.alter_mag(-(stacks * 20))
                 self.apply_stack_effect(
                     Effect(
@@ -3693,73 +4632,495 @@ class CharacterManager():
     def mission_active(self, name: str, character: "CharacterManager") -> bool:
         return name in self.scene.missions_to_check and character.source.name == name
 
+    def check_for_all_kill_status(self, mission_name: str) -> bool:
+        for manager in self.enemy_team:
+            if not manager.has_effect(EffectType.SYSTEM, mission_name):
+                return False
+        return True
+
+    def is_countering(self):
+        gen = (eff for eff in self.source.current_effects
+                       if eff.eff_type == EffectType.COUNTER
+                       and not self.scene.is_allied_effect(eff))
+        for eff in gen:
+            return True
+        return False
+
+    def apply_all_kill_mission_tracker(self, targeter: "CharacterManager", mission_name: str):
+        if not self.has_effect(EffectType.SYSTEM, mission_name):
+            self.add_effect(Effect(mission_name, EffectType.SYSTEM, targeter, 280000, lambda eff:"", system=True))
+        if self.killing_blow_mission_check(mission_name):
+            self.add_effect(Effect(mission_name + "Success", EffectType.SYSTEM, targeter, 280000, lambda eff:"", system=False))
+
+    def killing_blow_mission_check(self, targeter: Union["CharacterManager", Effect], active_killing_blow = True):
+        if active_killing_blow:
+            if self.mission_active("naruto", targeter):
+                if targeter.has_effect(EffectType.ALL_INVULN, "Sage Mode"):
+                    targeter.progress_mission(3, 1)
+                if targeter.used_ability.name == "Rasengan" and not self.has_effect(EffectType.SYSTEM, "NarutoMission5Tracker"):
+                    targeter.progress_mission(5, 1)
+            if self.mission_active("itachi", targeter):
+                if targeter.has_effect(EffectType.DEST_DEF, "Susano'o"):
+                    targeter.progress_mission(3, 1)
+            if self.mission_active("minato", targeter):
+                if targeter.used_ability.name == "Flying Raijin":
+                    targeter.progress_mission(2, 1)
+            if self.mission_active("neji", targeter):
+                if targeter.used_ability.name == "Eight Trigrams - Mountain Crusher" and self.check_invuln():
+                    targeter.progress_mission(1, 1)
+            if self.mission_active("hinata", targeter):
+                if targeter.used_ability.name == "Gentle Step - Twin Lion Fists" and targeter.source.second_swing:
+                    targeter.progress_mission(2, 1)
+                if targeter.used_ability.name == "Gentle Step - Twin Lion Fists" and targeter.source.second_swing and targeter.source.first_countered:
+                    targeter.progress_mission(3, 1)
+            if self.mission_active("shikamaru", targeter):
+                if targeter.used_ability.name == "Shadow Neck Bind":
+                    if targeter.has_effect(EffectType.SYSTEM, "ShikamaruMission2Tracker"):
+                        targeter.progress_mission(2, 1)
+                    else:
+                        targeter.add_effect(Effect("ShikamaruMissionTracker2", EffectType.SYSTEM, targeter, 1, lambda eff:"", system = True))
+            if "shikamaru" in self.scene.missions_to_check:
+                if self.has_effect(EffectType.CONT_AFF_DMG, "Shadow Neck Bind") and targeter != self.get_effect(EffectType.CONT_AFF_DMG, "Shadow Neck Bind").user: 
+                    self.get_effect(EffectType.CONT_AFF_DMG, "Shadow Neck Bind").user.progress_mission(3, 1)
+            if "kakashi" in self.scene.missions_to_check:
+                if self.scene.sharingan_reflecting:
+                    self.scene.sharingan_reflector.progress_mission(1, 1)
+            if self.mission_active("kakashi", targeter):
+                if targeter.used_ability.name == "Raikiri" and self.has_effect(EffectType.ALL_STUN, "Summon - Nin-dogs"):
+                    targeter.progress_mission(2, 1)
+                if not self.has_effect(EffectType.SYSTEM, "KakashiMission4Tracker"):
+                    targeter.progress_mission(4, 1)
+            if self.mission_active("ichigo", targeter):
+                if targeter.has_effect(EffectType.ALL_INVULN, "Tensa Zangetsu"):
+                    targeter.progress_mission(2, 1)
+                if targeter.source.hp < 30:
+                    targeter.progress_mission(5, 1)
+            if self.mission_active("ichimaru", targeter):
+                if targeter.used_ability.name == "Kill, Kamishini no Yari":
+                    targeter.progress_mission(1, 1)
+                if targeter.last_man_standing():
+                    if not targeter.has_effect(EffectType.SYSTEM, "IchimaruMission5Tracker"):
+                        targeter.add_effect(Effect("IchimaruMission5Tracker", EffectType.SYSTEM, targeter, 280000, lambda eff: "", mag = 1, system=True))
+                    else:
+                        targeter.get_effect(EffectType.SYSTEM, "IchimaruMission5Tracker").alter_mag(1)
+            if self.mission_active("aizen", targeter):
+                if targeter.used_ability.name == "Overwhelming Power":
+                    targeter.progress_mission(3, 1)
+            if self.mission_active("midoriya", targeter):
+                if targeter.used_ability.name == "One For All - Shoot Style":
+                    targeter.progress_mission(4, 1)
+            if self.mission_active("mirio", targeter):
+                if targeter.used_ability.name == "Phantom Menace":
+                    targeter.progress_mission(5, 1)
+            if "toga" in self.scene.missions_to_check:
+                if targeter.is_toga:
+                    if not targeter.user.has_effect(EffectType.UNIQUE, "Quirk - Transform"):
+                        targeter.source.mission5progress += 1
+                    else:
+                        targeter.source.mission4progress += 1
+            if self.mission_active("shigaraki", targeter):
+                targeter.progress_mission(2, 1)
+            if "shigaraki" in self.scene.missions_to_check:
+                if self.has_effect(EffectType.ALL_BOOST, "Destroy What You Hate, Destroy What You Love"):
+                    shigaraki: "CharacterManager" = self.get_effect(EffectType.ALL_BOOST, "Destroy What You Hate, Destroy What You Love").user
+                    if shigaraki.has_effect(EffectType.SYSTEM, "ShigarakiMission3Tracker"):
+                        shigaraki.get_effect(EffectType.SYSTEM, "ShigarakiMission3Tracker").alter_mag(1)
+                    else:
+                        shigaraki.add_effect(Effect("ShigarakiMission3Tracker", EffectType.SYSTEM, shigaraki, 280000, lambda eff:"", mag=1, system=True))
+                if targeter.has_effect(EffectType.ALL_BOOST, "Destroy What You Hate, Destroy What You Love"):
+                    shigaraki = targeter.get_effect(EffectType.ALL_BOOST, "Destroy What You Hate, Destroy What You Love").user
+                    if shigaraki.has_effect(EffectType.SYSTEM, "ShigarakiMission4Tracker"):
+                        shigaraki.get_effect(EffectType.SYSTEM, "ShigarakiMission4Tracker").alter_mag(1)
+                    else:
+                        shigaraki.add_effect(Effect("ShigarakiMission4Tracker", EffectType.SYSTEM, shigaraki, 280000, lambda eff:"", mag=1, system=True))
+            if "uraraka" in self.scene.missions_to_check:
+                if targeter.has_effect(EffectType.UNIQUE, "Quirk - Zero Gravity"):
+                    targeter.get_effect(EffectType.UNIQUE, "Quirk - Zero Gravity").user.progress_mission(1, 1)
+                if self.has_effect(EffectType.ALL_DR, "Quirk - Zero Gravity"):
+                    self.get_effect(EffectType.UNIQUE, "Quirk - Zero Gravity").user.progress_mission(2, 1)
+            if self.mission_active("uraraka", targeter):
+                if not self.has_effect(EffectType.SYSTEM, "UrarakaMission5Tracker"):
+                    self.add_effect(Effect("UrarakaMission5Tracker", EffectType.SYSTEM, self, 280000, lambda eff:"", system = True))
+            if self.mission_active("todoroki", targeter):
+                if targeter.used_ability.name == "Flashfreeze Heatwave":
+                    targeter.get_effect(EffectType.SYSTEM, "TodorokiMission1Tracker").alter_mag(1)
+            if self.mission_active("jiro", targeter):
+                if self.has_effect(EffectType.SYSTEM, "JiroMission4Tracker"):
+                    targeter.progress_mission(4, 1)
+                if self.has_effect(EffectType.UNIQUE, "Heartbeat Surround") or self.has_effect(EffectType.UNIQUE, "Heartbeat Distortion"):
+                    targeter.progress_mission(3, 1)
+            if self.mission_active("natsu", targeter):
+                targeter.progress_mission(3, 1)
+                self.apply_all_kill_mission_tracker(targeter, "NatsuMission3Tracker")
+            if self.mission_active("gajeel", targeter):
+                if targeter.has_effect(EffectType.UNIQUE, "Iron Shadow Dragon"):
+                    if not targeter.has_effect(EffectType.UNIQUE, "GajeelMission1ShadowTracker"):
+                        targeter.add_effect(Effect("GajeelMission1ShadowTracker", EffectType.SYSTEM, targeter, 280000, lambda eff:"", system=True))
+                    if targeter.has_effect(EffectType.SYSTEM, "GajeelMission1IronTracker") and not targeter.source.mission1complete:
+                        targeter.progress_mission(1, 1)
+                        targeter.source.mission1complete = True
+                if targeter.has_effect(EffectType.ALL_DR, "Blacksteel Gajeel"):
+                    if not targeter.has_effect(EffectType.UNIQUE, "GajeelMission1IronTracker"):
+                        targeter.add_effect(Effect("GajeelMission1IronTracker", EffectType.SYSTEM, targeter, 280000, lambda eff:"", system=True))
+                    if targeter.has_effect(EffectType.SYSTEM, "GajeelMission1ShadowTracker") and not targeter.source.mission1complete:
+                        targeter.progress_mission(1, 1)
+                        targeter.source.mission1complete = True
+            if self.mission_active("wendy", targeter):
+                if self.has_effect(EffectType.MARK, "Shredding Wedding"):
+                    targeter.progress_mission(2, 1)
+            if self.mission_active("erza", targeter):
+                if targeter.used_ability.name == "Titania's Rampage":
+                    targeter.progress_mission(1, 1)
+            if "erza" in self.scene.missions_to_check:
+                if targeter.has_effect(EffectType.ALL_INVULN, "Adamantine Barrier"):
+                    targeter.get_effect(EffectType.ALL_INVULN, "Adamantine Barrier").user.progress_mission(4, 1)
+            if "levy" in self.scene.missions_to_check:
+                if self.has_effect(EffectType.ISOLATE, "Solid Script - Silent"):
+                    if self in self.enemy_team:
+                        self.get_effect(EffectType.ISOLATE, "Solid Script - Silent").user.progress_mission(2, 1)
+                if targeter.has_effect(EffectType.AFF_IMMUNE, "Solid Script - Mask"):
+                    targeter.get_effect(EffectType.AFF_IMMUNE, "Solid Script - Mask").user.progress_mission(3, 1)
+            if self.mission_active("jack", targeter):
+                if self.has_effect(EffectType.MARK, "Streets of the Lost"):
+                    targeter.progress_mission(2, 1)
+                if targeter.used_ability.name == "Maria the Ripper":
+                    targeter.progress_mission(4, 1)
+                if not self.has_effect(EffectType.SYSTEM, "JackMission1Failure"):
+                    targeter.progress_mission(1, 1)
+            if self.mission_active("chu", targeter):
+                if targeter.used_ability.name == "Gae Bolg" and self.has_effect(EffectType.SYSTEM, "GaeBolgPierceMarker"):
+                    targeter.progress_mission(3, 1)
+            if self.mission_active("astolfo", targeter):
+                if targeter.used_ability.name == "Trap of Argalia - Down With A Touch!":
+                    targeter.progress_mission(3, 1)
+                if self.has_effect(EffectType.BOOST_NEGATE, "La Black Luna"):
+                    targeter.progress_mission(5, 1)
+            if self.mission_active("misaka", targeter):
+                if targeter.has_effect(EffectType.MARK, "Electric Rage") and targeter.used_ability.name == "Railgun":
+                    targeter.progress_mission(1, 1)
+            if self.mission_active("kuroko", targeter):
+                if targeter.used_ability.name == "Teleporting Strike":
+                    targeter.progress_mission(4, 1)
+            if self.mission_active("gunha", targeter):
+                if targeter.used_ability.name == "Super Awesome Punch":
+                    targeter.progress_mission(2, 1)
+            if "gunha" in self.scene.missions_to_check:
+                if self.has_effect(EffectType.DEF_NEGATE, "Overwhelming Suppression"):
+                    self.get_effect(EffectType.DEF_NEGATE, "Overwhelming Suppression").user.progress_mission(4, 1)
+            if "misaki" in self.scene.missions_to_check:
+                if targeter.has_effect(EffectType.ALL_STUN, "Mental Out"):
+                    targeter.get_effect(EffectType.ALL_STUN, "Mental Out").user.progress_mission(1, 1)
+            if self.mission_active("frenda", targeter):
+                if targeter.used_ability.name == "Detonate":
+                    targeter.get_effect(EffectType.SYSTEM, "FrendaMission2Tracker").alter_mag(1)
+                    targeter.progress_mission(3, 1)
+            if self.mission_active("naruha", targeter):
+                if targeter.has_effect(EffectType.MARK, "Perfect Paper - Rampage Suit"):
+                    targeter.progress_mission(4, 1)
+                if targeter.used_ability.name == "Enraged Blow":
+                    targeter.progress_mission(5, 1)
+            if self.mission_active("tsunayoshi", targeter):
+                if targeter.used_ability.name == "X-Burner":
+                    targeter.get_effect(EffectType.SYSTEM, "TsunaMission4Tracker").alter_mag(1)
+            if self.mission_active("yamamoto", targeter):
+                if targeter.used_ability.name == "Shinotsuku Ame":
+                    targeter.progress_mission(2, 1)
+            if self.mission_active("gokudera", targeter):
+                if targeter.used_ability.name == "Sistema C.A.I." and targeter.has_effect(EffectType.MARK, "Vongola Box Weapon - Vongola Bow"):
+                    targeter.progress_mission(3, 1)
+            if self.mission_active("ryohei", targeter):
+                if targeter.used_ability.name == "Maximum Cannon":
+                    targeter.progress_mission(1, 1)
+            if self.mission_active("chrome", targeter):
+                targeter.progress_mission(4, 1)
+                if not self.has_effect(EffectType.SYSTEM, "ChromeMission5Marker"):
+                    if targeter.has_effect(EffectType.SYSTEM, "ChromeMission5Tracker"):
+                        targeter.get_effect(EffectType.SYSTEM, "ChromeMission5Tracker").alter_mag(1)
+                    else:
+                        targeter.add_effect(Effect("ChromeMission5Tracker", EffectType.SYSTEM, targeter, 280000, lambda eff:"", mag=1, system=True))
+                    self.add_effect(Effect("ChromeMission5Marker", EffectType.SYSTEM, targeter, 280000, lambda eff:"", system=True))
+            if self.mission_active("tatsumi", targeter):
+                targeter.progress_mission(5, 1)
+                if not self.has_effect(EffectType.SYSTEM, "TatsumiMission5Marker"):
+                    if targeter.has_effect(EffectType.SYSTEM, "TatsumiMission5Tracker"):
+                        targeter.get_effect(EffectType.SYSTEM, "TatsumiMission5Tracker").alter_mag(1)
+                    else:
+                        targeter.add_effect(Effect("TatsumiMission5Tracker", EffectType.SYSTEM, targeter, 280000, lambda eff:"", mag=1, system=True))
+                    self.add_effect(Effect("TatsumiMission5Marker", EffectType.SYSTEM, targeter, 280000, lambda eff:"", system=True))
+            if self.mission_active("mine", targeter):
+                if self.check_invuln() and targeter.has_effect(EffectType.MARK, "Pumpkin Scouter"):
+                    targeter.progress_mission(1, 1)
+                if targeter.used_ability.name == "Roman Artillery - Pumpkin" and targeter.source.hp < 30:
+                    targeter.progress_mission(2, 1)
+                if targeter.used_ability.name == "Cut-Down Shot" and targeter.source.hp < 25:
+                    targeter.progress_mission(3, 1)
+                targeter.get_effect(EffectType.SYSTEM, "MineMission4Tracker").alter_mag(1)
+            if self.mission_active("akame", targeter):
+                targeter.progress_mission(2, 1)
+                if targeter.has_effect(EffectType.MARK, "Little War Horn"):
+                    targeter.progress_mission(1, 1)
+                if not self.has_effect(EffectType.SYSTEM, "AkameMission5Marker"):
+                    if targeter.has_effect(EffectType.SYSTEM, "AkameMission5Tracker"):
+                        targeter.get_effect(EffectType.SYSTEM, "AkameMission5Tracker").alter_mag(1)
+                    else:
+                        targeter.add_effect(Effect("AkameMission5Tracker", EffectType.SYSTEM, targeter, 280000, lambda eff:"", mag=1, system=True))
+                    self.add_effect(Effect("AkameMission5Marker", EffectType.SYSTEM, targeter, 280000, lambda eff:"", system=True))
+            if self.mission_active("leone", targeter):
+                targeter.progress_mission(2, 1)
+                if self.has_effect(EffectType.MARK, "Beast Instinct"):
+                    targeter.progress_mission(3, 1)
+            if self.mission_active("lubbock", targeter):
+                if targeter.used_ability.name == "Heartseeker Thrust":
+                    targeter.progress_mission(3, 1)
+            if self.mission_active("sheele", targeter):
+                targeter.progress_mission(1, 1)
+                if self.is_ignoring() or self.is_countering():
+                    targeter.progress_mission(2, 1)
+                if self.has_effect(EffectType.ALL_STUN, "Trump Card - Blinding Light"):
+                    targeter.progress_mission(5, 1)
+            if self.mission_active("seryu", targeter):
+                if targeter.used_ability.name == "Insatiable Justice":
+                    targeter.progress_mission(2, 1)
+                if targeter.used_ability.name == "Body Modification - Arm Gun" and self.has_effect(EffectType.ALL_BOOST, "Berserker Howl"):
+                    targeter.progress_mission(3, 1)
+                if targeter.used_ability.name == "Body Modification - Self Destruct":
+                    targeter.progress_mission(5, 1)
+                if self.has_effect(EffectType.SYSTEM, "SeryuKoroTracker") and self.has_effect(EffectType.SYSTEM, "SeryuArmGunTracker"):
+                    targeter.progress_mission(4, 1)
+            if self.mission_active("kurome", targeter):
+                if targeter.used_ability.name == "Mass Animation" and targeter.has_effect(EffectType.STACK, "Yatsufusa"):
+                    targeter.progress_mission(2, 1)
+                if targeter.has_effect(EffectType.UNIQUE, "Yatsufusa"):
+                    targeter.get_effect(EffectType.UNIQUE, "Yatsufusa").user.progress_mission(3, 1)
+                if targeter.has_effect(EffectType.MARK, "Doping Rampage"):
+                    targeter.progress_mission(5, 1)
+            if self.mission_active("esdeath", targeter):
+                if self.has_effect(EffectType.MARK, "Frozen Castle"):
+                    targeter.progress_mission(1, 1)
+                if self.has_effect(EffectType.ALL_STUN, "Mahapadma"):
+                    targeter.progress_mission(4, 1)
+            if "ruler" in self.scene.missions_to_check:
+                if self.has_effect(EffectType.ALL_STUN, "In The Name Of Ruler!"):
+                    self.get_effect(EffectType.ALL_STUN, "In The Name Of Ruler!").user.progress_mission(5, 1)
+            if self.mission_active("ripple", targeter):
+                if self.has_effect(EffectType.CONT_PIERCE_DMG, "Night of Countless Stars"):
+                    targeter.progress_mission(3, 1)
+                if self.check_invuln():
+                    targeter.progress_mission(4, 1)
+                if not targeter.has_effect(EffectType.SYSTEM, "RippleMission5Tracker"):
+                    targeter.add_effect(Effect("RippleMission5Tracker", EffectType.SYSTEM, targeter, 1, lambda eff:"", mag = 1, system=True))
+                else:
+                    targeter.get_effect(EffectType.SYSTEM, "RippleMission5Tracker").alter_mag(1)
+            if "nemurin" in self.scene.missions_to_check:
+                if targeter.has_effect(EffectType.ALL_BOOST, "Dream Manipulation"):
+                    targeter.progress_mission(3, 1)
+            if self.mission_active("cmary", targeter):
+                if targeter.used_ability.name == "Grenade Toss" and self.has_effect(EffectType.UNIQUE, "Hidden Mine"):
+                    targeter.progress_mission(2, 1)
+                if targeter.used_ability.name == "Quickdraw - Pistol" or targeter.used_ability.name == "Quickdraw - Rifle" or targeter.used_ability.name == "Quickdraw - Sniper":
+                    targeter.progress_mission(3, 1)
+            if self.mission_active("cranberry", targeter):
+                if targeter.used_ability.name == "Merciless Finish":
+                    targeter.progress_mission(2, 1)
+            if self.mission_active("swimswim", targeter):
+                if targeter.has_effect(EffectType.UNIQUE, "Dive"):
+                    targeter.progress_mission(1, 1)
+                if targeter.has_effect(EffectType.ALL_BOOST, "Vitality Pill"):
+                    targeter.progress_mission(2, 1)
+            if self.mission_active("pucelle", targeter):
+                if targeter.used_ability.name == "Ideal Strike":
+                    targeter.progress_mission(1, 1)
+                    if targeter.last_man_standing():
+                        targeter.add_effect(Effect("PucelleMission5Tracker", EffectType.SYSTEM, targeter, 1, lambda eff:"", system=True))
+                if targeter.used_ability.name == "Knight's Sword":
+                    targeter.progress_mission(3, 1)
+            if self.mission_active("chachamaru", targeter):
+                if targeter.used_ability.name == "Orbital Satellite Cannon":
+                    targeter.progress_mission(3, 1)
+                    if not targeter.has_effect(EffectType.SYSTEM, "ChachamaruMission4Tracker"):
+                        targeter.add_effect(Effect("ChachamaruMission4Tracker", EffectType.SYSTEM, targeter, 1, lambda eff:"", mag = 1, system=True))
+                    else:
+                        targeter.get_effect(EffectType.SYSTEM, "ChachamaruMission4Tracker").alter_mag(1)
+            if self.mission_active("saitama", targeter):
+                if targeter.used_ability.name == "One Punch":
+                    targeter.progress_mission(1, 1)
+                if not self.has_effect(EffectType.SYSTEM, "SaitamaMission5Marker"):
+                    if targeter.has_effect(EffectType.SYSTEM, "SaitamaMission5Tracker"):
+                        targeter.get_effect(EffectType.SYSTEM, "SaitamaMission5Tracker").alter_mag(1)
+                    else:
+                        targeter.add_effect(Effect("SaitamaMission5Tracker", EffectType.SYSTEM, targeter.user, 280000, lambda eff:"", mag=1, system=True))
+                    self.add_effect(Effect("SaitamaMission5Marker", EffectType.SYSTEM, targeter.user, 280000, lambda eff:"", system=True))
+            if self.mission_active("tatsumaki", targeter):
+                if targeter.used_ability.name == "Return Assault":
+                    targeter.progress_mission(3, 1)
+                if targeter.used_ability.name == "Rubble Barrage":
+                    targeter.progress_mission(5, 1)
+            if self.mission_active("mirai", targeter):
+                if targeter.has_effect(EffectType.MARK, "Blood Suppression Removal"):
+                    targeter.progress_mission(2, 1)
+                if targeter.used_ability.name == "Blood Sword Combat":
+                    targeter.progress_mission(4, 1)
+            if self.mission_active("touka", targeter):
+                if targeter.used_ability.name == "Raikiri":
+                    targeter.progress_mission(3, 1)
+                if targeter.has_effect(EffectType.MARK, "Nukiashi"):
+                    targeter.progress_mission(4, 1)
+            if self.mission_active("killua", targeter):
+                if targeter.has_effect(EffectType.MARK, "Godspeed"):
+                    targeter.progress_mission(4, 1)
+            if self.mission_active("byakuya", targeter):
+                if targeter.source.hp == 100:
+                    targeter.progress_mission(4, 1)
+                if targeter.source.hp <= 20 and targeter.used_ability.name == "White Imperial Sword":
+                    targeter.progress_mission(5, 1)
+        else:
+            if "shikamaru" in self.scene.missions_to_check:
+                if targeter.name == "Shadow Neck Bind":
+                    if targeter.user.has_effect(EffectType.SYSTEM, "ShikamaruMission2Tracker"):
+                        targeter.user.progress_mission(2, 1)
+                    else:
+                        targeter.user.add_effect(Effect("ShikamaruMissionTracker2", EffectType.SYSTEM, targeter.user, 1, lambda eff:"", system = True))
+                if self.has_effect(EffectType.CONT_AFF_DMG, "Shadow Neck Bind") and targeter.user != self.get_effect(EffectType.CONT_AFF_DMG, "Shadow Neck Bind").user: 
+                    self.get_effect(EffectType.CONT_AFF_DMG, "Shadow Neck Bind").user.source.mission3progress += 1
+                if targeter in self.scene.sharingan_reflected_effects:
+                    targeter.user.source.mission1progress += 1
+            if "ichimaru" in self.scene.missions_to_check:
+                if targeter.name == "Kill, Kamishini no Yari":
+                    
+                    if targeter.name == "Kill, Kamishini no Yari":
+                        targeter.user.progress_mission(2, 1)
+                if targeter.user.last_man_standing():
+                    if not targeter.user.has_effect(EffectType.SYSTEM, "IchimaruMission5Tracker"):
+                        targeter.user.add_effect(Effect("IchimaruMission5Tracker", EffectType.SYSTEM, targeter.user, 280000, lambda eff: "", mag = 1, system=True))
+                    else:
+                        targeter.user.get_effect(EffectType.SYSTEM, "IchimaruMission5Tracker").alter_mag(1)
+            if "toga" in self.scene.missions_to_check:
+                if targeter.user.is_toga:
+                    if not targeter.user.has_effect(EffectType.UNIQUE, "Quirk - Transform"):
+                        targeter.user.source.mission5progress += 1
+                    else:
+                        targeter.user.source.mission4progress += 1
+            if self.mission_active("shigaraki", targeter.user):
+                targeter.user.progress_mission(2, 1)
+            if "shigaraki" in self.scene.missions_to_check:
+                if self.has_effect(EffectType.ALL_BOOST, "Destroy What You Hate, Destroy What You Love"):
+                    shigaraki = self.get_effect(EffectType.ALL_BOOST, "Destroy What You Hate, Destroy What You Love").user
+                    if shigaraki.has_effect(EffectType.SYSTEM, "ShigarakiMission3Tracker"):
+                        shigaraki.get_effect(EffectType.SYSTEM, "ShigarakiMission3Tracker").alter_mag(1)
+                    else:
+                        shigaraki.add_effect(Effect("ShigarakiMission3Tracker", EffectType.SYSTEM, shigaraki, 280000, lambda eff:"", mag=1, system=True))
+                if targeter.user.has_effect(EffectType.ALL_BOOST, "Destroy What You Hate, Destroy What You Love"):
+                    shigaraki = targeter.user.get_effect(EffectType.ALL_BOOST, "Destroy What You Hate, Destroy What You Love").user
+                    if shigaraki.has_effect(EffectType.SYSTEM, "ShigarakiMission4Tracker"):
+                        shigaraki.get_effect(EffectType.SYSTEM, "ShigarakiMission4Tracker").alter_mag(1)
+                    else:
+                        shigaraki.add_effect(Effect("ShigarakiMission4Tracker", EffectType.SYSTEM, shigaraki, 280000, lambda eff:"", mag=1, system=True))
+            if "uraraka" in self.scene.missions_to_check:
+                if targeter.user.has_effect(EffectType.UNIQUE, "Quirk - Zero Gravity"):
+                    targeter.user.get_effect(EffectType.UNIQUE, "Quirk - Zero Gravity").user.progress_mission(1, 1)
+                if self.has_effect(EffectType.ALL_DR, "Quirk - Zero Gravity"):
+                    self.get_effect(EffectType.UNIQUE, "Quirk - Zero Gravity").user.progress_mission(2, 1)
+            if "jiro" in self.scene.missions_to_check:
+                if self.has_effect(EffectType.SYSTEM, "JiroMission4Tracker"):
+                    targeter.user.progress_mission(4, 1)
+                if targeter.name == "Heartbeat Distortion" or targeter.name == "Heartbeat Surround":
+                    targeter.user.progress_mission(2, 1)
+            if self.mission_active("natsu", targeter.user):
+                targeter.user.progress_mission(3, 1)
+                self.add_effect(Effect("NatsuMission4Tracker", EffectType.SYSTEM, targeter.user, 280000, lambda eff:"", system=True))
+            if self.mission_active("wendy", targeter.user):
+                if self.has_effect(EffectType.MARK, "Shredding Wedding"):
+                    targeter.user.progress_mission(2, 1)
+            if self.mission_active("erza", targeter.user):
+                if targeter.name == "Titania's Rampage":
+                    targeter.user.progress_mission(1, 1)
+            if targeter.user.has_effect(EffectType.AFF_IMMUNE, "Solid Script - Mask"):
+                    targeter.user.get_effect(EffectType.AFF_IMMUNE, "Solid Script - Mask").user.progress_mission(3, 1)
+            if self.mission_active("lucy", targeter.user):
+                if targeter.eff_type == EffectType.CONT_DMG:
+                    targeter.user.progress_mission(3, 1)
+            if self.mission_active("jack", targeter.user):
+                if self.has_effect(EffectType.MARK, "Streets of the Lost"):
+                    targeter.user.progress_mission(2, 1)
+                if not self.has_effect(EffectType.SYSTEM, "JackMission1Failure"):
+                    targeter.user.progress_mission(1, 1)
+            if self.mission_active("chu", targeter.user):
+                if targeter.name == "Relentless Assault" and targeter.duration <= 1:
+                    targeter.user.progress_mission(5, 1)
+            if "misaki" in self.scene.missions_to_check:
+                if targeter.user.has_effect(EffectType.ALL_STUN, "Mental Out"):
+                    targeter.user.get_effect(EffectType.ALL_STUN, "Mental Out").user.progress_mission(1, 1)
+            if self.mission_active("naruha", targeter.user):
+                if targeter.user.has_effect(EffectType.MARK, "Perfect Paper - Rampage Suit"):
+                    targeter.user.progress_mission(4, 1)
+            if self.mission_active("chrome", targeter.user):
+                targeter.user.progress_mission(4, 1)
+                if not self.has_effect(EffectType.SYSTEM, "ChromeMission5Marker"):
+                    if targeter.user.has_effect(EffectType.SYSTEM, "ChromeMission5Tracker"):
+                        targeter.user.get_effect(EffectType.SYSTEM, "ChromeMission5Tracker").alter_mag(1)
+                    else:
+                        targeter.user.add_effect(Effect("ChromeMission5Tracker", EffectType.SYSTEM, targeter.user, 280000, lambda eff:"", mag=1, system=True))
+                    self.add_effect(Effect("ChromeMission5Marker", EffectType.SYSTEM, targeter.user, 280000, lambda eff:"", system=True))
+            if "ruler" in self.scene.missions_to_check:
+                if self.has_effect(EffectType.ALL_STUN, "In The Name Of Ruler!"):
+                    self.get_effect(EffectType.ALL_STUN, "In The Name Of Ruler!").user.progress_mission(5, 1)
+            if self.mission_active("ripple", targeter.user):
+                if self.has_effect(EffectType.CONT_PIERCE_DMG, "Night of Countless Stars"):
+                    targeter.user.progress_mission(3, 1)
+                if self.check_invuln():
+                    targeter.user.progress_mission(4, 1)
+                if not targeter.user.has_effect(EffectType.SYSTEM, "RippleMission5Tracker"):
+                    targeter.user.add_effect(Effect("RippleMission5Tracker", EffectType.SYSTEM, targeter.user, 1, lambda eff:"", mag = 1, system=True))
+                else:
+                    targeter.user.get_effect(EffectType.SYSTEM, "RippleMission5Tracker").alter_mag(1)
+            if self.mission_active("cranberry", targeter.user):
+                if targeter.name == "Merciless Finish":
+                    targeter.progress_mission(2, 1)
+            if self.mission_active("tatsumaki", targeter.user):
+                if targeter.name == "Rubble Barrage":
+                    targeter.progress_mission(5, 1)
+            
+
     def death_check(self, targeter: "CharacterManager"):
         if self.source.hp <= 0:
             if self.has_effect(
                     EffectType.MARK,
                     "Doping Rampage") and not self.scene.dying_to_doping:
                 self.source.hp = 1
+                self.progress_mission(4, 1)
             elif self.has_effect(EffectType.MARK, "Electric Rage"):
+                self.progress_mission(2, 1)
                 self.source.hp = 1
             elif self.has_effect(EffectType.MARK, "Lucky Rabbit's Foot"):
                 self.source.hp = 35
+                self.get_effect(EffectType.MARK, "Lucky Rabbit's Foot").user.progress_mission(3, 1)
+                self.add_effect(Effect("SnowWhiteMission5Tracker", EffectType.SYSTEM, self, 280000, lambda eff:"", system=True))
             else:
+
+                if self.source.name == "esdeath":
+                    if not self.has_effect(EffectType.SYSTEM, "EsdeathMission3Failure"):
+                        self.add_effect(Effect("EsdeathMission3Failure", EffectType.SYSTEM, self, 280000, lambda eff:"", system=True))
+                    
+
                 #region Active Killing Blow Mission Check
-                if self.mission_active("naruto", targeter):
-                    if targeter.has_effect(EffectType.ALL_INVULN, "Sage Mode"):
-                        targeter.source.mission3progress += 1
-                    if targeter.used_ability.name == "Rasengan" and not self.has_effect(EffectType.SYSTEM, "NarutoMission5Tracker"):
-                        targeter.source.mission5progress += 1
-                if self.mission_active("itachi", targeter):
-                    if targeter.has_effect(EffectType.DEST_DEF, "Susano'o"):
-                        targeter.source.mission3progress += 1
-                if self.mission_active("minato", targeter):
-                    if targeter.used_ability.name == "Flying Raijin":
-                        targeter.source.mission2progress += 1
-                if self.mission_active("neji", targeter):
-                    if targeter.used_ability.name == "Eight Trigrams - Mountain Crusher" and self.check_invuln():
-                        targeter.source.mission1progress += 1
-                if self.mission_active("hinata", targeter):
-                    if targeter.used_ability.name == "Gentle Step - Twin Lion Fists" and targeter.source.second_swing:
-                        targeter.source.mission2progress += 1
-                    if targeter.used_ability.name == "Gentle Step - Twin Lion Fists" and targeter.source.second_swing and targeter.source.first_countered:
-                        targeter.source.mission3progress += 1
-                if self.mission_active("shikamaru", targeter):
-                    if targeter.used_ability.name == "Shadow Neck Bind":
-                        if targeter.has_effect(EffectType.SYSTEM, "ShikamaruMission2Tracker"):
-                            targeter.source.mission2progress += 1
-                        else:
-                            targeter.add_effect(Effect("ShikamaruMissionTracker2", EffectType.SYSTEM, targeter, 1, lambda eff:"", system = True))
-                if "shikamaru" in self.scene.missions_to_check:
-                    if self.has_effect(EffectType.CONT_AFF_DMG, "Shadow Neck Bind") and targeter != self.get_effect(EffectType.CONT_AFF_DMG, "Shadow Neck Bind").user: 
-                        self.get_effect(EffectType.CONT_AFF_DMG, "Shadow Neck Bind").user.source.mission3progress += 1
-                if "kakashi" in self.scene.missions_to_check:
-                    if self.scene.sharingan_reflecting:
-                        self.scene.sharingan_reflector.source.mission1progress += 1
-                if self.mission_active("kakashi", targeter):
-                    if targeter.used_ability.name == "Raikiri" and self.has_effect(EffectType.ALL_STUN, "Summon - Nin-dogs"):
-                        targeter.source.mission2progress += 1
-                    if not self.has_effect(EffectType.SYSTEM, "KakashiMission4Tracker"):
-                        targeter.source.mission4progress += 1
-                
+                self.killing_blow_mission_check(targeter)
                 #endregion
                 if self.has_effect(EffectType.MARK, "Beast Instinct"):
                     if targeter == self.get_effect(EffectType.MARK,
                                                    "Beast Instinct").user:
-                        targeter.receive_healing(20)
+                        targeter.receive_healing(20, targeter)
                 self.source.hp = 0
                 self.source.dead = True
                 temp_yatsufusa_storage = None
                 if self.has_effect(EffectType.MARK, "Yatsufusa"):
                     temp_yatsufusa_storage = self.get_effect(
                         EffectType.MARK, "Yatsufusa")
-                self.source.current_effects.clear()
+                self.source.clear_effects()
                 self.update_effect_region()
                 if temp_yatsufusa_storage:
                     self.source.current_effects.append(temp_yatsufusa_storage)
                 
                 #region Checking for winning killing blow mission progress
-
                 winning_kb = True
                 for manager in self.scene.enemy_display.team.character_managers:
                     if not manager.source.dead and manager != self:
@@ -3767,10 +5128,27 @@ class CharacterManager():
                 if winning_kb:
                     if "neji" in self.scene.missions_to_check:
                         if targeter.has_effect(EffectType.ALL_BOOST, "Selfless Genius"):
-                            targeter.get_effect(EffectType.ALL_BOOST, "Selfless Genius").user.source.mission5progress += 1
+                            targeter.get_effect(EffectType.ALL_BOOST, "Selfless Genius").user.progress_mission(5, 1)
+                    if self.mission_active("ichimaru", targeter):
+                        if targeter.has_effect(EffectType.SYSTEM, "IchimaruMission5Tracker"):
+                            if targeter.get_effect(EffectType.SYSTEM, "IchimaruMission5Tracker").mag == 3:
+                                targeter.progress_mission(5, 1)
+                    if "snowwhite" in self.scene.missions_to_check:
+                        if targeter.has_effect(EffectType.SYSTEM, "SnowWhiteMission5Tracker"):
+                            targeter.get_effect(EffectType.SYSTEM, "SnowWhiteMission5Tracker").user.progress_mission(5, 1)
+                    if "nemurin" in self.scene.missions_to_check:
+                        if targeter.has_effect(EffectType.ALL_BOOST, "Dream Manipulation"):
+                            if targeter.get_effect(EffectType.ALL_BOOST, "Dream Manipulation").user.source.dead:
+                                targeter.get_effect(EffectType.ALL_BOOST, "Dream Manipulation").user.progress_mission(4, 1)
                 #endregion
 
         self.scene.dying_to_doping = False
+
+    def last_man_standing(self) -> bool:
+        for manager in self.scene.player_display.team.character_managers:
+            if manager != self and not manager.source.dead:
+                return False
+        return True
 
     def eff_death_check(self, source: Effect):
         if self.source.hp <= 0:
@@ -3778,36 +5156,33 @@ class CharacterManager():
                     EffectType.MARK,
                     "Doping Rampage") and not self.scene.dying_to_doping:
                 self.source.hp = 1
+                self.progress_mission(4, 1)
             elif self.has_effect(EffectType.MARK, "Electric Rage"):
                 self.source.hp = 1
             elif self.has_effect(EffectType.MARK, "Lucky Rabbit's Foot"):
                 self.source.hp = 35
             else:
+
+                if self.source.name == "esdeath":
+                    if not self.has_effect(EffectType.SYSTEM, "EsdeathMission3Failure"):
+                        self.add_effect(Effect("EsdeathMission3Failure", EffectType.SYSTEM, self, 280000, lambda eff:"", system=True))
+
                 #region Effect Killing Blow Mission Check
                 
-                if "shikamaru" in self.scene.missions_to_check:
-                    if source.name == "Shadow Neck Bind":
-                        if source.user.has_effect(EffectType.SYSTEM, "ShikamaruMission2Tracker"):
-                            source.user.source.mission2progress += 1
-                        else:
-                            source.user.add_effect(Effect("ShikamaruMissionTracker2", EffectType.SYSTEM, source.user, 1, lambda eff:"", system = True))
-                    if self.has_effect(EffectType.CONT_AFF_DMG, "Shadow Neck Bind") and source.user != self.get_effect(EffectType.CONT_AFF_DMG, "Shadow Neck Bind").user: 
-                        self.get_effect(EffectType.CONT_AFF_DMG, "Shadow Neck Bind").user.source.mission3progress += 1
-                    if source in self.scene.sharingan_reflected_effects:
-                        source.user.source.mission1progress += 1
-                
+                self.killing_blow_mission_check(source, active_killing_blow=False)
+
                 #endregion
                 if self.has_effect(EffectType.MARK, "Beast Instinct"):
                     if source.user == self.get_effect(EffectType.MARK,
                                                    "Beast Instinct").user:
-                        source.user.receive_healing(20)
+                        source.user.receive_healing(20, targeter)
                 self.source.hp = 0
                 self.source.dead = True
                 temp_yatsufusa_storage = None
                 if self.has_effect(EffectType.MARK, "Yatsufusa"):
                     temp_yatsufusa_storage = self.get_effect(
                         EffectType.MARK, "Yatsufusa")
-                self.source.current_effects.clear()
+                self.source.clear_effects()
                 self.update_effect_region()
                 if temp_yatsufusa_storage:
                     self.source.current_effects.append(temp_yatsufusa_storage)
@@ -3821,7 +5196,13 @@ class CharacterManager():
                 if winning_kb:
                     if "neji" in self.scene.missions_to_check:
                         if source.user.has_effect(EffectType.ALL_BOOST, "Selfless Genius"):
-                            source.user.get_effect(EffectType.ALL_BOOST, "Selfless Genius").user.source.mission5progress += 1
+                            source.user.get_effect(EffectType.ALL_BOOST, "Selfless Genius").user.progress_mission(5, 1)
+                        if source.user.has_effect(EffectType.SYSTEM, "IchimaruMission5Tracker"):
+                            if source.user.get_effect(EffectType.SYSTEM, "IchimaruMission5Tracker").mag == 3:
+                                source.user.progress_mission(5, 1)
+                        if "snowwhite" in self.scene.missions_to_check:
+                            if source.user.has_effect(EffectType.SYSTEM, "SnowWhiteMission5Tracker"):
+                                source.user.get_effect(EffectType.SYSTEM, "SnowWhiteMission5Tracker").user.progress_mission(5, 1)
                 #endregion
 
         self.scene.dying_to_doping = False
@@ -3852,29 +5233,68 @@ class CharacterManager():
 
         if self.used_ability.name == "Kangaryu":
             if self.has_effect(EffectType.STACK, "Kangaryu"):
+                guts = self.get_effect(EffectType.STACK, "Kangaryu")
+                if guts.mag >= 5:
+                    self.progress_mission(4, 1)
                 mod_healing += (
-                    20 * self.get_effect(EffectType.STACK, "Kangaryu").mag)
+                    20 * guts.mag)
 
-        target.receive_healing(mod_healing)
+        target.receive_healing(mod_healing, self)
 
-    def receive_healing(self, healing: int):
+    def receive_healing(self, healing: int, healer: "CharacterManager"):
         mod_healing = healing  #TODO: Add healing reduction/boost checking
         #TODO: Check for healing negation
 
         if self.source.name == "seiryu" and self.source.hp >= 30:
             self.full_remove_effect("Body Modification - Self Destruct", self)
 
+        #region Healing Mission Check
+        if self.mission_active("orihime", healer):
+            healer.progress_mission(3, mod_healing)
+        if self.mission_active("wendy", healer):
+            healer.progress_mission(1, mod_healing)
+            if healer.used_ability.name == "Sky Dragon's Roar":
+                healer.progress_mission(4, mod_healing)
+        if self.mission_active("gunha", healer):
+            if healer.used_ability.name == "Guts":
+                healer.progress_mission(5, mod_healing)
+        if self.mission_active("gokudera", healer):
+            if healer.used_ability.name == "Sistema C.A.I.":
+                healer.progress_mission(2, mod_healing)
+        if self.mission_active("ryohei", healer):
+            if healer.used_ability.name == "Kangaryu":
+                healer.progress_mission(2, mod_healing)
+        if self.mission_active("leone", healer):
+            healer.progress_mission(1, mod_healing)
+        if self.mission_active("nemurin", healer):
+            healer.progress_mission(1, mod_healing)
+
+        #endregion
+
         self.source.hp += mod_healing
         if self.source.hp > 100:
             self.source.hp = 100
 
-    def give_eff_healing(self, healing: int, target: "CharacterManager"):
+    def give_eff_healing(self, healing: int, target: "CharacterManager", source: Effect):
         #TODO add healing boosts
-        target.receive_eff_healing(healing)
+        target.receive_eff_healing(healing, source)
 
-    def receive_eff_healing(self, healing: int):
+    def receive_eff_healing(self, healing: int, source: Effect):
         mod_healing = healing  #TODO: Add healing reduction/boost checking
         #TODO: Check for healing negation
+
+        if self.source.name == "seiryu" and self.source.hp >= 30:
+            self.full_remove_effect("Body Modification - Self Destruct", self)
+
+        #region Healing Mission Check
+        if self.mission_active("orihime", source.user):
+            source.user.progress_mission(3, mod_healing)
+        if self.mission_active("leone", source.user):
+            source.user.progress_mission(1, mod_healing)
+        if self.mission_active("nemurin", source.user):
+            source.user.progress_mission(1, mod_healing)
+        #endregion
+
         self.source.hp += mod_healing
         if self.source.hp > 100:
             self.source.hp = 100
@@ -4119,7 +5539,7 @@ class CharacterManager():
                 continue
             if effect.invisible == True and effect.user.is_enemy():
                 continue
-            if effect.system:
+            if effect.system or effect.eff_type == EffectType.SYSTEM:
                 continue
             if effect.name in output.keys() and effect.user == output[
                     effect.name][0].user:
@@ -4249,6 +5669,7 @@ class CharacterManager():
                 self.profile_sprite.surface = self.scene.get_scaled_surface(
                     self.scene.scene_manager.surfaces[self.source.name +
                                                       "altprof2"])
+        
 
     def check_enemy_profile_swaps(self):
         gen = (eff for eff in self.source.current_effects

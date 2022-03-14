@@ -173,6 +173,7 @@ class ConnectionHandler:
         buffer.read_int()
         wins = buffer.read_int()
         losses = buffer.read_int()
+        medals = buffer.read_int()
         mission_data = buffer.read_string()
         ava_code = None
         has_avatar = buffer.read_int()
@@ -180,7 +181,7 @@ class ConnectionHandler:
             length = buffer.read_int()
             ava_code = bytes(buffer.read_bytes(length))
     
-        self.scene_manager.login(self.scene_manager.login_scene.username_box.text, wins, losses, mission_data, ava_code)
+        self.scene_manager.login(self.scene_manager.login_scene.username_box.text, wins, losses, medals, mission_data, ava_code)
 
         buffer.clear()
 
@@ -189,9 +190,10 @@ class ConnectionHandler:
         buffer.write_int(5)
         buffer.write_int(player.wins)
         buffer.write_int(player.losses)
+        buffer.write_int(player.medals)
         mission_strings = []
         for name, nums in player.missions.items():
-            mission_strings.append(f"{name}/{nums[0]}/{nums[1]}/{nums[2]}/{nums[3]}/{nums[4]}")
+            mission_strings.append(f"{name}/{nums[0]}/{nums[1]}/{nums[2]}/{nums[3]}/{nums[4]}/{nums[5]}")
         mission_string = "|".join(mission_strings)
         buffer.write_string(mission_string)
         buffer.write_byte(b'\x1f\x1f\x1f')

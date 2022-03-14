@@ -19,6 +19,8 @@ scene_manager = SceneManager()
 uiprocessor = sdl2.ext.UIProcessor()
 resources_path = "resources"
 
+
+
 def do_targeting(scene: BattleScene, targeter: CharacterManager, primary_target: CharacterManager):
     scene.acting_character = targeter
     scene.selected_ability = targeter.used_ability
@@ -32,7 +34,7 @@ def do_enemy_targeting(scene: BattleScene, targeter: CharacterManager, primary_t
 def tick_one_turn(scene: BattleScene):
     scene.resolve_ticking_ability()
     scene.tick_effect_duration()
-    scene.tick_effect_duration()
+    scene.test_enemy_tick_effect_duration()
 
 def enemy_apply_targeting(scene: BattleScene, primary_target: CharacterManager):
         if scene.selected_ability.target_type == Target.SINGLE:
@@ -84,7 +86,22 @@ def ally_use_ability(scene: BattleScene, targeter: CharacterManager, primary_tar
     targeter.current_targets.clear()
     tick_one_turn(scene)
 
+def ally_use(scene: BattleScene, targeter: CharacterManager, primary_target: CharacterManager, ability: Ability):
+    targeter.used_ability = ability
+    targeter.used_ability.target(targeter, scene.player_display.team.character_managers, scene.enemy_display.team.character_managers)
+    do_targeting(scene, targeter, primary_target)
+    targeter.used_ability.execute(targeter, scene.player_display.team.character_managers, scene.enemy_display.team.character_managers)
+    targeter.current_targets.clear()
+
 def enemy_use_ability(scene: BattleScene, targeter: CharacterManager, primary_target: CharacterManager, ability: Ability):
+    targeter.used_ability = ability
+    targeter.used_ability.target(targeter, scene.enemy_display.team.character_managers, scene.player_display.team.character_managers)
+    do_enemy_targeting(scene, targeter, primary_target)
+    targeter.used_ability.execute(targeter, scene.enemy_display.team.character_managers, scene.player_display.team.character_managers)
+    targeter.current_targets.clear()
+    scene.test_enemy_tick_effect_duration()
+
+def enemy_use(scene: BattleScene, targeter: CharacterManager, primary_target: CharacterManager, ability: Ability):
     targeter.used_ability = ability
     targeter.used_ability.target(targeter, scene.enemy_display.team.character_managers, scene.player_display.team.character_managers)
     do_enemy_targeting(scene, targeter, primary_target)
@@ -98,7 +115,7 @@ def test_scene() -> engine.Scene:
 @pytest.fixture
 def naruto_test_scene(test_scene: BattleScene) -> engine.Scene:
     ally_team = [Character("naruto"), Character("toga"), Character("nemu")]
-    enemy_team = [Character("ruler"), Character("snowwhite"), Character("naruto")]
+    enemy_team = [Character("naruto"), Character("snowwhite"), Character("naruto")]
     test_scene.setup_scene(ally_team, enemy_team)
     return test_scene
 
@@ -349,15 +366,50 @@ def byakuya_test_scene(test_scene: BattleScene) -> engine.Scene:
     test_scene.setup_scene(ally_team, enemy_team)
     return test_scene
 
-def test_detail_unpack():
-    details_package = ["Justice Kick", "Shiro deals 20 damage to target enemy. If they damaged one of Shiro's allies the previous turn, this ability deals double damage.", [1,0,0,0,0,1], Target.SINGLE]
+@pytest.fixture
+def neji_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("neji"), Character("naruto"), Character("nemu")]
+    enemy_team = [Character("naruto"), Character("astolfo"), Character("toga")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
 
-    test_ability = Ability()
+@pytest.fixture
+def hinata_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("hinata"), Character("snowwhite"), Character("nemu")]
+    enemy_team = [Character("snowwhite"), Character("astolfo"), Character("toga")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
 
-    test_ability.unpack_details(details_package)
+@pytest.fixture
+def shikamaru_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("shikamaru"), Character("snowwhite"), Character("nemu")]
+    enemy_team = [Character("snowwhite"), Character("astolfo"), Character("toga")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
 
-    assert test_ability.name == "Justice Kick"
-    assert test_ability.cost[Energy.PHYSICAL] == 1
+@pytest.fixture
+def kakashi_test_scene(test_scene: BattleScene) -> engine.Scene:
+    ally_team = [Character("kakashi"), Character("snowwhite"), Character("nemu")]
+    enemy_team = [Character("snowwhite"), Character("kakashi"), Character("toga")]
+    test_scene.setup_scene(ally_team, enemy_team)
+    return test_scene
+
+def normlen(effects) -> int:
+    gen = [eff for eff in effects if eff.eff_type != EffectType.SYSTEM]
+    return len(gen)
+
+def add_test_effect(effect_type: EffectType, scene: BattleScene) -> Effect:
+    return Effect("TestEffect", effect_type, scene.pteam[0], 280000, lambda eff:"")
+#region X
+# def test_detail_unpack():
+#     details_package = ["Justice Kick", "Shiro deals 20 damage to target enemy. If they damaged one of Shiro's allies the previous turn, this ability deals double damage.", [1,0,0,0,0,1], Target.SINGLE]
+
+#     test_ability = Ability()
+
+#     test_ability.unpack_details(details_package)
+
+#     assert test_ability.name == "Justice Kick"
+#     assert test_ability.cost[Energy.PHYSICAL] == 1
 
 # def test_shadow_clones(naruto_test_scene: BattleScene):
 #     naruto = naruto_test_scene.player_display.team.character_managers[0]
@@ -368,7 +420,7 @@ def test_detail_unpack():
     
 #     shadow_clones.execute(naruto, e_team, p_team)
 
-#     assert len(naruto.source.current_effects) == 4
+#     assert normlen(naruto.source.current_effects) == 4
 
 #     naruto.update_ability()
 
@@ -396,7 +448,7 @@ def test_detail_unpack():
 
 #     Ability("narutoalt1").execute(naruto, e_team, p_team)
 
-#     assert len(naruto.source.current_effects) == 3
+#     assert normlen(naruto.source.current_effects) == 3
     
 #     naruto.update_ability()
 
@@ -432,7 +484,7 @@ def test_detail_unpack():
 #     naruto.used_ability = toad_taijutsu
 #     toad_taijutsu.execute(naruto, p_team, e_team)
 
-#     assert len(fucking_ruler.source.current_effects) == 1
+#     assert normlen(fucking_ruler.source.current_effects) == 1
 #     assert fucking_ruler.source.hp == 65
 #     fucking_ruler.refresh_character(True)
 #     assert fucking_ruler.source.main_abilities[0].total_cost == 3
@@ -782,7 +834,7 @@ def test_detail_unpack():
     
 #     shadow_clones.execute(naruto, e_team, p_team)
 #     naruto.full_remove_effect("Shadow Clones", naruto)
-#     assert len(naruto.source.current_effects) == 0
+#     assert normlen(naruto.source.current_effects) == 0
 
 # def test_luna_cleanse(astolfo_test_scene: BattleScene):
 #     astolfo = astolfo_test_scene.player_display.team.character_managers[0]
@@ -799,11 +851,11 @@ def test_detail_unpack():
 
 #     rasengan.execute(naruto, pteam, eteam)
 
-#     assert len(pteam[1].source.current_effects) == 1
+#     assert normlen(pteam[1].source.current_effects) == 1
 
 #     luna.execute(astolfo, pteam, eteam)
 
-#     assert len(pteam[1].source.current_effects) == 0
+#     assert normlen(pteam[1].source.current_effects) == 0
 
 #     assert astolfo.has_effect(EffectType.STACK, "Trap of Argalia - Down With A Touch!")
 
@@ -874,7 +926,7 @@ def test_detail_unpack():
 #     cmary.update_ability()
 
 #     assert fucking_ruler.source.hp == 70
-#     assert len(cmary.source.current_effects) == 1
+#     assert normlen(cmary.source.current_effects) == 1
 #     assert cmary.source.current_abilities[0].name == "Quickdraw - Sniper"
 
 # def test_hidden_mine(cmary_test_scene: BattleScene):
@@ -1046,7 +1098,7 @@ def test_detail_unpack():
 #     assert naruto.source.hp == 75
 #     assert naruto.is_stunned()
 
-#     assert len(chrome.source.current_effects) == 0
+#     assert normlen(chrome.source.current_effects) == 0
 
 #     chrome.used_ability.execute(chrome, pteam, eteam)
 #     naruto.used_ability.execute(naruto, pteam, eteam)
@@ -1086,7 +1138,7 @@ def test_detail_unpack():
 #     assert naruto.source.hp == 80
 #     assert naruto.source.energy_contribution == 0
 
-#     assert len(chrome.source.current_effects) == 0
+#     assert normlen(chrome.source.current_effects) == 0
 
 #     chrome.used_ability.execute(chrome, pteam, eteam)
 #     naruto.used_ability.execute(naruto, pteam, eteam)
@@ -1178,7 +1230,7 @@ def test_detail_unpack():
 
 #     assert naruto.source.hp == 65
 
-#     assert len(chrome.source.current_effects) == 0
+#     assert normlen(chrome.source.current_effects) == 0
 
 #     chrome.used_ability.execute(chrome, pteam, eteam)
 #     naruto.used_ability.execute(naruto, pteam, eteam)
@@ -1326,7 +1378,7 @@ def test_detail_unpack():
 #     chu.used_ability.execute(chu, pteam, eteam)
 
 #     assert chrome.source.hp == 60
-#     assert len(chu.source.current_effects) == 0
+#     assert normlen(chu.source.current_effects) == 0
 
 # def test_illusory_disorientation_effect(cranberry_test_scene: BattleScene):
 #     cranberry = cranberry_test_scene.player_display.team.character_managers[0]
@@ -1621,7 +1673,7 @@ def test_detail_unpack():
 #     esdeath.used_ability.execute(esdeath, pteam, eteam)
 
 #     for e in eteam:
-#         assert len(e.source.current_effects) == 1
+#         assert normlen(e.source.current_effects) == 1
 
 #     assert not esdeath.has_effect(EffectType.MARK, "Frozen Castle")
 #     assert esdeath.has_effect(EffectType.UNIQUE, "Frozen Castle")
@@ -1732,7 +1784,7 @@ def test_detail_unpack():
 #     frenda.used_ability.execute(frenda, pteam, eteam)
 #     frenda.used_ability.execute(frenda, pteam, eteam)
 
-#     assert len(astolfo.source.current_effects) == 2
+#     assert normlen(astolfo.source.current_effects) == 2
 
 #     frenda.used_ability = detonate
 #     frenda.used_ability.execute(frenda, pteam, eteam)
@@ -1762,7 +1814,7 @@ def test_detail_unpack():
 #     naruto.current_targets.append(toga)
 #     naruto.used_ability.execute(naruto, eteam, pteam)
 
-#     assert len(toga.source.current_effects) == 0
+#     assert normlen(toga.source.current_effects) == 0
 #     frenda.current_targets.clear()
 #     frenda.current_targets.append(naruto)
 #     frenda.used_ability = detonate
@@ -1888,6 +1940,7 @@ def test_detail_unpack():
 #     gokudera.used_ability.execute(gokudera, pteam, eteam)
     
 #     assert eteam[0].source.hp == 60
+#     assert gokudera.has_effect(EffectType.STACK, "Sistema C.A.I.")
 #     assert gokudera.get_effect(EffectType.STACK, "Sistema C.A.I.").mag == 1
     
 # def test_skull_ring(gokudera_test_scene: BattleScene):
@@ -3223,10 +3276,10 @@ def test_detail_unpack():
 #     lightningroar = laxus.source.main_abilities[1]
 #     thunder_palace = laxus.source.main_abilities[2]
 
-#     ally_use_ability(laxus_test_scene, laxus, pteam[0], lightningroar)
+#     ally_use_ability(laxus_test_scene, laxus, eteam[0], lightningroar)
 
 
-#     assert pteam[0].check_for_dmg_reduction() == -10
+#     assert eteam[0].check_for_dmg_reduction() == -10
 
 # def test_thunder_palace(laxus_test_scene: BattleScene):
 #     pteam = laxus_test_scene.player_display.team.character_managers
@@ -3258,7 +3311,7 @@ def test_detail_unpack():
 
 #     assert laxus.source.hp == 70
 #     assert eteam[1].source.hp == 70
-#     assert len(laxus.source.current_effects) == 0
+#     assert normlen(laxus.source.current_effects) == 0
 
 # def test_lionel_lockout(leone_test_scene: BattleScene):
 #     pteam = leone_test_scene.player_display.team.character_managers
@@ -3632,27 +3685,22 @@ def test_detail_unpack():
 #     ally_use_ability(byakuya_test_scene, byakuya, naruto, imperial)
 
 #     assert naruto.source.hp == 50
-
+#endregion
 def test_naruto_mission_2(naruto_test_scene: BattleScene):
     pteam = naruto_test_scene.player_display.team.character_managers
     eteam = naruto_test_scene.enemy_display.team.character_managers
     naruto = pteam[0]
     enemy = eteam[2]
 
-    barrage = enemy.source.alt_abilities[1]
+    barrage = naruto.source.alt_abilities[1]
 
-    enemy_use_ability(naruto_test_scene, enemy, naruto, barrage)
+    ally_use_ability(naruto_test_scene, naruto, eteam[2], barrage)
 
-    assert enemy.source.mission2progress == 0
+    assert naruto.source.mission2progress == 0
 
-    tick_one_turn(naruto_test_scene)
-    enemy_use_ability(naruto_test_scene, enemy, naruto, barrage)
+    ally_use_ability(naruto_test_scene, naruto, eteam[2], barrage)
 
-    assert naruto.is_stunned()
-
-    naruto_test_scene.tick_effect_duration()
-    
-    assert enemy.source.mission2progress == 1
+    assert naruto.source.mission2progress == 1
 
 def test_naruto_mission_4(naruto_test_scene: BattleScene):
     pteam = naruto_test_scene.player_display.team.character_managers
@@ -3794,6 +3842,10 @@ def test_itachi_mission_2(itachi_test_scene: BattleScene):
 
     assert itachi.source.mission2progress == 1
 
+    tick_one_turn(itachi_test_scene)
+
+    assert itachi.source.mission2progress == 2
+
 def test_itachi_mission_3(itachi_test_scene: BattleScene):
     pteam = itachi_test_scene.player_display.team.character_managers
     eteam = itachi_test_scene.enemy_display.team.character_managers
@@ -3901,4 +3953,301 @@ def test_minato_mission_4_success(minato_test_scene: BattleScene):
 
     assert minato.source.mission4progress == 0
 
+def test_minato_mission_5(minato_test_scene: BattleScene):
+    pteam = minato_test_scene.player_display.team.character_managers
+    eteam = minato_test_scene.enemy_display.team.character_managers
+    minato = pteam[0]
+    kunai = minato.source.main_abilities[1]
+    raijin = minato.source.main_abilities[0]
 
+    assert minato.source.mission5progress == 0
+
+    ally_use_ability(minato_test_scene, minato, eteam[0], kunai)
+    ally_use_ability(minato_test_scene, minato, eteam[0], raijin)
+
+    assert minato.source.mission5progress == 1
+
+def test_neji_mission_1(neji_test_scene: BattleScene):
+    pteam = neji_test_scene.pteam
+    eteam = neji_test_scene.eteam
+
+    neji = pteam[0]
+    crusher = neji.source.main_abilities[1]
+
+    assert neji.source.mission1progress == 0
+
+    eteam[0].add_effect(add_test_effect(EffectType.ALL_INVULN, neji_test_scene))
+    eteam[0].source.hp = 10
+
+    ally_use_ability(neji_test_scene, neji, eteam[0], crusher)
+
+    assert eteam[0].source.dead
+    assert neji.source.mission1progress == 1
+
+def test_neji_mission_1_false_invuln(neji_test_scene: BattleScene):
+    pteam = neji_test_scene.pteam
+    eteam = neji_test_scene.eteam
+
+    neji = pteam[0]
+    crusher = neji.source.main_abilities[1]
+
+    assert neji.source.mission1progress == 0
+
+    eteam[0].add_effect(add_test_effect(EffectType.ALL_INVULN, neji_test_scene))
+    eteam[0].source.hp = 10
+    eteam[0].add_effect(add_test_effect(EffectType.DEF_NEGATE, neji_test_scene))
+
+    ally_use_ability(neji_test_scene, neji, eteam[0], crusher)
+
+    assert eteam[0].source.dead
+    assert neji.source.mission1progress == 0
+
+def test_neji_mission_3(neji_test_scene: BattleScene):
+    pteam = neji_test_scene.pteam
+    eteam = neji_test_scene.eteam
+
+    neji = pteam[0]
+    trigrams = neji.source.main_abilities[0]
+
+    assert neji.source.mission3progress == 0
+
+    ally_use_ability(neji_test_scene, neji, eteam[0], trigrams)
+
+    tick_one_turn(neji_test_scene)
+    tick_one_turn(neji_test_scene)
+    tick_one_turn(neji_test_scene)
+
+    assert eteam[0].source.hp == 70
+    assert neji.source.mission3progress == 30
+
+def test_neji_mission_4(neji_test_scene: BattleScene):
+    pteam = neji_test_scene.pteam
+    eteam = neji_test_scene.eteam
+
+    neji = pteam[0]
+    genius = neji.source.main_abilities[2]
+    ally_naruto = pteam[1]
+    ally_naruto.source.hp = 10
+    a_tai = ally_naruto.source.main_abilities[2]
+
+
+    eteam[1].source.dead = True
+    eteam[2].source.dead = True
+    eteam[0].source.hp = 10
+    e_tai = eteam[0].source.main_abilities[2]
+
+    ally_use_ability_with_response(neji_test_scene, neji, ally_naruto, genius)
+    enemy_use_ability(neji_test_scene, eteam[0], ally_naruto, e_tai)
+
+    assert neji.source.dead
+    assert not pteam[1].source.dead
+    assert neji.source.mission4progress == 1
+
+def test_neji_mission_5(neji_test_scene: BattleScene):
+    pteam = neji_test_scene.pteam
+    eteam = neji_test_scene.eteam
+
+    neji = pteam[0]
+    genius = neji.source.main_abilities[2]
+    ally_naruto = pteam[1]
+    ally_naruto.source.hp = 10
+    a_tai = ally_naruto.source.main_abilities[2]
+
+
+    eteam[1].source.dead = True
+    eteam[2].source.dead = True
+    eteam[0].source.hp = 10
+    e_tai = eteam[0].source.main_abilities[2]
+
+    ally_use_ability_with_response(neji_test_scene, neji, ally_naruto, genius)
+    enemy_use_ability(neji_test_scene, eteam[0], ally_naruto, e_tai)
+
+    assert neji.source.dead
+    
+    ally_use_ability(neji_test_scene, ally_naruto, eteam[0], a_tai)
+
+    assert neji.source.mission5progress == 1
+
+def test_hinata_mission_2(hinata_test_scene: BattleScene):
+    pteam = hinata_test_scene.pteam
+    eteam = hinata_test_scene.eteam
+
+    hinata = pteam[0]
+    twinlion = hinata.source.main_abilities[0]
+
+    eteam[0].source.hp = 40
+
+    assert hinata.source.mission2progress == 0
+
+    ally_use_ability(hinata_test_scene, hinata, eteam[0], twinlion)
+    tick_one_turn(hinata_test_scene)
+
+    assert hinata.source.mission2progress == 1
+
+def test_hinata_mission_2_first_hit_kill(hinata_test_scene: BattleScene):
+    pteam = hinata_test_scene.pteam
+    eteam = hinata_test_scene.eteam
+
+    hinata = pteam[0]
+    twinlion = hinata.source.main_abilities[0]
+
+    eteam[0].source.hp = 20
+
+    assert hinata.source.mission2progress == 0
+
+    ally_use_ability(hinata_test_scene, hinata, eteam[0], twinlion)
+    tick_one_turn(hinata_test_scene)
+
+    assert hinata.source.mission2progress == 0
+
+def test_hinata_mission_3(hinata_test_scene: BattleScene):
+    pteam = hinata_test_scene.pteam
+    eteam = hinata_test_scene.eteam
+
+    snowwhite = eteam[0]
+    counter = snowwhite.source.main_abilities[1]
+
+    hinata = pteam[0]
+    twinlion = hinata.source.main_abilities[0]
+
+    eteam[1].source.hp = 20
+
+    enemy_use_ability(hinata_test_scene, snowwhite, hinata, counter)
+
+    assert hinata.has_effect(EffectType.COUNTER, "Hear Distress")
+
+    ally_use_ability(hinata_test_scene, hinata, eteam[1], twinlion)
+
+    assert eteam[1].source.dead
+
+    assert hinata.source.mission3progress == 1
+
+def test_hinata_mission_4(hinata_test_scene: BattleScene):
+    pteam = hinata_test_scene.pteam
+    eteam = hinata_test_scene.eteam
+
+    hinata = pteam[0]
+    trigrams = hinata.source.main_abilities[1]
+
+    snowwhite = pteam[1]
+    hear_distress = snowwhite.source.main_abilities[1]
+
+    enemy = eteam[0]
+    attack = enemy.source.main_abilities[0]
+
+    ally_use_ability_with_response(hinata_test_scene, hinata, snowwhite, trigrams)
+    ally_use_ability_with_response(hinata_test_scene, snowwhite, snowwhite, hear_distress)
+
+    tick_one_turn(hinata_test_scene)
+
+    ally_use_ability_with_response(hinata_test_scene, hinata, snowwhite, trigrams)
+    enemy_use_ability(hinata_test_scene, enemy, snowwhite, attack)
+
+    assert hinata.source.mission4progress == 2
+
+def test_hinata_mission_5(hinata_test_scene: BattleScene):
+    pteam = hinata_test_scene.pteam
+    eteam = hinata_test_scene.eteam
+
+    hinata = pteam[0]
+    trigrams = hinata.source.main_abilities[1]
+
+    ally_use_ability(hinata_test_scene, hinata, hinata, trigrams)
+    ally_use_ability(hinata_test_scene, hinata, hinata, trigrams)
+
+    assert hinata.source.mission5progress == 45
+
+def test_shikamaru_mission_2(shikamaru_test_scene: BattleScene):
+    pteam = shikamaru_test_scene.pteam
+    eteam = shikamaru_test_scene.eteam
+
+    shikamaru = pteam[0]
+    neckbind = shikamaru.source.main_abilities[1]
+
+    eteam[0].source.hp = 30
+    eteam[1].source.hp = 15
+
+    ally_use_ability(shikamaru_test_scene, shikamaru, eteam[0], neckbind)
+    ally_use_ability(shikamaru_test_scene, shikamaru, eteam[1], neckbind)
+
+    shikamaru.source.mission2progress == 1
+    
+def test_shikamaru_mission_3(shikamaru_test_scene: BattleScene):
+    pteam = shikamaru_test_scene.pteam
+    eteam = shikamaru_test_scene.eteam
+
+    shikamaru = pteam[0]
+    bind = shikamaru.source.main_abilities[0]
+
+    snowwhite = pteam[1]
+    attack = snowwhite.source.main_abilities[0]
+
+    eteam[0].source.hp = 15
+
+    ally_use_ability(shikamaru_test_scene, shikamaru, eteam[0], bind)
+    ally_use_ability(shikamaru_test_scene, snowwhite, eteam[0], attack)
+
+    shikamaru.source.mission3progress == 1
+
+def test_shikamaru_mission_5(shikamaru_test_scene: BattleScene):
+    pteam = shikamaru_test_scene.pteam
+    eteam = shikamaru_test_scene.eteam
+
+    shikamaru = pteam[0]
+    bind = shikamaru.source.main_abilities[0]
+    neckbind = shikamaru.source.main_abilities[1]
+    pin = shikamaru.source.main_abilities[2]
+
+    a = eteam[0]
+    b = eteam[1]
+
+    ally_use(shikamaru_test_scene, shikamaru, a, pin)
+    ally_use(shikamaru_test_scene, shikamaru, b, bind)
+
+    assert shikamaru.source.mission5progress == 1
+    assert a.has_effect(EffectType.ALL_STUN, "Shadow Bind Jutsu")
+    assert b.has_effect(EffectType.ALL_STUN, "Shadow Bind Jutsu")
+
+def test_kakashi_mission_1(kakashi_test_scene: BattleScene):
+    pteam = kakashi_test_scene.pteam
+    eteam = kakashi_test_scene.eteam
+
+    kakashi = eteam[1]
+    sharingan = kakashi.source.main_abilities[0]
+
+    pteam[1].source.hp = 15
+
+    enemy_use(kakashi_test_scene, kakashi, kakashi, sharingan)
+    ally_use(kakashi_test_scene, pteam[1], kakashi, pteam[1].source.main_abilities[0])
+
+    assert kakashi.source.mission1progress == 1
+
+def test_kakashi_mission_2(kakashi_test_scene: BattleScene):
+    pteam = kakashi_test_scene.pteam
+    eteam = kakashi_test_scene.eteam
+
+    kakashi = pteam[0]
+    raikiri = kakashi.source.main_abilities[2]
+    nindogs = kakashi.source.main_abilities[1]
+
+    target = eteam[0]
+    target.source.hp = 40
+    ally_use(kakashi_test_scene, kakashi, target, nindogs)
+    ally_use(kakashi_test_scene, kakashi, target, raikiri)
+    assert kakashi.source.mission2progress == 1
+
+def test_kakashi_mission_4_success(kakashi_test_scene: BattleScene):
+    pteam = kakashi_test_scene.pteam
+    eteam = kakashi_test_scene.eteam
+
+    kakashi = pteam[0]
+    raikiri = kakashi.source.main_abilities[2]
+
+    snowwhite = pteam[1]
+    help = snowwhite.source.main_abilities[0]
+
+    target = eteam[0]
+    target.source.hp = 40
+
+    ally_use(kakashi_test_scene, kakashi, target, raikiri)
+    assert kakashi.source.mission4progress == 1
