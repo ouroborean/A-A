@@ -1,5 +1,6 @@
 from operator import add
 from random import randint
+from turtle import end_fill
 import PIL
 from PIL import Image
 from pathlib import Path
@@ -39,6 +40,7 @@ class Target(enum.IntEnum):
     MULTI_ALLY = 2
     ALL_TARGET = 3
     MULTI_EITHER = 4
+    SELF_OR_ENEMIES = 5
 
 
 @enum.unique
@@ -170,6 +172,10 @@ class Ability():
             return False
         if scene.window_up:
             return False
+        if character.has_specific_stun():
+            for stun_type in character.get_specific_stun_types():
+                if self._base_cost[Energy(stun_type - 1)] > 0:
+                    return False
         return True
 
     def modify_ability_cost(self, energy_type: Energy, mod: int):
@@ -206,6 +212,8 @@ class Ability():
 
     def start_cooldown(self):
         self.cooldown_remaining = self.cooldown + 1
+
+
 
 #region Targeting
 #region default targeting methods
@@ -470,6 +478,24 @@ def target_kamui(user: "CharacterManager",
     total_targets += 1
     return total_targets
 
+def target_gate_of_babylon(user: "CharacterManager",
+              playerTeam: list["CharacterManager"],
+              enemyTeam: list["CharacterManager"],
+              fake_targeting: bool = False) -> int:
+    total_targets = 0
+
+    targeting = user.check_bypass_effects()
+
+    user.set_targeted()
+    total_targets += 1
+
+    for enemy in enemyTeam:
+        if enemy.hostile_target(user, targeting):
+            if not fake_targeting:
+                enemy.set_targeted()
+            total_targets += 1
+    return total_targets
+
 def target_needle_pin(user: "CharacterManager",
               playerTeam: list["CharacterManager"],
               enemyTeam: list["CharacterManager"],
@@ -552,7 +578,6 @@ def target_yatsufusa(user: "CharacterManager",
             total_targets += 1
     return total_targets
 
-    return total_targets
 
 def target_pumpkin(user: "CharacterManager",
               playerTeam: list["CharacterManager"],
@@ -768,6 +793,9 @@ def target_titanias_rampage(user: "CharacterManager",
         total_targets += 1
     return total_targets
 
+
+
+
 #endregion
 #endregion
 
@@ -789,7 +817,8 @@ def exe_rasengan(user: "CharacterManager", playerTeam: list["CharacterManager"],
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(base_damage, target)
                 target.add_effect(Effect(Ability("naruto2"), EffectType.ALL_STUN, user, stun_duration, lambda eff: "This character is stunned."))
-                user.check_on_stun(target)
+                if target.meets_stun_check():
+                    user.check_on_stun(target)
         user.check_on_use()
         user.check_on_harm()
 
@@ -830,7 +859,7 @@ def exe_uzumaki_barrage(user: "CharacterManager", playerTeam: list["CharacterMan
                 user.deal_damage(base_damage, target)
                 if user.has_effect(EffectType.MARK, "Uzumaki Barrage"):
                     target.add_effect(Effect(Ability("narutoalt2"), EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                    if user.is_stunned():
+                    if target.meets_stun_check():
                         user.source.mission2progress += 1
                         user.check_on_stun(target)
             user.add_effect(Effect(Ability("narutoalt2"), EffectType.MARK, user, 3, lambda eff: "Uzumaki Barrage will stun its target for one turn."))
@@ -930,7 +959,8 @@ def exe_black_coffin(user: "CharacterManager", playerTeam: list["CharacterManage
                 target.add_effect(Effect(Ability("aizen3"), EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
                 target.add_effect(Effect(Ability("aizen3"), EffectType.MARK, user, 3, lambda eff: "If Shatter, Kyoka Suigetsu is used on this character, all of their active cooldowns will be increased by 2."))
                 target.add_effect(Effect(Ability("aizen3"), EffectType.MARK, user, 3, lambda eff: "If Overwhelming Power is used on this character, they will be unable to reduce damage or become invulnerable for 2 turns."))
-                user.check_on_stun(target)
+                if target.meets_stun_check():
+                    user.check_on_stun(target)
                 if target.has_effect(EffectType.MARK, "Overwhelming Power"):
                     user.progress_mission(1, 1)
                     base_damage = 20
@@ -1045,7 +1075,7 @@ def exe_sixrod(user: "CharacterManager", playerTeam: list["CharacterManager"], e
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                if target.is_stunned():
+                if target.meets_stun_check():
                     target.add_effect(Effect("ByakuyaMission1Marker", EffectType.SYSTEM, user, 3, lambda eff:"", system=True))
                     user.check_on_stun(target)
         user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Bakudou #61 - Six-Rod Light Restraint has been replaced by Hadou #2 - Byakurai.", mag=21))
@@ -1330,7 +1360,8 @@ def exe_merciless_finish(user: "CharacterManager", playerTeam: list["CharacterMa
                 target.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 3, lambda eff: "This character will take 15 affliction damage.", mag=15))
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 4, lambda eff: "This character is stunned."))
                 user.add_effect(Effect(user.used_ability, EffectType.CONT_USE, user, 3, lambda eff: "Cranberry is using Merciless Finish. This effect will end if she is stunned."))
-                user.check_on_stun(target)
+                if target.meets_stun_check():
+                    user.check_on_stun(target)
         user.check_on_use()
         user.check_on_harm()
 #endregion
@@ -1480,17 +1511,73 @@ def exe_esdeath_guard(user: "CharacterManager", playerTeam: list["CharacterManag
 
 def exe_mahapadma(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     for target in user.current_targets:
-        if target != user:
-            if target.id < 3:
-                duration = 5
+        if target.final_can_effect(user.check_bypass_effects()):
+            if target != user:
+                if target.id < 3:
+                    duration = 5
+                else:
+                    duration = 4
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, duration, lambda eff: "This character is stunned."))
+                if target.meets_stun_check():
+                    user.check_on_stun(target)
             else:
-                duration = 4
-            target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, duration, lambda eff: "This character is stunned."))
-            user.check_on_stun(target)
-        else:
-            target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 5, lambda eff: "When Mahapadma ends, Esdeath will be stunned for two turns."))
+                target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 5, lambda eff: "When Mahapadma ends, Esdeath will be stunned for two turns."))
     if user.last_man_standing():
         user.add_effect(Effect("EsdeathMission5Tracker", EffectType.SYSTEM, user, 280000, lambda eff:"", system=True))
+    user.check_on_use()
+#endregion
+#region Frankenstein Execution
+def exe_bridal_smash(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                base_damage = 20
+                if user.has_effect(EffectType.STACK, "Galvanism"):
+                    base_damage = base_damage + (user.get_effect(EffectType.STACK, "Galvanism").mag * 10)
+                user.deal_damage(base_damage, target)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_bridal_chest(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                base_damage = 20
+                if user.has_effect(EffectType.STACK, "Galvanism"):
+                    base_damage = base_damage + (user.get_effect(EffectType.STACK, "Galvanism").mag * 10)
+                user.deal_damage(base_damage, target)
+        user.add_effect(Effect(user.used_ability, EffectType.CONT_UNIQUE, user, 5, lambda eff: "Frankenstein will deal 20 damage to a random enemy target.", mag=20))
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_blasted_tree(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    
+    for target in user.current_targets:
+        if target.final_can_effect(user.check_bypass_effects()):
+            base_damage = user.source.hp
+            if user.has_effect(EffectType.STACK, "Galvanism"):
+                    base_damage = base_damage + (user.get_effect(EffectType.STACK, "Galvanism").mag * 10)
+            user.deal_damage(base_damage, target)
+    
+    user.check_on_use()
+    user.check_on_harm()
+
+    user.source.hp = 0
+    user.source.dead = True
+    temp_yatsufusa_storage = None
+    if user.has_effect(EffectType.MARK, "Yatsufusa"):
+        temp_yatsufusa_storage = user.get_effect(EffectType.MARK, "Yatsufusa")
+        temp_yatsufusa_storage.user.progress_mission(1, 1)
+    user.source.current_effects.clear()
+    if temp_yatsufusa_storage:
+        user.source.current_effects.append(temp_yatsufusa_storage)
+
+        
+
+def exe_galvanism(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 4, lambda eff: "Damaging Special abilities will instead heal Frankenstein.", invisible=True))
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 4, lambda eff: "If Frankenstein is healed by Galvanism, she will deal 10 additional damage with her abilities on the following turn.", invisible=True))
+    
     user.check_on_use()
 #endregion
 #region Frenda Execution
@@ -1594,6 +1681,50 @@ def exe_blacksteel_gajeel(user: "CharacterManager", playerTeam: list["CharacterM
 
 
 #endregion
+#region Gilgamesh Execution
+
+def exe_gate_of_babylon(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    harmed = False
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target == user:
+                target.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff:f"Gate of Babylon will deal {eff.mag * 15} additional damage.", mag=1), user)
+            else:
+                if target.final_can_effect(user.check_bypass_effects()):
+                    base_damage = 10
+                    if user.has_effect(EffectType.STACK, "Gate of Babylon"):
+                        base_damage += (user.get_effect(EffectType.STACK, "Gate of Babylon").mag * 15)
+                    user.deal_damage(base_damage, target)
+                    harmed = True
+        user.check_on_use()
+        if harmed:
+            if user.has_effect(EffectType.STACK, "Gate of Babylon"):
+                user.remove_effect(user.get_effect(EffectType.STACK, "Gate of Babylon"))
+            user.check_on_harm()
+            
+def exe_enkidu(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    for target in user.current_targets:
+        if target.final_can_effect(user.check_bypass_effects()):
+            target.add_effect(Effect(user.used_ability, EffectType.COUNTER, user, 2, lambda eff: f"The first harmful ability used by this character will be countered and they will be stunned for one turn.", invisible=True))
+    user.check_on_use()
+    user.check_on_harm()
+
+def exe_enuma_elish(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(40, target)
+                target.add_effect(Effect(user.used_ability, EffectType.SPECIFIC_STUN, user, 4, lambda eff: "This character's Weapon skills are stunned.", mag=5))
+                if target.meets_stun_check():
+                    user.check_on_stun(target)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_intercept(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: f"Gilgamesh is invulnerable."))
+    user.check_on_use()
+
+#endregion
 #region Gokudera Execution
 
 def advance_sistema_cai(sistema: Effect):
@@ -1624,7 +1755,8 @@ def exe_sistema_cai(user: "CharacterManager", playerTeam: list["CharacterManager
                     user.deal_damage(10, target)
                     if target == user.primary_target:
                         target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                        user.check_on_stun(target)
+                        if target.meets_stun_check():
+                            user.check_on_stun(target)
             user.check_on_use()
             user.check_on_harm()
         elif stage == 3:
@@ -1633,7 +1765,8 @@ def exe_sistema_cai(user: "CharacterManager", playerTeam: list["CharacterManager
                     if target.final_can_effect(user.check_bypass_effects()):
                         user.deal_damage(20, target)
                         target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                        user.check_on_stun(target)
+                        if target.meets_stun_check():
+                            user.check_on_stun(target)
                 else:
                     if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                         user.deal_damage(10, target)
@@ -1648,7 +1781,8 @@ def exe_sistema_cai(user: "CharacterManager", playerTeam: list["CharacterManager
                     if target.final_can_effect(user.check_bypass_effects()):
                         user.deal_damage(25, target)
                         target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                        user.check_on_stun(target)
+                        if target.meets_stun_check():
+                            user.check_on_stun(target)
             
             user.check_on_use()
             user.check_on_harm()
@@ -1739,7 +1873,7 @@ def exe_hammer(user: "CharacterManager", playerTeam: list["CharacterManager"], e
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(20, target)
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                if target.is_stunned():
+                if target.meets_stun_check():
                     user.check_on_stun()
                     user.progress_mission(2, 1)
         user.check_on_use()
@@ -1822,7 +1956,8 @@ def exe_super_awesome_punch(user: "CharacterManager", playerTeam: list["Characte
                 user.deal_pierce_damage(base_damage, target)
                 if charges == 5:
                     target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                    user.check_on_stun(target)
+                    if target.meets_stun_check():
+                        user.check_on_stun(target)
         user.check_on_use()
         user.check_on_harm()
                 
@@ -2098,7 +2233,7 @@ def exe_tsukuyomi(user: "CharacterManager", playerTeam: list["CharacterManager"]
             if target.final_can_effect(user.check_bypass_effects()):
                 target.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 6, lambda eff: "If this character is aided by an ally, this effect will end."))
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 6, lambda eff: "This character is stunned."))
-                if target.is_stunned():
+                if target.meets_stun_check():
 
                     user.check_on_stun(target)
         user.check_on_use()
@@ -2122,7 +2257,8 @@ def exe_totsuka_blade(user: "CharacterManager", playerTeam: list["CharacterManag
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(35, target)
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                user.check_on_stun(target)
+                if target.meets_stun_check():
+                    user.check_on_stun(target)
         user.check_on_use()
         user.check_on_harm()
 
@@ -2130,6 +2266,44 @@ def exe_yata_mirror(user: "CharacterManager", playerTeam: list["CharacterManager
     user.get_effect(EffectType.DEST_DEF, "Susano'o").alter_dest_def(20)
     user.receive_system_aff_damage(5)
     user.check_on_use()
+#endregion
+#region Jeanne Execution
+def exe_flag_of_the_ruler(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    for target in user.current_targets:
+        if target.helpful_target(user, user.check_bypass_effects()):
+            target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 2, lambda eff:f"This character has 10 points of damage reduction."))
+            target.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 280000, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag = 10))
+    user.check_on_use()
+    user.check_on_help()            
+
+def exe_luminosite(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    for target in user.current_targets:
+        if target.helpful_target(user, user.check_bypass_effects()):
+            target.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 4, lambda eff:"This character is invulnerable."))
+    user.check_on_use()
+    user.check_on_help()
+
+def exe_la_pucelle(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 3, lambda eff:"La Pucelle - Draw has been replaced by Crimson Holy Maiden.", mag = 31))
+    user.check_on_use()
+
+def exe_crimson_holy_maiden(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_aff_damage(15, target)
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 280000, lambda eff:f"This character will take 15 affliction damage.", mag=15))
+        user.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 280000, lambda eff:"This character is stunned."))
+        user.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 280000, lambda eff: "This character will take 35 affliction damage.", mag=35))
+        user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 280000, lambda eff: "Jeanne is invulnerable."))
+        user.receive_eff_aff_damage(35, user.get_effect(EffectType.CONT_AFF_DMG, "Crimson Holy Maiden"))
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_jeanne_dodge(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Jeanne is invulnerable."))
+    user.check_on_use()
+
 #endregion
 #region Jiro Execution
 def exe_counter_balance(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
@@ -2211,7 +2385,8 @@ def exe_nindogs(user: "CharacterManager", playerTeam: list["CharacterManager"], 
                 user.deal_damage(20, target)
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
                 target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "This character will take double damage from Raikiri."))
-                user.check_on_stun(target)
+                if target.meets_stun_check():
+                    user.check_on_stun(target)
         user.check_on_use()
         user.check_on_harm()
 
@@ -2287,8 +2462,9 @@ def exe_whirlwind_rush(user: "CharacterManager", playerTeam: list["CharacterMana
                 if not user.has_effect(EffectType.MARK, "Godspeed"):
                     target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 1, lambda eff:"If this character is damaged, the damager will become invulnerable for one turn."))
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                user.check_on_stun(target)
                 user.deal_damage(base_damage, target)
+                if target.meets_stun_check():
+                    user.check_on_stun(target)
         user.check_on_use()
         user.check_on_harm()
 
@@ -2348,7 +2524,7 @@ def exe_needle_pin(user: "CharacterManager", playerTeam: list["CharacterManager"
                 target.add_effect(Effect(user.used_ability, EffectType.DEF_NEGATE, user, 3, lambda eff: "This character cannot reduce damage or become invulnerable."))
                 if user.has_effect(EffectType.MARK, "Judgement Throw"):
                     target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                    if target.is_stunned():
+                    if target.meets_stun_check():
                         user.progress_mission(2, 1)
                         user.check_on_stun(target)
 
@@ -2544,7 +2720,8 @@ def exe_lightning_dragons_roar(user: "CharacterManager", playerTeam: list["Chara
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(40, target)
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                user.check_on_stun(target)
+                if target.meets_stun_check():
+                    user.check_on_stun(target)
         user.check_on_use()
         user.check_on_harm()
 
@@ -2709,7 +2886,8 @@ def exe_heartseeker_thrust(user: "CharacterManager", playerTeam: list["Character
                     target.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 3, lambda eff: "This character will receive 15 affliction damage.", mag=15))
                 if target.has_effect(EffectType.MARK, "Cross-Tail Strike"):
                     target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                    user.check_on_stun(target)
+                    if target.meets_stun_check():
+                        user.check_on_stun(target)
         user.check_on_use()
         user.check_on_harm()
 
@@ -2935,7 +3113,8 @@ def exe_cutdown_shot(user: "CharacterManager", playerTeam: list["CharacterManage
                 user.deal_damage(base_damage, target)
                 if user.source.hp < 50:
                     target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                    user.check_on_stun(target)
+                    if target.meets_stun_check():
+                        user.check_on_stun(target)
         user.check_on_use()
         user.check_on_harm()
 
@@ -3133,8 +3312,10 @@ def exe_enraged_blow(user: "CharacterManager", playerTeam: list["CharacterManage
                 base_damage = 40
                 user.deal_damage(base_damage, target)
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                user.check_on_stun(target)
                 user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 2, lambda eff: "Naruha will take double damage."))
+                if target.meets_stun_check():
+                    user.check_on_stun(target)
+                
         user.check_on_use()
         user.check_on_harm()
 #endregion
@@ -3458,7 +3639,7 @@ def exe_first_dance(user: "CharacterManager", playerTeam: list["CharacterManager
                 base_damage = 25
                 if target.check_invuln():
                     target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                    if target.is_stunned():
+                    if target.meets_stun_check():
                         user.check_on_stun()
                         user.progress_mission(1, 1)
                 user.deal_damage(base_damage, target)
@@ -3494,7 +3675,8 @@ def exe_in_the_name_of_ruler(user: "CharacterManager", playerTeam: list["Charact
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 6, lambda eff: "This character is stunned."))
-                user.check_on_stun(target)
+                if target.meets_stun_check():
+                    user.check_on_stun(target)
         user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 5, lambda eff: "In The Name Of Ruler! will end if Ruler takes new damage."))
         user.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 5, lambda eff: "Ruler is stunned."))
         if user.has_effect(EffectType.DEST_DEF, "Minion - Minael and Yunael") and user.has_effect(EffectType.COUNTER, "Minion - Tama"):
@@ -3583,6 +3765,7 @@ def exe_wind_blade_combat(user: "CharacterManager", playerTeam: list["CharacterM
             user.deal_damage(10, target)
             target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 5, lambda eff: "This character will take 10 damage.", mag = 10))
         user.add_effect(Effect(user.used_ability, EffectType.CONT_USE, user, 5, lambda eff: "Saber is using Wind Blade Combat."))
+        user.add_effect(Effect(user.used_ability, EffectType.STUN_IMMUNE, user, 5, lambda eff: "Saber cannot be stunned."))
         user.check_on_use()
         user.check_on_harm()
 
@@ -3694,7 +3877,13 @@ def exe_self_destruct(user: "CharacterManager", playerTeam: list["CharacterManag
     user.check_on_harm()
     user.source.hp = 0
     user.source.dead = True
+    temp_yatsufusa_storage = None
+    if user.has_effect(EffectType.MARK, "Yatsufusa"):
+        temp_yatsufusa_storage = user.get_effect(EffectType.MARK, "Yatsufusa")
+        temp_yatsufusa_storage.user.progress_mission(1, 1)
     user.source.current_effects.clear()
+    if temp_yatsufusa_storage:
+        user.source.current_effects.append(temp_yatsufusa_storage)
     
 
 def exe_insatiable_justice(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
@@ -3745,7 +3934,8 @@ def exe_blinding_light(user: "CharacterManager", playerTeam: list["CharacterMana
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 4, lambda eff: "This character is stunned."))
                 target.add_effect(Effect(user.used_ability, EffectType.DEF_NEGATE, user, 4, lambda eff: "This character cannot reduce damage or become invulnerable."))
                 target.add_effect(Effect(user.used_ability, EffectType.MARK, user, lambda eff: "This character will take 10 more damage from Extase - Bisector of Creation."))
-                user.check_on_stun(target)
+                if target.meets_stun_check():
+                    user.check_on_stun(target)
         user.check_on_use()
         user.check_on_harm()
 
@@ -3817,7 +4007,8 @@ def exe_shadow_bind_jutsu(user: "CharacterManager", playerTeam: list["CharacterM
                 def_type = user.check_bypass_effects()
             if target.final_can_effect(def_type):
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 4, lambda eff: "This character is stunned."))
-                user.check_on_stun(target)
+                if target.meets_stun_check:
+                    user.check_on_stun(target)
         user.check_on_use()
         user.check_on_harm()
 
@@ -4020,7 +4211,8 @@ def exe_mental_out(user: "CharacterManager", playerTeam: list["CharacterManager"
                 user.alt_ability_sprites[0].surface = user.scene.get_scaled_surface(user.scene.scene_manager.surfaces[stolen_ability.db_name])
                 user.alt_ability_sprites[0].ability = user.source.alt_abilities[0]
                 user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, base_duration - 1, lambda eff: f"Mental Out has been replaced by {stolen_ability.name}.", mag = 11))
-                user.check_on_stun(target)
+                if target.meets_stun_check():
+                    user.check_on_stun(target)
 
 def exe_exterior(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.receive_system_aff_damage(25)
@@ -4252,7 +4444,6 @@ def exe_killing_strike(user: "CharacterManager", playerTeam: list["CharacterMana
                     user.progress_mission(2, 1)
                 user.deal_damage(base_damage, target)
         user.check_on_use()
-        user.check_on_stun()
 
 def exe_incursio(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 7, lambda eff: f"Tatsumi has {eff.mag} points of destructible defense.", mag=25))
@@ -4274,7 +4465,6 @@ def exe_neuntote(user: "CharacterManager", playerTeam: list["CharacterManager"],
                 user.deal_damage(base_damage, target)
                 target.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 5, lambda eff: "This character will take double damage from Neuntote."))
         user.check_on_use()
-        user.check_on_stun()
 
 def exe_invisibility(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Tatsumi is invulnerable."))
@@ -4426,7 +4616,8 @@ def exe_meteor_storm(user: "CharacterManager", playerTeam: list["CharacterManage
                 user.deal_damage(15, target)
                 if target.has_effect(EffectType.DEF_NEGATE, "Quirk - Zero Gravity"):
                     target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                    user.check_on_stun(target)
+                    if target.meets_stun_check():
+                        user.check_on_stun(target)
                 for ally in playerTeam:
                     if ally.has_effect(EffectType.UNIQUE, "Quirk - Zero Gravity") and ally.helpful_target(user, user.check_bypass_effects()):
                         ally.add_effect(Effect(user.used_ability, EffectType.ALL_BOOST, user, 3, lambda eff: "This character will deal 5 more non-affliction damage.", mag=5))
@@ -4953,16 +5144,23 @@ ability_info_db = {
     ],
     "esdeath4": [
         "Esdeath Guard",
-        "Esdeath Guard: Esdeath becomes invulnerable for one turn.",
+        "Esdeath becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
         default_target("SELF"), exe_esdeath_guard
     ],
     "esdeathalt1": [
         "Mahapadma",
-        "Mahapadma: Esdeath stuns every living character except for her for 2 turns. At the end of those turns, Esdeath is stunned for 2 turns.",
+        "Esdeath stuns every living character except for her for 2 turns. At the end of those turns, Esdeath is stunned for 2 turns.",
         [0, 2, 0, 0, 1, 8], Target.ALL_TARGET,
         default_target("ALL"), exe_mahapadma
     ],
+    "frankenstein1": ["Bridal Smash", "Frankenstein deals 20 damage to target enemy.", [1, 0, 0, 0, 0, 0], Target.SINGLE, default_target("HOSTILE"), exe_bridal_smash],
+    "frankenstein2": ["Bridal Chest", "Frankenstein deals 20 damage to all enemies. During the following two turns, she will deal 20 damage to a random enemy.", [1, 1, 0, 0, 0, 3],
+                      Target.MULTI_ENEMY, default_target("HOSTILE"), exe_bridal_chest],
+    "frankenstein3": ["Blasted Tree", "Frankenstein self-destructs, dealing her remaining health in piercing damage to target enemy. This ability cannot be countered or reflected, cannot be used while Frankenstein is at full health, and will kill her upon use.",
+                      [0, 1, 0, 0, 2, 0], Target.SINGLE, default_target("HOSTILE"), exe_blasted_tree],
+    "frankenstein4": ["Galvanism", "For 2 turns, Frankenstein ignores Special damage and instead heals for that amount. Whenever Frankenstein is healed this way, she deals 10 additional damage with all her abilities on the following turn. This effect is invisible.",
+                      [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_galvanism],
     "frenda2": [
         "Close Combat Bombs",
         "Frenda hurls a handful of bombs at an enemy, marking them with a stack of Close Combat Bombs for 3 turns. If Detonate is used, "
@@ -5028,6 +5226,14 @@ ability_info_db = {
         [1, 0, 0, 0, 0, 0], Target.SINGLE,
         default_target("SELF"), exe_blacksteel_gajeel
     ],
+    "gilgamesh1": ["Gate of Babylon", "If used on Gilgamesh, adds one stack of Gate of Babylon. If used on an enemy, deals 10 damage to that enemy plus 15 additional damage for every stack of Gate of Babylon on Gilgamesh. Removes all stacks of Gate of Babylon on use.",
+                    [0, 0, 0, 0, 0, 0], Target.SINGLE, target_gate_of_babylon, exe_gate_of_babylon],
+    "gilgamesh2": ["Enkidu, Chains of Heaven", "If target enemy uses a harmful ability on the following turn, that ability is countered and the countered enemy is stunned for one turn. During this time, any active abilities or effects caused by that character do not deal damage or healing.",
+                    [0,0,0,1,0,3], Target.SINGLE, default_target("HOSTILE"), exe_enkidu],
+    "gilgamesh3": ["Enuma Elish", "Deals 40 damage to one enemy and stuns their Weapon abilities for one turn.",
+                    [0, 0, 0, 2, 0, 3], Target.SINGLE, default_target("HOSTILE"), exe_enuma_elish],
+    "gilgamesh4": ["Gate of Babylon - Interception", "Gilgamesh becomes invulnerable for one turn.",
+                    [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_intercept],
     "gokudera1": [
         "Sistema C.A.I.",
         "Advances the C.A.I. Stage by 1. All effects are cumulative except for Stage 4."
@@ -5243,6 +5449,15 @@ ability_info_db = {
         [0, 0, 1, 0, 1, 5], Target.SINGLE,
         default_target("HOSTILE"), exe_streets_of_the_lost
     ],
+    "jeanne1": ["Flag of the Ruler", "For one turn, Jeanne's allies gain 10 points of damage reduction and 10 points of destructible defense.",
+                [0, 0, 0, 1, 0, 1], Target.MULTI_ALLY, default_target("SELFLESS"), exe_flag_of_the_ruler],
+    "jeanne2": ["Luminosite Eternelle", "Jeanne makes her entire team invulnerable for two turns.",
+                [0, 0, 0, 2, 1, 6], Target.MULTI_ALLY, default_target("HELPFUL"), exe_luminosite],
+    "jeanne3": ["La Pucelle - Draw", "Jeanne draws her sword, preparing to give her life. On the following turn, this ability is replaced with Crimson Holy Maiden.",
+                [0, 0, 0, 1, 0, 0], Target.SINGLE, default_target("SELF"), exe_la_pucelle],
+    "jeanne4": ["Jeanne Dodge", "Jeanne becomes invulnerable for one turn.", [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_crimson_holy_maiden],
+    "jeannealt1": ["Crimson Holy Maiden", "Jeanne stuns herself and becomes permanently invulnerable. Each turn, she suffers 35 affliction damage and deals 15 affliction damage to all enemies.",
+                    [0, 0, 0, 1, 1, 0], Target.SINGLE, default_target("SELF"), exe_jeanne_dodge],
     "itachi1": [
         "Amaterasu",
         "Itachi deals 10 affliction damage to one enemy for the rest of the game. This effect does not stack.",
@@ -5605,7 +5820,7 @@ ability_info_db = {
     "midoriya3": [
         "One For All - Shoot Style",
         "Midoriya unleashes his own style of One For All, dealing 20 damage to all enemies. For 1 turn,"
-        + " Midoriya will counter the first ability used on him.",
+        + " Midoriya will counter the first ability used on him. This effect is invisible.",
         [1, 0, 0, 0, 1, 3], Target.MULTI_ENEMY,
         default_target("HOSTILE"), exe_shoot_style
     ],

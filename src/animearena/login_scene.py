@@ -161,7 +161,7 @@ class LoginScene(engine.Scene):
 
 def make_login_scene(scene_manager) -> LoginScene:
 
-    scene = LoginScene(scene_manager, sdl2.ext.SOFTWARE, RESOURCES)
+    scene = LoginScene(scene_manager, sdl2.ext.SOFTWARE)
 
 
     assets = {

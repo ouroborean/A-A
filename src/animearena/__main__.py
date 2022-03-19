@@ -9,7 +9,7 @@ import sdl2
 import sdl2.ext
 import sdl2.sdlttf
 from playsound import playsound
-from animearena import character_select_scene
+from animearena import character_select_scene, tutorial_scene
 from animearena import battle_scene
 from animearena import login_scene
 from animearena import client
@@ -50,6 +50,7 @@ def main():
 
     scene_manager.login_scene = login_scene.make_login_scene(scene_manager)
 
+    scene_manager.tutorial_scene = tutorial_scene.make_tutorial_scene(scene_manager)
 
     scene_manager.set_scene_to_current(scene_manager.login_scene)
     scene_manager.spriterenderer.render(scene_manager.current_scene.renderables())
@@ -77,8 +78,8 @@ async def server_loop(scene_manager):
     cancelled = False
     while not scene_manager.connected:
         try:
-            #35.219.128.93
-            reader, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", 5692, limit = 1024 * 256, happy_eyeballs_delay=0.25), 1)
+            #34.125.127.187
+            reader, writer = await asyncio.wait_for(asyncio.open_connection("34.125.127.187", 5692, limit = 1024 * 256, happy_eyeballs_delay=0.25), 1)
             
             scene_manager.connected = True
             scene_manager.connection.writer = writer

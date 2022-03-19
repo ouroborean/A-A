@@ -17,7 +17,7 @@ if typing.TYPE_CHECKING:
     from animearena.scene_manager import SceneManager
 
 
-VERSION = "0.9.3"
+VERSION = "0.9.8"
 
 class ConnectionHandler:
 

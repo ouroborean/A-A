@@ -65,6 +65,7 @@ class EffectType(enum.IntEnum):
     SYSTEM = 48
     CONSECUTIVE_TRACKER = 49
     CONSECUTIVE_BUFFER = 50
+    SPECIFIC_STUN = 51
 
 
 class Effect:

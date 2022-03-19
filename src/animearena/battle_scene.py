@@ -1317,7 +1317,8 @@ class BattleScene(engine.Scene):
                                             EffectType.ALL_STUN, manager, 2,
                                             lambda eff:
                                             "This character is stunned."))
-                                    manager.check_on_stun(emanager)
+                                    if emanager.meets_stun_check():
+                                        manager.check_on_stun(emanager)
                     if eff.name == "Mental Immolation" and eff.mag > 0:
                         for emanager in enemy_team:
                             if emanager.has_effect(
@@ -1350,7 +1351,8 @@ class BattleScene(engine.Scene):
                                         Ability("chromealt2"),
                                         EffectType.ALL_STUN, manager, 2, lambda
                                         eff: "This character is stunned."))
-                                manager.check_on_stun(emanager)
+                                if emanager.meets_stun_check():
+                                    manager.check_on_stun(emanager)
                     if not manager.has_effect(
                             EffectType.INVIS_END,
                             eff.name) and eff.invisible == True:
@@ -1524,7 +1526,8 @@ class BattleScene(engine.Scene):
                                             EffectType.ALL_STUN, manager, 2,
                                             lambda eff:
                                             "This character is stunned."))
-                                    manager.check_on_stun(emanager)
+                                    if emanager.meets_stun_check():
+                                        manager.check_on_stun(emanager)
                     if eff.name == "Mental Immolation" and eff.mag > 0:
                         for emanager in enemy_team:
                             if emanager.has_effect(
@@ -1557,7 +1560,8 @@ class BattleScene(engine.Scene):
                                         Ability("chromealt2"),
                                         EffectType.ALL_STUN, manager, 2, lambda
                                         eff: "This character is stunned."))
-                                manager.check_on_stun(emanager)
+                                if emanager.meets_stun_check(emanager):
+                                    manager.check_on_stun(emanager)
                     if not manager.has_effect(
                             EffectType.INVIS_END,
                             eff.name) and eff.invisible == True:
@@ -2886,6 +2890,21 @@ class CharacterManager():
                     eff.user.deal_eff_pierce_damage(15, self, eff)
                 else:
                     eff.user.deal_eff_damage(15, self, eff)
+        if eff.name == "Bridal Chest":
+            valid_targets: list["CharacterManager"] = []
+            for enemy in self.scene.enemy_display.team.character_managers:
+                if enemy.final_can_effect(self.check_bypass_effects()
+                                          ) and not enemy.deflecting():
+                    valid_targets.append(enemy)
+            if valid_targets:
+                damage = eff.mag
+                if eff.user.has_effect(EffectType.STACK, "Galvanism"):
+                    damage = damage + (eff.user.get_effect(EffectType.STACK, "Galvanism").mag * 10)
+                target = randint(0, len(valid_targets) - 1)
+                print(
+                    f"Dealing {damage} damage to {valid_targets[target].source.name}"
+                )
+                self.deal_eff_damage(damage, valid_targets[target], eff)
         if eff.name == "Titania's Rampage":
             valid_targets: list["CharacterManager"] = []
             for enemy in self.scene.enemy_display.team.character_managers:
@@ -2958,7 +2977,8 @@ class CharacterManager():
                                         Ability("rukia3"), EffectType.ALL_STUN,
                                         self.get_effect(EffectType.MARK, "Third Dance - Shirafune").user, 2, lambda eff:
                                         "This character is stunned."))
-                                self.check_on_stun(counter.user)
+                                if self.meets_stun_check():
+                                    counter.user.check_on_stun(self)
                             self.full_remove_effect("Third Dance - Shirafune",
                                                     self)
 
@@ -3014,7 +3034,14 @@ class CharacterManager():
                         eff.user.check_on_drain(self)
                         self.shirafune_check(eff)
                         return True
-
+                for eff in gen:
+                    if eff.name == "Enkidu, Chains of Heaven":
+                        src = Ability("gilgamesh2")
+                        self.full_remove_effect("Enkidu, Chains of Heaven", eff.user)
+                        self.add_effect(Effect(src, EffectType.UNIQUE, eff.user, 2, lambda eff: "This character was countered by Enkidu, Chains of Heaven."))
+                        self.add_effect(Effect(src, EffectType.ALL_STUN, eff.user, 3, lambda eff: "This character is stunned."))
+                        self.add_effect(Effect(src, EffectType.MARK, eff.user, 3, lambda eff: "This character's continuous abilities will not activate."))
+                        self.shirafune_check(eff)
                 #target counter check
                 for target in self.current_targets:
 
@@ -3128,7 +3155,8 @@ class CharacterManager():
                                             src, EffectType.ISOLATE, eff.user,
                                             3, lambda eff:
                                             "This character is isolated."))
-                                    eff.user.check_on_stun(self)
+                                    if self.meets_stun_check():
+                                        eff.user.check_on_stun(self)
                                 self.shirafune_check(eff)
                                 return True
 
@@ -3154,6 +3182,16 @@ class CharacterManager():
                 if self.has_effect(EffectType.COUNTER_IMMUNE, "Mental Radar"):
                     self.get_effect(EffectType.COUNTER_IMMUNE, "Mental Radar").user.progress_mission(3, 1)
         return False
+
+    def meets_stun_check(self) -> bool:
+        output = False
+        if self.is_stunned():
+            output = True
+        gen = [eff for eff in self.source.current_effects if eff.eff_type == EffectType.SPECIFIC_STUN]
+        for eff in gen:
+            if self.source.uses_energy(eff.mag - 1):
+                output = True
+        return output
 
     def check_on_damage_dealt(self, target: "CharacterManager", damage: int):
         #TODO check user effects
@@ -3280,32 +3318,36 @@ class CharacterManager():
 
     def deal_damage(self, damage: int, target: "CharacterManager"):
         mod_damage = self.get_boosts(damage)
+        
+        if self.used_ability.all_costs[1] and target.has_effect(EffectType.UNIQUE, "Galvanism"):
+            target.receive_eff_healing(damage, target.get_effect(EffectType.UNIQUE, "Galvanism"))
+            target.apply_stack_effect(Effect(target.get_effect(EffectType.UNIQUE, "Galvanism").source, EffectType.STACK, target, 2, lambda eff:f"Frankenstein will deal {eff.mag * 10} damage with her abilities.", mag=1), target)
+        else:
+            if self.mission_active("ryohei", self):
+                if mod_damage >= 100 and self.used_ability.name == "Maximum Cannon":
+                    self.progress_mission(5, 1)
 
-        if self.mission_active("ryohei", self):
-            if mod_damage >= 100 and self.used_ability.name == "Maximum Cannon":
-                self.progress_mission(5, 1)
 
+            if mod_damage > target.check_for_dmg_reduction():
+                if self.has_effect(EffectType.UNIQUE,
+                                "Three-God Empowering Shield"):
+                    self.receive_eff_healing(10, self.get_effect(EffectType.UNIQUE,
+                                "Three-God Empowering Shield"))
 
-        if mod_damage > target.check_for_dmg_reduction():
-            if self.has_effect(EffectType.UNIQUE,
-                               "Three-God Empowering Shield"):
-                self.receive_eff_healing(10, self.get_effect(EffectType.UNIQUE,
-                               "Three-God Empowering Shield"))
+            target.receive_damage(mod_damage, self)
 
-        target.receive_damage(mod_damage, self)
-
-        if target.has_effect(EffectType.UNIQUE, "Thunder Palace"):
-            self.receive_eff_damage(mod_damage, target.get_effect(EffectType.UNIQUE, "Thunder Palace"))
-            target.full_remove_effect("Thunder Palace", target)
-        if target.has_effect(EffectType.UNIQUE, "Burning Axle"):
-            user = target.get_effect(EffectType.UNIQUE, "Burning Axle").user
-            target.full_remove_effect("Burning Axle", user)
-            target.add_effect(
-                Effect(Ability("tsunayoshi3"), EffectType.ALL_STUN, user, 2,
-                       lambda eff: "This character is stunned."))
-            if target.is_stunned():
-                user.check_on_stun(target)
-                user.progress_mission(3, 1)
+            if target.has_effect(EffectType.UNIQUE, "Thunder Palace"):
+                self.receive_eff_damage(mod_damage, target.get_effect(EffectType.UNIQUE, "Thunder Palace"))
+                target.full_remove_effect("Thunder Palace", target)
+            if target.has_effect(EffectType.UNIQUE, "Burning Axle"):
+                user = target.get_effect(EffectType.UNIQUE, "Burning Axle").user
+                target.full_remove_effect("Burning Axle", user)
+                target.add_effect(
+                    Effect(Ability("tsunayoshi3"), EffectType.ALL_STUN, user, 2,
+                        lambda eff: "This character is stunned."))
+                if target.meets_stun_check():
+                    user.check_on_stun(target)
+                    user.progress_mission(3, 1)
 
 
     def receive_damage(self, damage: int, dealer: "CharacterManager"):
@@ -3473,7 +3515,11 @@ class CharacterManager():
 
     def deal_eff_damage(self, damage: int, target: "CharacterManager", source: Effect):
         damage = self.get_boosts(damage)
-        target.receive_eff_damage(damage, source)
+        if source.source.all_costs[1] and target.has_effect(EffectType.UNIQUE, "Galvanism"):
+            target.receive_eff_healing(damage, target.get_effect(EffectType.UNIQUE, "Galvanism"))
+            target.apply_stack_effect(Effect(target.get_effect(EffectType.UNIQUE, "Galvanism").source, EffectType.STACK, target, 2, lambda eff:f"Frankenstein will deal {eff.mag * 10} damage with her abilities.", mag=1), target)
+        else:
+            target.receive_eff_damage(damage, source)
 
     def progress_mission(self, mission_number: int, progress: int):
         if not self.has_effect(EffectType.UNIQUE, "Quirk - Transform"):
@@ -3576,27 +3622,30 @@ class CharacterManager():
 
     def deal_pierce_damage(self, damage: int, target: "CharacterManager"):
         mod_damage = self.get_boosts(damage)
+        if self.used_ability.all_costs[1] and target.has_effect(EffectType.UNIQUE, "Galvanism"):
+            target.receive_healing(damage, target.get_effect(EffectType.UNIQUE, "Galvanism"))
+            target.apply_stack_effect(Effect(target.get_effect(EffectType.UNIQUE, "Galvanism").source, EffectType.STACK, target, 2, lambda eff:f"Frankenstein will deal {eff.mag * 10} damage with her abilities.", mag=1), target)
+        else:
+            if mod_damage > target.check_for_dmg_reduction():
+                if self.has_effect(EffectType.UNIQUE,
+                                "Three-God Empowering Shield"):
+                    self.receive_eff_healing(10, self.get_effect(EffectType.UNIQUE,
+                                "Three-God Empowering Shield"))
 
-        if mod_damage > target.check_for_dmg_reduction():
-            if self.has_effect(EffectType.UNIQUE,
-                               "Three-God Empowering Shield"):
-                self.receive_eff_healing(10, self.get_effect(EffectType.UNIQUE,
-                               "Three-God Empowering Shield"))
+            target.receive_pierce_damage(mod_damage, self)
 
-        target.receive_pierce_damage(mod_damage, self)
-
-        if target.has_effect(EffectType.UNIQUE, "Thunder Palace"):
-            self.receive_eff_damage(mod_damage, target.get_effect(EffectType.UNIQUE, "Thunder Palace"))
-            target.full_remove_effect("Thunder Palace", target)
-        if target.has_effect(EffectType.UNIQUE, "Burning Axle"):
-            user = target.get_effect(EffectType.UNIQUE, "Burning Axle").user
-            target.full_remove_effect("Burning Axle", user)
-            target.add_effect(
-                Effect(Ability("tsunayoshi3"), EffectType.ALL_STUN, user, 2,
-                       lambda eff: "This character is stunned."))
-            if target.is_stunned():
-                user.check_on_stun(target)
-                user.progress_mission(3, 1)
+            if target.has_effect(EffectType.UNIQUE, "Thunder Palace"):
+                self.receive_eff_damage(mod_damage, target.get_effect(EffectType.UNIQUE, "Thunder Palace"))
+                target.full_remove_effect("Thunder Palace", target)
+            if target.has_effect(EffectType.UNIQUE, "Burning Axle"):
+                user = target.get_effect(EffectType.UNIQUE, "Burning Axle").user
+                target.full_remove_effect("Burning Axle", user)
+                target.add_effect(
+                    Effect(Ability("tsunayoshi3"), EffectType.ALL_STUN, user, 2,
+                        lambda eff: "This character is stunned."))
+                if target.meets_stun_check():
+                    user.check_on_stun(target)
+                    user.progress_mission(3, 1)
 
 
     def receive_pierce_damage(self, damage: int, dealer: "CharacterManager"):
@@ -3673,7 +3722,11 @@ class CharacterManager():
 
     def deal_eff_pierce_damage(self, damage: int, target: "CharacterManager", source: Effect):
         damage = self.get_boosts(damage)
-        target.receive_eff_pierce_damage(damage, source)
+        if source.source.all_costs[1] and target.has_effect(EffectType.UNIQUE, "Galvanism"):
+            target.receive_eff_healing(damage, target.get_effect(EffectType.UNIQUE, "Galvanism"))
+            target.apply_stack_effect(Effect(target.get_effect(EffectType.UNIQUE, "Galvanism").source, EffectType.STACK, target, 2, lambda eff:f"Frankenstein will deal {eff.mag * 10} damage with her abilities.", mag=1), target)
+        else:
+            target.receive_eff_pierce_damage(damage, source)
 
     def receive_eff_pierce_damage(self, damage: int, source: Effect):
         mod_damage = damage
@@ -3748,26 +3801,31 @@ class CharacterManager():
 
         if not target.is_aff_immune():
 
-            if self.has_effect(EffectType.UNIQUE,
-                               "Three-God Empowering Shield"):
-                self.receive_eff_healing(10, self.get_effect(EffectType.UNIQUE,
-                               "Three-God Empowering Shield"))
 
-            target.receive_aff_dmg(damage, self)
+            if self.used_ability.all_costs[1] and target.has_effect(EffectType.UNIQUE, "Galvanism"):
+                target.receive_eff_healing(damage, target.get_effect(EffectType.UNIQUE, "Galvanism"))
+                target.apply_stack_effect(Effect(target.get_effect(EffectType.UNIQUE, "Galvanism").source, EffectType.STACK, target, 2, lambda eff:f"Frankenstein will deal {eff.mag * 10} damage with her abilities.", mag=1), target)
+            else:
+                if self.has_effect(EffectType.UNIQUE,
+                                "Three-God Empowering Shield"):
+                    self.receive_eff_healing(10, self.get_effect(EffectType.UNIQUE,
+                                "Three-God Empowering Shield"))
 
-            if target.has_effect(EffectType.UNIQUE, "Thunder Palace"):
-                self.receive_eff_damage(damage, target.get_effect(EffectType.UNIQUE, "Thunder Palace"))
-                target.full_remove_effect("Thunder Palace", target)
-            if target.has_effect(EffectType.UNIQUE, "Burning Axle"):
-                user = target.get_effect(EffectType.UNIQUE,
-                                         "Burning Axle").user
-                target.full_remove_effect("Burning Axle", user)
-                target.add_effect(
-                    Effect(Ability("tsunayoshi3"), EffectType.ALL_STUN, user,
-                           2, lambda eff: "This character is stunned."))
-                if target.is_stunned():
-                    user.check_on_stun(target)
-                    user.progress_mission(3, 1)
+                target.receive_aff_dmg(damage, self)
+
+                if target.has_effect(EffectType.UNIQUE, "Thunder Palace"):
+                    self.receive_eff_damage(damage, target.get_effect(EffectType.UNIQUE, "Thunder Palace"))
+                    target.full_remove_effect("Thunder Palace", target)
+                if target.has_effect(EffectType.UNIQUE, "Burning Axle"):
+                    user = target.get_effect(EffectType.UNIQUE,
+                                            "Burning Axle").user
+                    target.full_remove_effect("Burning Axle", user)
+                    target.add_effect(
+                        Effect(Ability("tsunayoshi3"), EffectType.ALL_STUN, user,
+                            2, lambda eff: "This character is stunned."))
+                    if target.meets_stun_check():
+                        user.check_on_stun(target)
+                        user.progress_mission(3, 1)
         else:
             #Check for affliction negation missions
             #TODO add affliction damage received boosts
@@ -3875,7 +3933,11 @@ class CharacterManager():
     def deal_eff_aff_damage(self, damage: int, target: "CharacterManager", source: Effect):
         #TODO add affliction damage boosts
         if not target.is_aff_immune():
-            target.receive_eff_aff_damage(damage, source)
+            if source.source.all_costs[1] and target.has_effect(EffectType.UNIQUE, "Galvanism"):
+                target.receive_eff_healing(damage, target.get_effect(EffectType.UNIQUE, "Galvanism"))
+                target.apply_stack_effect(Effect(target.get_effect(EffectType.UNIQUE, "Galvanism").source, EffectType.STACK, target, 2, lambda eff:f"Frankenstein will deal {eff.mag * 10} damage with her abilities.", mag=1), target)
+            else:
+                target.receive_eff_aff_damage(damage, source)
         else:
             #Check for affliction negation missions
             #TODO add affliction damage received boosts
@@ -4329,6 +4391,29 @@ class CharacterManager():
             return True
         return False
 
+    def has_specific_stun(self) -> bool:
+        gen = (eff for eff in self.source.current_effects if eff.eff_type == EffectType.SPECIFIC_STUN)
+        output = False
+        for eff in gen:
+            output = True
+            break
+        gen = (eff for eff in self.source.current_effects
+               if eff.eff_type == EffectType.STUN_IMMUNE)
+        for eff in gen:
+            output = False
+            break
+        return output
+
+    def get_specific_stun_types(self) -> list[int]:
+        output = []
+        gen = (eff for eff in self.source.current_effects if eff.eff_type == EffectType.SPECIFIC_STUN)
+        for eff in gen:
+            if not eff.mag in output:
+                output.append(eff.mag)
+        return output
+
+
+
     def is_stunned(self) -> bool:
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.ALL_STUN)
@@ -4336,7 +4421,6 @@ class CharacterManager():
         for eff in gen:
             output = True
             break
-
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.STUN_IMMUNE)
         for eff in gen:
@@ -5100,7 +5184,11 @@ class CharacterManager():
                 if self.source.name == "esdeath":
                     if not self.has_effect(EffectType.SYSTEM, "EsdeathMission3Failure"):
                         self.add_effect(Effect("EsdeathMission3Failure", EffectType.SYSTEM, self, 280000, lambda eff:"", system=True))
-                    
+                if self.has_effect(EffectType.ALL_INVULN, "Crimson Holy Maiden"):
+                    for enemy in self.scene.enemy_display.team.character_managers:
+                        enemy.full_remove_effect("Crimson Holy Maiden", self)
+                    for player in self.scene.player_display.team.character_managers:
+                        player.full_remove_effect("Crimson Holy Maiden", self) 
 
                 #region Active Killing Blow Mission Check
                 self.killing_blow_mission_check(targeter)
@@ -5108,7 +5196,8 @@ class CharacterManager():
                 if self.has_effect(EffectType.MARK, "Beast Instinct"):
                     if targeter == self.get_effect(EffectType.MARK,
                                                    "Beast Instinct").user:
-                        targeter.receive_healing(20, targeter)
+                        targeter.receive_eff_healing(20, self.get_effect(EffectType.MARK,
+                                                   "Beast Instinct"))
                 self.source.hp = 0
                 self.source.dead = True
                 temp_yatsufusa_storage = None
@@ -5175,7 +5264,8 @@ class CharacterManager():
                 if self.has_effect(EffectType.MARK, "Beast Instinct"):
                     if source.user == self.get_effect(EffectType.MARK,
                                                    "Beast Instinct").user:
-                        source.user.receive_healing(20, targeter)
+                        source.user.receive_eff_healing(20, self.get_effect(EffectType.MARK,
+                                                   "Beast Instinct"))
                 self.source.hp = 0
                 self.source.dead = True
                 temp_yatsufusa_storage = None
@@ -5823,6 +5913,6 @@ class CharacterManager():
 
 def make_battle_scene(scene_manager) -> BattleScene:
 
-    scene = BattleScene(scene_manager, sdl2.ext.SOFTWARE, RESOURCES)
+    scene = BattleScene(scene_manager, sdl2.ext.SOFTWARE)
 
     return scene

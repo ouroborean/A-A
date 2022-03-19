@@ -362,5 +362,21 @@ mission_db = {
                             Mission(max=500, description="Deal or absorb damage with Scatter, Senbonzakura"),
                             Mission(max=30, description="Use Scatter, Senbonzakura while Senbonzakura Kageyoshi is active."),
                             Mission(max=20, description="Deal killing blows while Byakuya is at full health."),
-                            Mission(max=10, description="Deal killing blows with White Imperial Sword while Byakuya is at or below 20 health."))
+                            Mission(max=10, description="Deal killing blows with White Imperial Sword while Byakuya is at or below 20 health.")),
+                "frankenstein": (Mission(max=20, description="Deal killing blows with Bridal Smash while Bridal Chest is active."),
+                                 Mission(max=1, description="Deal all 3 killing blows with the same Bridal Chest."),
+                                 Mission(max=20, description="Absorb abilities with Galvanism."),
+                                 Mission(max=10, description="Deal killing blows after absorbing abilities with Galvanism."),
+                                 Mission(max=10, description="Deal killing blows against enemies above half health with Blasted Tree.")),
+                "gilgamesh":    (Mission(max=40, description="Deal killing blows with Gate of Babylon."),
+                                 Mission(max=25, description="Win games with Gilgamesh at full health."),
+                                 Mission(max=20, description="Deal killing blows with Gilgamesh at full health."),
+                                 Mission(max=15, description="Deal killing blows against enemies that were countered by Enkidu, Chains of Heaven."),
+                                 Mission(max=20, description="Use Enuma Elish against enemies that only use Weapon and Random energy.")),
+                "jeanne":       (Mission(max=0, description=""),
+                                Mission(max=0, description=""),
+                                Mission(max=0, description=""),
+                                Mission(max=0, description=""),
+                                Mission(max=0, description=""),
+                                )
             }

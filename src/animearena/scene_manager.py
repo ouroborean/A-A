@@ -13,6 +13,7 @@ if typing.TYPE_CHECKING:
     from animearena.character_select_scene import CharacterSelectScene
     from animearena.battle_scene import BattleScene
     from animearena.login_scene import LoginScene
+    from animearena.tutorial_scene import TutorialScene
 
 def get_image_from_path(file_name: str) -> Image:
     with importlib.resources.path('animearena.resources', file_name) as path:
@@ -29,6 +30,7 @@ class SceneManager:
     char_select: "CharacterSelectScene"
     battle_scene: "BattleScene"
     login_scene: "LoginScene"
+    tutorial_scene: "TutorialScene"
     frame_count: int
     def __init__(self, window: sdl2.ext.Window = None):
         self.frame_count = 0
@@ -93,7 +95,7 @@ class SceneManager:
         self.surfaces["ment_icon"] = get_image_from_path("ment_icon.png")
         self.surfaces["rand_icon"] = get_image_from_path("rand_icon.png")
         self.surfaces["exclusive_icon"] = get_image_from_path("exclusive_icon.png")
-        
+        self.surfaces["how_to"] = get_image_from_path("how_to.png")
         self.connected = False
 
     def play_sound(self, file_name: str):
@@ -130,6 +132,11 @@ class SceneManager:
         self.change_window_size(900, 1000)
         self.set_scene_to_current(self.battle_scene)
         self.battle_scene.setup_scene(player_team, enemy_team, player, enemy, energy)
+
+    def start_tutorial(self, player):
+        self.change_window_size(1100, 1100)
+        self.set_scene_to_current(self.tutorial_scene)
+        self.tutorial_scene.start_tutorial(player)
 
     def change_window_size(self, new_width: int, new_height: int):
         sdl2.SDL_SetWindowSize(self.window.window, new_width, new_height)

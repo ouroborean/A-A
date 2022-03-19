@@ -9,7 +9,7 @@ import os
 import sys
 import importlib.resources
 from PIL import Image
-from animearena import energy
+from animearena.energy import Energy
 from animearena.ability import Ability
 if typing.TYPE_CHECKING:
     from animearena.effects import Effect
@@ -112,20 +112,20 @@ class Character:
 
     def uses_energy(self, energy_type: int) -> bool:
         for ability in self.main_abilities:
-            if ability.all_costs[energy_type] > 0:
+            if ability._base_cost[Energy(energy_type)] > 0:
                 return True
         for ability in self.alt_abilities:
-            if ability.all_costs[energy_type] > 0:
+            if ability._base_cost[Energy(energy_type)] > 0:
                 return True
         return False
 
     def uses_energy_mult(self, energy_types: list[int]) -> bool:
         for energy_type in energy_types:
             for ability in self.main_abilities:
-                if ability.all_costs[energy_type] > 0:
+                if ability._base_cost[Energy(energy_type)] > 0:
                     return True
             for ability in self.alt_abilities:
-                if ability.all_costs[energy_type] > 0:
+                if ability._base_cost[Energy(energy_type)] > 0:
                     return True
         return False
 
@@ -197,9 +197,13 @@ character_db = {"naruto": Character("naruto", "Uzumaki Naruto, a former outcast 
                 "spent following his heart has left him inundated with Noble Phantasms from across the ages."),
                 "jack": Character("jack","Jack the Ripper, a Heroic Spirit summoned in the role of Assassin. Jack is an embodiment of the vengeful spirits" +
                 " of the lost and neglected children who died on the streets of London. She can call forth London's bleak smog and steal her enemies away to its cold streets."),
+                "frankenstein": Character("frankenstein", "Frankenstein, a Heroic Spirit summoned in the role of Berserker. An artificial human created with a very low mental capacity, " + 
+                "Frankenstein conceals an innocent and child-like kindness beneath her powerful combat abilities. As a Berserker, she is capable of withstanding attacks, rampaging across a battlefield, and unleashing her devastating Noble Phantasm when her back is to the wall."),
+                "gilgamesh": Character("gilgamesh", "Gilgamesh, the legendary King of Heroes and a Heroic Spirit summoned in the role of Archer. Gilgamesh is a proud warrior, and can summon a myriad of Noble Phantasms from the endless vaults he amassed during his life to overwhelm his foes with their individual power or the sheer weight of their blades."),
+                "jeanne": Character("jeanne", "Jeanne D'Arc, a Heroic Spirit summoned to the Great Holy Grail War in the special role of Ruler. A common girl born in war-torn France, Jeanne took up the sword and flag and fought in the name of her country and her god. Her presence on the battlefield inspires and protects her allies from harm."),
                 "misaka": Character("misaka", "Misaka Mikoto, the ace of Tokiwadai Middle School. Misaka is one of seven Level 5" +
-            " espers in Academy City, the world's bastion of esper research. Her abilities as an electromaster" +
-            " have her ranked third among the city's top espers."),
+                " espers in Academy City, the world's bastion of esper research. Her abilities as an electromaster" +
+                " have her ranked third among the city's top espers."),
                 "kuroko": Character("kuroko", "Shirai Kuroko, level 4 esper and Misaka Mikoto's devoted underclassman. A talented member of Judgement, Academy City's organized esper task force, Kuroko " +
                 "puts her all into her work, constantly improving while maintaining a strict code of justice. Her ability to teleport both objects and herself make her an unpredictable foe."),
                 "sogiita": Character("sogiita","Sogiita Gunha, the seventh ranked esper in Academy City. His abilities defy understanding, though he personally believes that with " +

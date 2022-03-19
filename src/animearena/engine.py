@@ -21,6 +21,7 @@ import sdl2.sdlttf
 import sdl2.surface
 from sdl2 import endian
 from pathlib import Path
+import math
 import animearena.text_formatter
 from animearena.animation import Animation
 def get_image_from_path(file_name: str) -> Image:
@@ -47,18 +48,15 @@ class Scene:
     region: "Region"
     sprite_factory: sdl2.ext.SpriteFactory
     ui_factory: sdl2.ext.UIFactory
-    resource_manager: sdl2.ext.Resources
     triggered_event: bool
     animations: list[Animation]
     font: None
 
-    def __init__(self, sprite_type: Union[Literal[0], Literal[1]],
-                 resource_manager: sdl2.ext.Resources):
+    def __init__(self, sprite_type: Union[Literal[0], Literal[1]]):
         self.animations = []
         self.region = Region()
         self.sprite_factory = sdl2.ext.SpriteFactory(sprite_type, free=False)
         self.ui_factory = sdl2.ext.UIFactory(self.sprite_factory, free=False)
-        self.resource_manager = resource_manager
         self.surfaces = dict()
         self.window_closing = False
         self.window_up = False
@@ -127,6 +125,7 @@ class Scene:
             # We do not support CMYK or YCbCr for now
             raise TypeError("unsupported image format")
         pxbuf = image.tobytes()
+        
         imgsurface = sdl2.ext.surface.SDL_CreateRGBSurfaceFrom(pxbuf, width, height, depth, pitch, rmask, gmask, bmask, amask)
         imgsurface = imgsurface.contents
         imgsurface._pxbuf = pxbuf

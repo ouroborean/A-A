@@ -18,7 +18,7 @@ from io import StringIO
 from animearena import engine
 from animearena import character
 from animearena import player
-from animearena.character import Character, character_db
+from animearena.character import Character, character_db, get_image_from_path
 from animearena.ability import Ability
 from animearena.engine import FilterType
 from animearena.player import Player
@@ -101,7 +101,8 @@ class CharacterSelectScene(engine.Scene):
         self.character_select_region = self.region.subregion(15, 400, 770, 285)
         self.team_region = self.region.subregion(240, 20, 320, 100)
         self.character_info_region = self.region.subregion(72, 170, 770, 260)
-        self.start_match_region = self.region.subregion(685, 50, 100, 100)
+        self.start_match_region = self.region.subregion(685, 50, 100, 40)
+        self.how_to_region = self.region.subregion(685, 90, 100, 40)
         self.player_profile_region = self.region.subregion(15, 20, 200, 100)
         self.search_panel_region = self.region.subregion(144, 158, 0, 0)
         self.mission_region = self.region.subregion(210, 158, 0, 0)
@@ -121,6 +122,8 @@ class CharacterSelectScene(engine.Scene):
             sdl2.ext.BUTTON,
             self.get_scaled_surface(self.scene_manager.surfaces["right_arrow"]))
         self.right_button.click += self.right_click
+        self.how_to_button = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["how_to"], 100, 40))
+        self.how_to_button.click += self.tutorial_click
         self.character_sprites = {} 
         for k, v in character_db.items():
             self.character_sprites[k] = self.ui_factory.from_surface(
@@ -209,12 +212,17 @@ class CharacterSelectScene(engine.Scene):
         if self.display_character:
             self.render_main_character_info()
         self.render_character_selection()
+        self.render_tutorial_button()
         self.render_team_display()
         self.render_start_button()
         self.render_player_profile()
         self.render_search_panel()
         self.render_filter_options()
         gc.collect()
+
+    def render_tutorial_button(self):
+        self.how_to_region.clear()
+        self.how_to_region.add_sprite(self.how_to_button, 0, 0)
 
     def render_mission_panel(self):
         self.mission_region.clear()
@@ -454,6 +462,9 @@ class CharacterSelectScene(engine.Scene):
 
     #region On-Click Event Handlers
 
+    def tutorial_click(self, button, sender):
+        self.scene_manager.start_tutorial(self.player)
+
     def exclusive_filter_click(self, button, sender):
         self.exclusive_filtering = not self.exclusive_filtering
         
@@ -691,7 +702,7 @@ class CharacterSelectScene(engine.Scene):
 
 def make_character_select_scene(scene_manager) -> CharacterSelectScene:
 
-    scene = CharacterSelectScene(scene_manager, sdl2.ext.SOFTWARE, RESOURCES)
+    scene = CharacterSelectScene(scene_manager, sdl2.ext.SOFTWARE)
 
     
 
