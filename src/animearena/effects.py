@@ -47,12 +47,12 @@ class EffectType(enum.IntEnum):
     REFLECT = 30
     CONT_AFF_DMG = 31
     PASSIVE = 32
-    COST_ADJUST = 33
+    COST_ADJUST = 33 # mag = (naive ability index, 0 for all)(naive energy index)(true quantity of adjustment)
     ENERGY_GAIN = 34
-    ABILITY_SWAP = 35
+    ABILITY_SWAP = 35 # mag = (naive ability index)(naive replacement index)
     CONT_USE = 36
     DEF_NEGATE = 37
-    TARGET_SWAP = 38
+    TARGET_SWAP = 38 # mag = (naive ability index)(true targeting type)
     STACK = 39
     ISOLATE = 40
     PROF_SWAP = 41

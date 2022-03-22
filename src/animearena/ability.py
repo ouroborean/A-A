@@ -1,7 +1,4 @@
-from operator import add
 from random import randint
-from turtle import end_fill
-import PIL
 from PIL import Image
 from pathlib import Path
 import sdl2
@@ -486,7 +483,8 @@ def target_gate_of_babylon(user: "CharacterManager",
 
     targeting = user.check_bypass_effects()
 
-    user.set_targeted()
+    if not fake_targeting:
+        user.set_targeted()
     total_targets += 1
 
     for enemy in enemyTeam:
@@ -3219,40 +3217,105 @@ def exe_mirio_dodge(user: "CharacterManager", playerTeam: list["CharacterManager
     user.check_on_use()
 #endregion
 #region Misaka Execution
+
+def misaka_form_changed(user: "CharacterManager"):
+    return (user.has_effect(EffectType.MARK, "Ultra Railgun") or user.has_effect(EffectType.CONT_DEST_DEF, "Iron Colossus") or user.has_effect(EffectType.PROF_SWAP, "Level-6 Shift"))
+
+def misaka_reset_swaps(user: "CharacterManager"):
+    new_effects = [eff for eff in user.source.current_effects if not (eff.eff_type == EffectType.ABILITY_SWAP and eff.user == user)]
+    user.source.current_effects = new_effects
+
 def exe_railgun(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    damage = 20
+
+    if user.has_effect(EffectType.STACK, "Overcharge"):
+        charges = user.get_effect(EffectType.STACK, "Overcharge").mag
+        damage += (charges * 5)
+
+    if user.has_effect(EffectType.MARK, "Level-6 Shift"):
+        damage -= 10
+
+    if user.has_effect(EffectType.MARK, "Ultra Railgun"):
+        damage = damage * 2
+    
     for target in user.current_targets:
         if target.final_can_effect("BYPASS"):
-            user.deal_damage(45, target)
+            user.deal_damage(damage, target)
+            if user.has_effect(EffectType.MARK, "Level-6 Shift"):
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_UNIQUE, user, 5, lambda eff: f"This character will take {eff.mag} damage.", mag=damage))
             if target.check_invuln():
                 user.progress_mission(4, 1)
+    if not misaka_form_changed(user):
+        user.add_effect(Effect(Ability("misakaalt2"), EffectType.ABILITY_SWAP, user, 280000, lambda eff:"Railgun has been replaced by Ultra Railgun.", mag = 22))
+
     user.check_on_use()
     user.check_on_harm()
 
 def exe_iron_sand(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    helped = False
-    harmed = False
+    
     if not user.check_countered(playerTeam, enemyTeam):
-        for target in user.current_targets:
-            if target.id > 2 and target.final_can_effect(user.check_bypass_effects()):
-                user.deal_damage(20, target)
-                harmed = True
-            elif target.id < 3 and target.helpful_target(user, user.check_bypass_effects()):
-                target.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 2, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag=20))
-                helped = True
-        user.check_on_use()
-        if helped:
-            user.check_on_help()
-        if harmed:
-            user.check_on_harm()
+        defense_value = 20
 
-def exe_electric_rage(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 4, lambda eff: "Misaka cannot be killed."))
-    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 4, lambda eff: "If Misaka is damaged by a new ability, she will gain one special energy."))
+        if user.has_effect(EffectType.STACK, "Overcharge"):
+            charges = user.get_effect(EffectType.STACK, "Overcharge").mag
+            defense_value += (charges * 5)
+
+        if user.has_effect(EffectType.MARK, "Level-6 Shift"):
+            defense_value -= 10
+
+        if user.has_effect(EffectType.MARK, "Ultra Railgun"):
+            defense_value = defense_value * 2
+
+        for target in user.current_targets:
+            if target.helpful_target(user, user.check_bypass_effects()):
+                target.apply_dest_def_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 2, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag=defense_value))
+            if user.has_effect(EffectType.MARK, "Level-6 Shift"):
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_UNIQUE, user, 5, lambda eff: f"This character will gain {eff.mag} points of destructible defense.", mag = defense_value))
+        if not misaka_form_changed(user):
+            user.add_effect(Effect(Ability("misakaalt1"), EffectType.ABILITY_SWAP, user, 280000, lambda eff:"Iron Sand has been replaced by Iron Colossus.", mag = 11))
+     
+        user.check_on_use()
+        user.check_on_help()
+
+def exe_overcharge(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff:f"Iron Sand and Railgun will apply {eff.mag * 5} more destructible defense/damage.", mag = 1), user)
+    if user.has_effect(EffectType.MARK, "Level-6 Shift"):
+        user.add_effect(Effect(user.used_ability, EffectType.CONT_UNIQUE, user, 5, lambda eff: "Misaka will gain one stack of Overcharge."))
+    if not misaka_form_changed(user):
+            user.add_effect(Effect(Ability("misakaalt3"), EffectType.ABILITY_SWAP, user, 280000, lambda eff:"Overcharge has been replaced by Level-6 Shift", mag = 33))
     user.check_on_use()
 
 def exe_electric_deflection(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Misaka is invulnerable."))
     user.check_on_use()
+
+def exe_iron_colossus(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.CONT_DEST_DEF, user, 280000, lambda eff: f"Misaka will gain {eff.mag} points of destructible defense.", mag = 10))
+    user.add_effect(Effect(user.used_ability, EffectType.TARGET_SWAP, user, 280000, lambda eff: "Railgun and Iron Sand will target all enemies.", mag = 21))
+    user.add_effect(Effect(user.used_ability, EffectType.TARGET_SWAP, user, 280000, lambda eff: "Iron Sand will target all enemies.", mag = 12))
+    misaka_reset_swaps(user)
+    user.check_on_use()
+
+
+def exe_ultra_railgun(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    for target in user.current_targets:
+        if target.final_can_effect("BYPASS"):
+            user.deal_damage(50, target)
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: f"Railgun and Iron Sand have double effect."))
+    user.add_effect(Effect(user.used_ability, EffectType.COST_ADJUST, user, 280000, lambda eff: f"Railgun will cost one additional random energy.", mag = 251))
+    user.add_effect(Effect(user.used_ability, EffectType.COST_ADJUST, user, 280000, lambda eff: f"Iron Sand will cost one additional random energy.", mag = 151))
+    misaka_reset_swaps(user)
+    user.check_on_use()
+    user.check_on_harm()
+
+
+def exe_levelsix_shift(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.PROF_SWAP, user, 280000, lambda eff: f"Misaka is no longer controllable, and will use a random ability on a random valid target each turn.", mag = 1))
+    user.add_effect(Effect(user.used_ability, EffectType.CONT_UNIQUE, user, 280000, lambda eff: "Railgun and Iron Sand apply 10 less damage/destructible defense."))
+    user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "Railgun, Iron Sand, and Overcharge now last for 3 turns."))
+    misaka_reset_swaps(user)
+    user.check_on_use()
+    user.check_on_harm()
 #endregion
 #region Mugen Execution (Incomplete)
 def exe_unpredictable_strike(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
@@ -5455,9 +5518,9 @@ ability_info_db = {
                 [0, 0, 0, 2, 1, 6], Target.MULTI_ALLY, default_target("HELPFUL"), exe_luminosite],
     "jeanne3": ["La Pucelle - Draw", "Jeanne draws her sword, preparing to give her life. On the following turn, this ability is replaced with Crimson Holy Maiden.",
                 [0, 0, 0, 1, 0, 0], Target.SINGLE, default_target("SELF"), exe_la_pucelle],
-    "jeanne4": ["Jeanne Dodge", "Jeanne becomes invulnerable for one turn.", [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_crimson_holy_maiden],
+    "jeanne4": ["Jeanne Dodge", "Jeanne becomes invulnerable for one turn.", [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_jeanne_dodge],
     "jeannealt1": ["Crimson Holy Maiden", "Jeanne stuns herself and becomes permanently invulnerable. Each turn, she suffers 35 affliction damage and deals 15 affliction damage to all enemies.",
-                    [0, 0, 0, 1, 1, 0], Target.SINGLE, default_target("SELF"), exe_jeanne_dodge],
+                    [0, 0, 0, 2, 0, 0], Target.SINGLE, default_target("HOSTILE"), exe_crimson_holy_maiden],
     "itachi1": [
         "Amaterasu",
         "Itachi deals 10 affliction damage to one enemy for the rest of the game. This effect does not stack.",
@@ -5927,29 +5990,38 @@ ability_info_db = {
     ],
     "misaka2": [
         "Railgun",
-        "Misaka deals 45 damage to one enemy. This ability ignores invulnerability and cannot be countered or reflected.",
-        [0, 1, 1, 0, 0, 3], Target.SINGLE,
+        "Misaka deals 20 damage to one enemy. This ability ignores invulnerability and cannot be countered or reflected. After being used, this ability will be replaced by Ultra Railgun.",
+        [0, 0, 1, 0, 0, 0], Target.SINGLE,
         default_target("HOSTILE", def_type="BYPASS"), exe_railgun
     ],
     "misaka1": [
         "Iron Sand",
-        "Misaka targets an ally or an enemy. If used on an ally, that ally gains 20 points of destructible defense"
-        +
-        " for one turn and this ability goes on cooldown for one turn. If used on an enemy, it deals 20 damage to them.",
+        "Misaka grants one ally 20 points of destructible defense for one turn. After being used, this ability will be replaced by Iron Colossus.",
         [0, 1, 0, 0, 0, 0], Target.SINGLE,
-        default_target("ALL"), exe_iron_sand
+        default_target("HELPFUL"), exe_iron_sand
     ],
     "misaka3": [
-        "Electric Rage",
-        "For 2 turns, Misaka will gain one special energy whenever she takes new damage. She cannot"
-        + " be killed while this ability is active.", [0, 0, 1, 0, 0,
-                                                       6], Target.SINGLE,
-        default_target("SELF"), exe_electric_rage
+        "Overcharge",
+        "Misaka permanently gains one stack of Overcharge. For each stack she has, Railgun deals 5 additional damage and Iron Sand grants 5 additional destructible defense.", [0, 0, 0, 0, 1, 1], Target.SINGLE,
+        default_target("SELF"), exe_overcharge
     ],
     "misaka4": [
         "Electric Deflection", "Misaka becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
         default_target("SELF"), exe_electric_deflection
+    ],
+    "misakaalt1":[
+        "Iron Colossus", "Misaka permanently gains 10 destructible defense per turn. For the rest of the game, Iron Sand and Railgun affect all valid targets. Using this ability will reset all her abilities to their original forms and prevent her from switching for the rest of the game.",
+        [0, 1, 1, 0, 0, 0],
+        Target.SINGLE, default_target("SELF"), exe_iron_colossus
+    ],
+    "misakaalt2":[
+        "Ultra Railgun", "Misaka deals 50 damage to target enemy. This ability ignores invulnerability and cannot be countered or reflected. For the rest of the game, Misaka's abilities cost one additional random energy and have their effects doubled. Using this ability will reset all her abilities to their original forms and prevent her from switching for the rest of the game.",
+        [0, 1, 1, 0, 0, 0], Target.SINGLE, default_target("HOSTILE"), exe_ultra_railgun
+    ],
+    "misakaalt3":[
+        "Level-6 Shift", "For the rest of the game, Misaka will be uncontrollable and will use one of her abilities on a random valid target each round. During this time, she will deal 10 less damage, apply 10 less destructible defense, but all her effects will last for 3 turns. Using this ability will reset all her abilities to their original forms and prevent her from switching for the rest of the game.",
+        [0, 1, 1, 0, 0, 0], Target.SINGLE, default_target("SELF"), exe_levelsix_shift
     ],
     "mugen1": [
         "Unpredictable Strike",

@@ -10,6 +10,7 @@ import textwrap
 import copy
 import os
 import importlib.resources
+from PIL import Image
 from animearena import character_select_scene, engine, mission
 from animearena import character
 from animearena.character import Character, character_db, get_character
@@ -174,6 +175,26 @@ class EnemyTeamDisplay():
         for manager in self.team.character_managers:
             manager.update_limited()
 
+class ExecutionListFrame:
+        source: Union[Ability, Effect]
+
+        def __init__(self, source: Union[Ability, Effect]):
+            
+            self.source = source
+
+        @property
+        def image(self) -> Image:
+            if type(self.source) == Ability:
+                return self.source.image
+            elif type(self.source) == Effect:
+                return self.source.source.image
+
+        @property
+        def name(self) -> str:
+            if type(self.source) == Ability:
+                return self.source.name + ": Ability"
+            elif type(self.source) == Effect:
+                return self.source.source.name + ": Effect Activation"
 
 class BattleScene(engine.Scene):
     # pylint: disable=too-many-public-methods
@@ -753,28 +774,32 @@ class BattleScene(engine.Scene):
 
     #endregion
 
+    
+    
+    def get_execution_list(self):
+        execution_list = list[ExecutionListFrame]
+        continuous_types = [EffectType.CONT_DMG, EffectType.CONT_PIERCE_DMG, EffectType.CONT_AFF_DMG, EffectType.CONT_HEAL, EffectType.CONT_DEST_DEF, EffectType.CONT_UNIQUE]
+
+        for manager in self.pteam:
+            if manager.acted:
+                execution_list.append(ExecutionListFrame(manager.used_ability))
+        
+        for manager in self.pteam:
+            eff_list = [eff for eff in manager.source.current_effects if eff.eff_type in continuous_types and eff.check_waiting() and self.is_allied_effect(eff)]
+            for eff in eff_list:
+                execution_list.append(ExecutionListFrame(eff))
+
+        for manager in self.eteam:
+            eff_list = [eff for eff in manager.source.current_effects if eff.eff_type in continuous_types and eff.check_waiting() and self.is_allied_effect(eff)]
+            for eff in eff_list:
+                execution_list.append(ExecutionListFrame(eff))
+        
+
+
     def execution_loop(self):
         for manager in self.player_display.team.character_managers:
             if manager.acted:
-                manager.used_ability.execute(
-                    manager, self.player_display.team.character_managers,
-                    self.enemy_display.team.character_managers)
-                manager.check_for_cost_increase_missions()
-                self.reset_id()
-                self.sharingan_reflector = None
-                self.sharingan_reflecting = False
-                expected_cd = manager.used_ability.cooldown + manager.check_for_cooldown_mod(
-                    manager.used_ability)
-                if expected_cd < 0:
-                    expected_cd = 0
-                for ability in manager.source.main_abilities:
-                    if ability.name == manager.used_ability.name:
-                        ability.cooldown_remaining = expected_cd + 1
-                        break
-                for ability in manager.source.alt_abilities:
-                    if ability.name == manager.used_ability.name:
-                        ability.cooldown_remaining = expected_cd + 1
-                        break
+                manager.execute_ability()
         self.resolve_ticking_ability()
 
     def reset_id(self):
@@ -898,6 +923,7 @@ class BattleScene(engine.Scene):
             for ability in manager.source.alt_abilities:
                 ability.cooldown_remaining = max(
                     ability.cooldown_remaining - 1, 0)
+
 
     def turn_end(self):
         self.sharingan_reflecting = False
@@ -1127,7 +1153,7 @@ class BattleScene(engine.Scene):
                     i].has_effect(EffectType.UNIQUE, "Quirk - Transform") and self.player_display.team.character_managers[
                     i].source.name != self.player_display.team.character_managers[
                     i].get_effect(EffectType.SYSTEM, "TogaTransformTarget").get_desc():
-                    print("Player trigged transform!")
+
                     self.player_display.team.character_managers[
                     i].toga_transform(self.player_display.team.character_managers[
                     i].get_effect(EffectType.SYSTEM, "TogaTransformTarget").get_desc())
@@ -1453,11 +1479,9 @@ class BattleScene(engine.Scene):
                 if eff.eff_type == EffectType.CONSECUTIVE_TRACKER:
                         if not manager.has_effect(EffectType.CONSECUTIVE_BUFFER, eff.name):
                             eff.removing = True
-                if eff.name == "Tsukuyomi" and eff.eff_type == EffectType.ALL_STUN:
-                    print(f"Enemy Tsuku before tick: {eff.duration}")
+
                 eff.tick_duration()
-                if eff.name == "Tsukuyomi" and eff.eff_type == EffectType.ALL_STUN:
-                    print(f"Enemy Tsuku: {eff.duration}")
+
                 if eff.duration == 0:
                     
                     if eff.name == "Lightning Palm" or eff.name == "Narukami" or eff.name == "Whirlwind Rush":
@@ -2875,7 +2899,7 @@ class CharacterManager():
                     not self.deflecting() or (2 * (2 ** eff.mag) > 15)):
                 base_damage = (2 * (2**eff.mag))
                 eff.user.deal_eff_damage(base_damage, self, eff)
-                print(base_damage)
+                
                 eff.alter_mag(1)
                 if self.has_effect(
                         EffectType.MARK, "Chakra Point Strike"
@@ -2901,9 +2925,7 @@ class CharacterManager():
                 if eff.user.has_effect(EffectType.STACK, "Galvanism"):
                     damage = damage + (eff.user.get_effect(EffectType.STACK, "Galvanism").mag * 10)
                 target = randint(0, len(valid_targets) - 1)
-                print(
-                    f"Dealing {damage} damage to {valid_targets[target].source.name}"
-                )
+                
                 self.deal_eff_damage(damage, valid_targets[target], eff)
         if eff.name == "Titania's Rampage":
             valid_targets: list["CharacterManager"] = []
@@ -2914,9 +2936,7 @@ class CharacterManager():
             if valid_targets:
                 damage = 15 + (eff.mag * 5)
                 target = randint(0, len(valid_targets) - 1)
-                print(
-                    f"Dealing {damage} damage to {valid_targets[target].source.name}"
-                )
+                
                 self.deal_eff_pierce_damage(damage, valid_targets[target], eff)
                 eff.alter_mag(1)
         if eff.name == "Circle Blade":
@@ -2951,6 +2971,53 @@ class CharacterManager():
                     base_damage += (5 * eff.user.get_effect(
                         EffectType.STACK, "Gather Power").mag)
                 eff.user.deal_eff_damage(base_damage, self, eff)
+        if eff.name == "Railgun":
+            base_damage = 10
+            if self.final_can_effect(eff.user.check_bypass_effects()):
+                if eff.user.has_effect(EffectType.STACK, "Overcharge"):
+                    base_damage += (5 * eff.user.get_effect(EffectType.STACK, "Overcharge").mag)
+                eff.user.deal_eff_damage(base_damage, self, eff)
+        if eff.name == "Iron Sand":
+            base_defense = 10
+            if self.helpful_target(eff.user, eff.user.check_bypass_effects()):
+                if eff.user.has_effect(EffectType.STACK, "Overcharge"):
+                    base_defense += (5 * eff.user.get_effect(EffectType.STACK, "Overcharge").mag)
+                self.apply_dest_def_effect(Effect(eff.source, EffectType.DEST_DEF, eff.user, 280000, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag = base_defense))
+        if eff.name == "Overcharge":
+            self.apply_stack_effect(Effect(eff.source, EffectType.STACK, eff.user, 280000, lambda eff: "", mag = 1), eff.user)
+        if eff.name == "Level-6 Shift":
+            if not eff.user.is_stunned():
+                ability = randint(1, 3)
+                print(ability)
+                if ability == 1:
+                    valid_targets = [manager for manager in self.scene.pteam if manager.helpful_target(eff.user, eff.user.check_bypass_effects())]
+                    print(valid_targets)
+                    if valid_targets:
+                        chosen_target = valid_targets[randint(0, len(valid_targets) - 1)]
+                        eff.user.current_targets.append(chosen_target)
+                        eff.user.acted = True
+                        eff.user.used_ability = eff.user.source.main_abilities[0]
+                        eff.user.execute_ability()
+                elif ability == 2:
+                    valid_targets = [manager for manager in self.scene.eteam if manager.hostile_target(eff.user, "BYPASS")]
+                    print(valid_targets)
+                    if valid_targets:
+                        chosen_target = valid_targets[randint(0, len(valid_targets) - 1)]
+                        eff.user.current_targets.append(chosen_target)
+                        eff.user.acted = True
+                        eff.user.used_ability = eff.user.source.main_abilities[1]
+                        eff.user.execute_ability()
+                elif ability == 3:
+                    chosen_target = eff.user
+                    eff.user.current_targets.append(chosen_target)
+                    eff.user.acted = True
+                    eff.user.used_ability = eff.user.source.main_abilities[2]
+                    eff.user.execute_ability()
+
+    def is_controllable(self) -> bool:
+        if self.has_effect(EffectType.MARK, "Level-6 Shift"):
+            return False
+        return True
 
     def is_counter_immune(self):
         gen = [
@@ -3303,6 +3370,15 @@ class CharacterManager():
                 eff.alter_mag(effect.mag)
         else:
             self.add_effect(effect)
+
+    def apply_dest_def_effect(self, effect: Effect):
+        gen = [eff for eff in self.source.current_effects if (eff.eff_type == EffectType.DEST_DEF and eff.name == effect.name and eff.user == effect.user)]
+        if gen:
+            for eff in gen:
+                eff.alter_dest_def(effect.mag)
+        else:
+            self.add_effect(effect)
+
 
     def get_dest_def_total(self) -> int:
         gen = (eff for eff in self.source.current_effects
@@ -5471,6 +5547,24 @@ class CharacterManager():
         elif def_type == "FULLBYPASS":
             return not (self.source.dead)
 
+    def execute_ability(self):
+        self.used_ability.execute(self, self.scene.ally_managers, self.scene.enemy_managers)
+        self.check_for_cost_increase_missions()
+        self.scene.reset_id()
+        self.scene.sharingan_reflector = None
+        self.scene.sharingan_reflecting = False
+        expected_cd = self.used_ability.cooldown + self.check_for_cooldown_mod(self.used_ability)
+        if expected_cd < 0:
+            expected_cd = 0
+        for ability in self.source.main_abilities:
+                    if ability.name == self.used_ability.name:
+                        ability.cooldown_remaining = expected_cd + 1
+                        break
+        for ability in self.source.alt_abilities:
+            if ability.name == self.used_ability.name:
+                ability.cooldown_remaining = expected_cd + 1
+                break
+
     def is_ignoring(self) -> bool:
         for effect in self.source.current_effects:
             if effect.eff_type == EffectType.IGNORE:
@@ -5698,7 +5792,7 @@ class CharacterManager():
         self.current_targets.clear()
         self.received_ability.clear()
         self.used_ability = None
-        self.targeted = False
+        self.set_untargeted()
         self.targeting = False
         for ability in self.source.current_abilities:
             ability.reset_cooldown()
@@ -5887,7 +5981,7 @@ class CharacterManager():
                 self.character_region.add_sprite(button.selected_pane,
                                                  150 + (i * 140), 0)
             else:
-                if not button.ability.can_use(self.scene, self) or self.acted:
+                if not button.ability.can_use(self.scene, self) or self.acted or not self.is_controllable():
                     if button.ability.cooldown_remaining > 0:
                         button.null_pane.surface = self.scene.get_scaled_surface(
                             self.scene.scene_manager.surfaces["locked"])
