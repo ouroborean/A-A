@@ -378,5 +378,11 @@ mission_db = {
                                 Mission(max=0, description=""),
                                 Mission(max=0, description=""),
                                 Mission(max=0, description=""),
+                                ),
+                "accelerator": (Mission(max=0, description=""),
+                                Mission(max=0, description=""),
+                                Mission(max=0, description=""),
+                                Mission(max=0, description=""),
+                                Mission(max=0, description=""),
                                 )
             }

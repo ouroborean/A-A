@@ -99,9 +99,9 @@ class Character:
                 break
 
 def get_character(name: str):
-    return copy.copy(character_db[name])
+    return copy.copy(get_character_db()[name])
         
-character_db = {"naruto": Character("naruto", "Uzumaki Naruto, a former outcast of the Hidden Leaf Village, struggled throughout" +
+get_character_db() = {"naruto": Character("naruto", "Uzumaki Naruto, a former outcast of the Hidden Leaf Village, struggled throughout" +
                 " his life to become the type of ninja that the village could accept. Now, after training under Kakashi Hatake, Jiraiya," +
                 " and the toad sages of Mount Myoboku, he is ready to prove himself against his village's enemies."),
                 "hinata": Character("hinata","Hyuga Hinata, a shy kunoichi from the Leaf Village's legendary Hyuga clan. After a chance meeting with Uzumaki Naruto changes her life, Hinata resolves to stay true to herself and follow the path" +

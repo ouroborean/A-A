@@ -7,7 +7,7 @@ import sys
 import requests
 from animearena import mission
 from animearena.byte_buffer import ByteBuffer
-from animearena.character import Character, character_db
+from animearena.character import Character, get_character_db
 from animearena.player import Player
 from typing import Callable
 from PIL import Image
@@ -16,12 +16,15 @@ import typing
 if typing.TYPE_CHECKING:
     from animearena.scene_manager import SceneManager
 
+HOST = "127.0.0.1"
+PORT = 5692
 
-VERSION = "0.9.8"
+VERSION = "0.9.915"
 
 class ConnectionHandler:
 
     writer: StreamWriter
+    reader: StreamReader
     waiting_for_opponent: bool
     waiting_for_login: bool
     waiting_for_registration: bool
@@ -40,8 +43,22 @@ class ConnectionHandler:
             4: self.handle_registration,
             5: self.handle_surrender_notification,
             6: self.handle_reconnection,
-            7: self.handle_version_check
+            7: self.handle_version_check,
+            8: self.handle_test_ping
         }
+
+    def handle_test_ping(self, data:list[bytes]):
+        print("Received test ping response")
+
+    def send_test_ping(self):
+        buffer = ByteBuffer()
+        buffer.write_int(11)
+        buffer.write_byte(b'\x1f\x1f\x1f')
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect((HOST, PORT))
+            s.sendall(buffer.get_byte_array())
+        buffer.clear()
+        
 
     def handle_version_check(self, data:list[bytes]):
         buffer = ByteBuffer()
@@ -62,7 +79,7 @@ class ConnectionHandler:
             
             final_path = abs_path / file_name
 
-            url = "https://storage.googleapis.com/a-a-newest/AnimeArena.exe"
+            url = "https://storage.googleapis.com/a-a-latest/AnimeArena.exe"
             file = requests.get(url, stream=True)
             with open(abs_path / file_name, "wb") as f:
                 for block in file.iter_content(1024):
@@ -314,7 +331,7 @@ class ConnectionHandler:
         if has_match:
             pickled_match = bytearray(buffer.buff[buffer.read_pos:])
 
-        player_team = [character_db[name] for name in player_names]
+        player_team = [get_character_db()[name] for name in player_names]
         enemy_team = [Character(name) for name in names]
         player_pouch = pickle.loads(pickled_player)
         enemy_ava = Image.frombytes(player_pouch[3]["mode"], player_pouch[3]["size"], player_pouch[3]["pixels"])

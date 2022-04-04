@@ -130,9 +130,19 @@ class Character:
         return False
 
 def get_character(name: str):
-    return copy.copy(character_db[name])
+    return copy.copy(get_character_db()[name])
         
-character_db = {"naruto": Character("naruto", "Uzumaki Naruto, a former outcast of the Hidden Leaf Village, struggled throughout" +
+character_db = None
+
+def get_character_db():
+    global character_db
+    if not character_db:
+        character_db = make_character_db()
+    return character_db
+
+
+def make_character_db():
+ return {"naruto": Character("naruto", "Uzumaki Naruto, a former outcast of the Hidden Leaf Village, struggled throughout" +
                 " his life to become the type of ninja that the village could accept. Now, after training under Kakashi Hatake, Jiraiya," +
                 " and the toad sages of Mount Myoboku, he is ready to prove himself against his village's enemies."),
                 "hinata": Character("hinata","Hyuga Hinata, a shy kunoichi from the Leaf Village's legendary Hyuga clan. After a chance meeting with Uzumaki Naruto changes her life, Hinata resolves to stay true to herself and follow the path" +
@@ -212,6 +222,7 @@ character_db = {"naruto": Character("naruto", "Uzumaki Naruto, a former outcast 
                 "frenda": Character("frenda","Frenda Seivelun, a Level-0 member of the dark side organization known as ITEM. A skilled mercenary, Frenda's personal talent allows her to operate in a world rife with powerful espers, despite her lack of psychic powers."),
                 "naruha": Character("naruha","Sakuragi Naruha, a member of the Dark Side organization known as SCAVENGER. Naru can use her psychic powers to manipulate paper, preferring to utilize it in the construction of a massive rabbit suit. She, like the rest of SCAVENGER, " +
                 "believes that all the problems in Academy City are caused by teachers, and hates them above all other things."),
+                "accelerator": Character("accelerator", "Accelerator, the first-ranked level 5 esper in Academy City. His ability to control vectors make him a nearly unassailable opponent with a frighteningly devastating level of offensive strength."),
                 "tsunayoshi": Character("tsunayoshi", "Sawada Tsunayoshi, the tenth head of the Vongola Family. Unconfident and timid, yet fiercely" +
                 " loyal to his friends, Tsuna is the unwilling head of a mafia family, and wielder of the Vongola Flames of the Sky."),
                 "yamamoto": Character("yamamoto", "Yamamoto Takeshi, the Vongola Guardian of Rain. The heir to the Shigure Soen Ryu style of swordsmanship, " +

@@ -11,7 +11,7 @@ import os
 import importlib.resources
 from animearena import character_select_scene, engine, mission
 from animearena import character
-from animearena.character import Character, character_db
+from animearena.character import Character, get_character_db()
 from animearena.ability import Ability, Target, one, two, three
 from animearena.energy import Energy
 from animearena.effects import Effect, EffectType
@@ -760,7 +760,7 @@ class BattleScene(engine.Scene):
         return False
 
     def return_character(self, char_name) -> Character:
-        return character_db[char_name]
+        return get_character_db()[char_name]
 
     def resolve_ticking_ability(self):
         """Checks all Character Managers for continuous effects.

@@ -24,7 +24,7 @@ WHITE = sdl2.SDL_Color(255, 255, 255)
 
 def main():
     """Main game entry point."""
-
+    
 
     logging.basicConfig(level=logging.DEBUG,
                         format="%(levelname)s:%(relativeCreated)d:%(module)s:%(message)s")
@@ -192,6 +192,9 @@ async def game_loop(scene_manager, uiprocessor, window, server_loop_task):
             for manager in scene_manager.current_scene.enemy_display.team.character_managers:
                 if manager.source.hp != manager.source.current_hp:
                     manager.draw_hp_bar()
+            scene_manager.battle_scene.get_hovered_button()
+            
+            scene_manager.battle_scene.show_hover_text()
         if scene_manager.current_scene.window_closing:
             scene_manager.current_scene.window_closing = False
             scene_manager.current_scene.window_up = False

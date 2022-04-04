@@ -18,7 +18,7 @@ from io import StringIO
 from animearena import engine
 from animearena import character
 from animearena import player
-from animearena.character import Character, character_db, get_image_from_path
+from animearena.character import Character, get_character_db, get_image_from_path
 from animearena.ability import Ability
 from animearena.engine import FilterType
 from animearena.player import Player
@@ -125,7 +125,7 @@ class CharacterSelectScene(engine.Scene):
         self.how_to_button = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["how_to"], 100, 40))
         self.how_to_button.click += self.tutorial_click
         self.character_sprites = {} 
-        for k, v in character_db.items():
+        for k, v in get_character_db().items():
             self.character_sprites[k] = self.ui_factory.from_surface(
                 sdl2.ext.BUTTON,
                 self.get_scaled_surface(self.scene_manager.surfaces[k+"allyprof"]), free=True)
@@ -408,15 +408,12 @@ class CharacterSelectScene(engine.Scene):
         if self.page_on_display > 1:
             self.character_select_region.add_sprite(self.left_button, -20, 105)
 
-        
-        
-
         column = 0
         row = 0
         if not self.unlock_filtering:
-            self.filtered_characters = list(character_db.values())
+            self.filtered_characters = list(get_character_db().values())
         else:
-            self.filtered_characters = [char for char in character_db.values() if self.player.missions[char.name][5]]
+            self.filtered_characters = [char for char in get_character_db().values() if self.player.missions[char.name][5]]
             for character in self.filtered_characters:
                 print(character.name)
 
@@ -543,8 +540,8 @@ class CharacterSelectScene(engine.Scene):
         if not self.window_up:
             play_sound(self.scene_manager.sounds["page"])
             self.page_on_display += 1
-            max_pages = len(character_db) // 12
-            if len(character_db) % 12 > 0:
+            max_pages = len(get_character_db()) // 12
+            if len(get_character_db()) % 12 > 0:
                 max_pages += 1
             if self.page_on_display > max_pages:
                 self.page_on_display = max_pages

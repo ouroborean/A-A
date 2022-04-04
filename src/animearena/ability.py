@@ -8,7 +8,7 @@ import copy
 import sys
 import os
 import importlib.resources
-
+import logging
 from sdl2.ext import pixelaccess
 from animearena import mission
 from animearena.effects import EffectType, Effect
@@ -808,87 +808,106 @@ def target_titanias_rampage(user: "CharacterManager",
 def exe_rasengan(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if not user.check_countered(playerTeam, enemyTeam):
         base_damage = 25
-        stun_duration = 2
-        if user.has_effect(EffectType.ALL_BOOST, "Sage Mode"):
-            stun_duration = 4
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_damage(base_damage, target)
-                target.add_effect(Effect(Ability("naruto2"), EffectType.ALL_STUN, user, stun_duration, lambda eff: "This character is stunned."))
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
                 if target.meets_stun_check():
                     user.check_on_stun(target)
         user.check_on_use()
         user.check_on_harm()
 
 def exe_shadow_clones(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    user.add_effect(Effect(Ability("naruto1"), EffectType.ALL_DR, user, 5, lambda eff: "Naruto has 10 points of damage reduction.", mag=10))
-    user.add_effect(Effect(Ability("naruto1"), EffectType.ABILITY_SWAP, user, 5, lambda eff: "Shadow Clones has been replaced by Sage Mode.", mag=11))
-    user.add_effect(Effect(Ability("naruto1"), EffectType.ABILITY_SWAP, user, 5, lambda eff: "Naruto Taijutsu has been replaced by Uzumaki Barrage.", mag=32))
-    user.add_effect(Effect(Ability("naruto1"), EffectType.TARGET_SWAP, user, 5, lambda eff: "Rasengan will target all enemies.", mag=21))
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 5, lambda eff: "Naruto has 10 points of damage reduction.", mag=10))
+    user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 5, lambda eff: "Rasengan has been replaced by Odama Rasengan", mag=11))
+    user.add_effect(Effect(user.used_ability, EffectType.COUNTER_IMMUNE, user, 5, lambda eff: "Naruto will ignore counter and reflect effects."))
     user.check_on_use()
-
-def exe_naruto_taijutsu(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered(playerTeam, enemyTeam):
-        base_damage = 30
-        for target in user.current_targets:
-            if target.final_can_effect(user.check_bypass_effects()):
-                user.deal_damage(base_damage, target)
-        user.check_on_use()
-        user.check_on_harm()
 
 def exe_substitution(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(Ability("naruto4"), EffectType.ALL_INVULN, user, 2, lambda eff: "Naruto is invulnerable."))
     user.check_on_use()
 
 def exe_sage_mode(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    user.full_remove_effect("Shadow Clones", user)
-    user.scene.player_display.team.energy_pool[Energy.SPECIAL] += 1
-    user.add_effect(Effect(Ability("narutoalt1"), EffectType.ALL_INVULN, user, 3, lambda eff: "Naruto is invulnerable."))
-    user.add_effect(Effect(Ability("narutoalt1"), EffectType.ABILITY_SWAP, user, 3, lambda eff: "Uzumaki Barrage has been replaced by Toad Taijutsu.", mag=33))
-    user.add_effect(Effect(Ability("narutoalt1"), EffectType.ALL_BOOST, user, 3, lambda eff: "Rasengan stun duration and damage are doubled.", mag=225))
+    user.add_effect(Effect(user.used_ability, EffectType.PROF_SWAP, user, 3, lambda eff: "", mag=1, system=True))
+    if user.has_effect(EffectType.ABILITY_SWAP, "Shadow Clones"):
+        user.remove_effect(user.get_effect(EffectType.ABILITY_SWAP, "Shadow Clones"))
+        user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 3, lambda eff: "Odama Rasengan has been replaced by Rasenshuriken", mag=13))
+    else:
+        user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 3, lambda eff: "Rasengan has been replaced by Senpou - Rasenrengan", mag=12))
+    user.add_effect(Effect(user.used_ability, EffectType.STUN_IMMUNE, user, 3, lambda eff: "Naruto will ignore stun effects."))
+    user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 3, lambda eff: "Naruto will deal 20 affliction damage to any enemy that drains energy from him."))
     user.check_on_use()
 
-def exe_uzumaki_barrage(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    if not user.check_countered(playerTeam, enemyTeam):
-        base_damage = 15
-        stunned = False
-        for target in user.current_targets:
-            if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
-                user.deal_damage(base_damage, target)
-                if user.has_effect(EffectType.MARK, "Uzumaki Barrage"):
-                    target.add_effect(Effect(Ability("narutoalt2"), EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
-                    if target.meets_stun_check():
-                        user.source.mission2progress += 1
-                        user.check_on_stun(target)
-            user.add_effect(Effect(Ability("narutoalt2"), EffectType.MARK, user, 3, lambda eff: "Uzumaki Barrage will stun its target for one turn."))
-        
-        user.check_on_use()
-        user.check_on_harm()
 
-def exe_toad_taijutsu(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+def exe_odama_rasengan(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if not user.check_countered(playerTeam, enemyTeam):
-        base_damage = 35
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
-
-                #region Naruto Mission 4 handling
-                if not target.has_effect(EffectType.SYSTEM, "NarutoMission4Tracker"):
-                    target.add_effect(Effect("NarutoMission4Tracker", EffectType.SYSTEM, user, 280000, lambda eff: "", system = True))
-                    
-                    if not user.source.mission4complete:
-                        mission_complete = True
-                        for enemy in enemyTeam:
-                            if not enemy.has_effect(EffectType.SYSTEM, "NarutoMission4Tracker"):
-                                mission_complete = False
-                        if mission_complete:
-                            user.source.mission4progress += 1
-                            user.source.mission4complete = True
-                #endregion
-                
-                user.deal_damage(base_damage, target)
-                target.add_effect(Effect(Ability("narutoalt3"), EffectType.COST_ADJUST, user, 4, lambda eff: "This character's ability costs have been increased by 2 random energy.", mag=52))
+                if target == user.primary_target:
+                    user.deal_damage(35, target)
+                    target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
+                    if target.meets_stun_check():
+                        user.check_on_stun(target)
+                else:
+                    user.deal_damage(25, target)
         user.check_on_use()
         user.check_on_harm()
+
+def exe_rasenrengan(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(50, target)
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 4, lambda eff: "This character is stunned."))
+                if target.meets_stun_check():
+                    user.check_on_stun(target)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_rasenshuriken(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_pierce_damage(35, target)
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
+                if target.meets_stun_check():
+                    user.check_on_stun(target)
+        user.check_on_use()
+        user.check_on_harm()
+
+#endregion
+#region Accelerator Execution
+def exe_vector_scatter(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_damage(20, target)
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
+                if target.meets_stun_check():
+                    user.check_on_stun(target)
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_plasma_bomb(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+                user.deal_damage(15, target)
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 5, lambda eff: "This character will take 15 damage.", mag = 15))
+        user.add_effect(Effect(user.used_ability, EffectType.CONT_USE, user, 5, lambda eff:"Accelerator is using Plasma Bomb. This effect will end if he is stunned."))
+        user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, "Only stun effects can be applied to Accelerator."))
+        user.check_on_use()
+        user.check_on_harm()
+
+def exe_vector_reflection(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.IGNORE, user, 2, lambda eff: "Accelerator will ignore all harmful effects.", invisible = True))
+    user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 2, lambda eff: "Any enemy that targets Accelerator with a new harmful ability will be targeted by Vector Scatter.", invisible = True))
+    user.check_on_use()
+
+def exe_vector_immunity(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Accelerator is invulnerable."))
+    user.check_on_use()
+
 #endregion
 #region Aizen Execution
 
@@ -991,6 +1010,7 @@ def exe_one_cut_killing(user: "CharacterManager", playerTeam: list["CharacterMan
 
 def exe_little_war_horn(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(Ability("akame3"), EffectType.MARK, user, 5, lambda eff: "Akame can use One Cut Killing on any target."))
+    user.add_effect(Effect(user.used_ability, EffectType.PROF_SWAP, user, 5, lambda eff:"", mag = 1, system = True))
     if user.last_man_standing():
         user.add_effect(Effect("AkameMission3Tracker", EffectType.SYSTEM, user, 280000, lambda eff: "", system=True))
     user.check_on_use()
@@ -1644,6 +1664,7 @@ def exe_iron_shadow_dragon(user: "CharacterManager", playerTeam: list["Character
         user.full_remove_effect("Blacksteel Gajeel", user)
     user.progress_mission(4, 1)
     user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 280000, lambda eff: "The first time each turn that Gajeel receives a harmful ability, he will ignore all hostile effects for the rest of the turn."))
+    user.add_effect(Effect(user.used_ability, EffectType.PROF_SWAP, user, 280000, lambda eff: "", mag = 1, system=True))
     user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Iron Dragon's Roar has been replaced by Iron Shadow Dragon's Roar.", mag=11))
     user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Iron Dragon's Club has been replaced by Iron Shadow Dragon's Club", mag=22))
     user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Iron Shadow Dragon has been replaced by Blacksteel Gajeel.", mag=33))
@@ -1672,6 +1693,7 @@ def exe_iron_shadow_dragon_club(user: "CharacterManager", playerTeam: list["Char
 def exe_blacksteel_gajeel(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if user.has_effect(EffectType.UNIQUE, "Iron Shadow Dragon"):
         user.full_remove_effect("Iron Shadow Dragon", user)
+        user.full_remove_effect("gajeel3", user)
     user.progress_mission(4, 1)
     user.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 280000, lambda eff: "Gajeel has 15 points of damage reduction."))
     user.check_on_use()
@@ -2026,12 +2048,14 @@ def exe_hinata_trigrams(user: "CharacterManager", playerTeam: list["CharacterMan
     if counterable and not user.check_countered(playerTeam, enemyTeam):
         drained = False
         for target in user.current_targets:
-            if target in enemyTeam and target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+            print(f"Trigrams targeting {target.source.name}, {target.id}")
+            if target.id > 2 and target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                 user.deal_damage(15, target)
                 if user.has_effect(EffectType.MARK, "Byakugan") and not drained:
                     target.drain_energy(1, user)
                     drained = True
-            elif target in playerTeam and target.helpful_target(user, user.check_bypass_effects()):
+            elif target.id < 3 and target.helpful_target(user, user.check_bypass_effects()):
+                print(f"Adding DR to {target.source.name}")
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 2, lambda eff: "This character has 10 points of damage reduction.", mag=10))
         if not user.has_effect(EffectType.MARK, "Eight Trigrams - 64 Palms"):
             user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Eight Trigrams - 64 Palms will deal 15 damage to all enemies."))
@@ -2039,10 +2063,10 @@ def exe_hinata_trigrams(user: "CharacterManager", playerTeam: list["CharacterMan
             user.get_effect(EffectType.MARK, "Eight Trigrams - 64 Palms").duration = 3
         user.check_on_use()
         user.check_on_harm()
-    else:
+    if not counterable:
         for target in user.current_targets:
             if target.helpful_target(user, user.check_bypass_effects()):
-                target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 4, lambda eff: "This character has 10 points of damage reduction.", mag=10))
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 2, lambda eff: "This character has 10 points of damage reduction.", mag=10))
         if not user.has_effect(EffectType.MARK, "Eight Trigrams - 64 Palms"):
             user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Eight Trigrams - 64 Palms will deal 15 damage to all enemies."))
         else:
@@ -2240,6 +2264,7 @@ def exe_tsukuyomi(user: "CharacterManager", playerTeam: list["CharacterManager"]
 def exe_susanoo(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 280000, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag=45))
     user.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 280000, lambda eff: "Itachi will take 10 affliction damage. If his health falls below 20 or Susano'o's destructible defense is destroyed, Susano'o will end.", mag=10))
+    user.add_effect(Effect(user.used_ability, EffectType.PROF_SWAP, user, 280000, lambda eff: "", mag = 1, system=True))
     user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Amaterasu has been replaced by Totsuka Blade.", mag=11))
     user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 280000, lambda eff: "Tsukuyomi has been replaced by Yata Mirror.", mag=22))
     user.receive_system_aff_damage(10)
@@ -2724,7 +2749,7 @@ def exe_lightning_dragons_roar(user: "CharacterManager", playerTeam: list["Chara
         user.check_on_harm()
 
 def exe_thunder_palace(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 5, lambda eff:"If this effect expires naturally, Laxus will deal 40 damage to the entire enemy team. If he is damaged by a new ability during this time, this effect will end and the offending character will take damage equal to the original damage of the ability they used."))
+    user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 5, lambda eff:"If this effect expires naturally, Laxus will deal 40 damage to the entire enemy team. If he is damaged by a new ability, this effect will end and the offending character will take damage equal to the damage of the ability they used."))
     user.check_on_use()
 
 def exe_laxus_block(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
@@ -4399,7 +4424,7 @@ def exe_arrest_assault(user: "CharacterManager", playerTeam: list["CharacterMana
             base_dr = 10 + (5 * stacks)
             target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 2, lambda eff: f"This character has {base_dr} points of damage reduction", mag = base_dr, invisible=True))
     user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 3, lambda eff: "Arrest Assault has been replaced by Return Assault.", mag = 21, invisible=True))
-    user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 3, lambda eff: f"Arrest Assault has received {eff.mag} abilities.", mag = 0))
+    user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 3, lambda eff: f"Arrest Assault has received {eff.mag} abilities.", mag = 0, invisible=True))
     user.check_on_use()
     user.check_on_help()
 
@@ -4480,7 +4505,7 @@ def exe_flashfreeze_heatwave(user: "CharacterManager", playerTeam: list["Charact
                     user.deal_damage(primary_damage, target)
                 else:
                     user.deal_damage(splash_damage, target)
-        user.full_remove_effect("Quirk - Half Hot", user)
+        user.full_remove_effect("Quirk - Half-Hot", user)
         user.full_remove_effect("Quirk - Half-Cold", user)
         user.check_on_use()
         user.check_on_harm()
@@ -4510,6 +4535,7 @@ def exe_killing_strike(user: "CharacterManager", playerTeam: list["CharacterMana
 
 def exe_incursio(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 7, lambda eff: f"Tatsumi has {eff.mag} points of destructible defense.", mag=25))
+    user.add_effect(Effect(user.used_ability, EffectType.PROF_SWAP, user, 7, lambda eff: "", mag = 1, system=True))
     user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 7, lambda eff: "Tatsumi can use Neuntote."))
     user.check_on_use()
 
@@ -4833,26 +4859,22 @@ def exe_beccata_di_rondine(user: "CharacterManager", playerTeam: list["Character
 #endregion
 ability_info_db = {
     "naruto1": [
-        "Shadow Clones",
-        "Naruto summons an army of substantial clones. For 3 turns, he gains 10 points of damage reduction, Rasengan is improved, Naruto Taijutsu is replaced with Uzumaki Barrage, and this ability is replaced with Sage Mode.",
-        [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("SELF"), exe_shadow_clones
-    ],
-    "naruto2": [
         "Rasengan",
-        "Naruto slams one opponent with a spinning ball of condensed chakra. This deals 25 damage to one"
-        +
-        " enemy and stuns them for one turn. During Shadow Clones, this attack deals 10 less damage but affects all enemies."
-        +
-        " During Sage Mode, this ability deals double damage and stuns for two turns.",
-        [0, 1, 0, 0, 1, 2], Target.SINGLE,
+        "Naruto deals 25 damage to target enemy and stuns them for one turn.",
+        [0, 1, 0, 0, 1, 1], Target.SINGLE,
         default_target("HOSTILE"), exe_rasengan
     ],
+    "naruto2": [
+        "Shadow Clones",
+        "For three turns, Naruto will ignore counter and reflect abilities. During this time, he gains 10 points of damage reduction and Rasengan is replaced by Odama Rasengan.",
+        [0, 0, 0, 0, 1, 3], Target.SINGLE,
+        default_target("SELF"), exe_shadow_clones
+    ],
     "naruto3": [
-        "Naruto Taijutsu",
-        "Naruto strikes one enemy with his fist, dealing 30 physical damage.",
-        [1, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_naruto_taijutsu
+        "Sage Mode",
+        "For two turns, Naruto will ignore stun effects. During this time, any enemy that drains energy from him will take 20 affliction damage and Rasengan is replaced by Senpou - Rasenrengan. If activated while Shadow Clones is active, Naruto will become invulnerable for one turn, and Odama Rasengan will be replaced by Rasenshuriken.",
+        [0, 0, 1, 0, 0, 2], Target.SINGLE,
+        default_target("SELF"), exe_sage_mode
     ],
     "naruto4": [
         "Substitution", "Naruto becomes invulnerable for one turn.",
@@ -4860,25 +4882,26 @@ ability_info_db = {
         default_target("SELF"), exe_substitution
     ],
     "narutoalt1": [
-        "Sage Mode",
-        "Naruto gains 1 special energy and becomes invulnerable for 2 turns. During"
-        +
-        " this time, Rasengan is improved and Uzumaki Barrage is replaced with Toad Taijutsu.",
-        [0, 0, 1, 0, 0, 2], Target.SINGLE,
-        default_target("SELF"), exe_sage_mode
+        "Odama Rasengan",
+        "Naruto deals 35 damage to one enemy and 25 damage to the others. The primary target will be stunned for one turn.",
+        [0, 1, 0, 0, 1, 1], Target.MULTI_ENEMY,
+        default_target("HOSTILE"), exe_odama_rasengan
     ],
     "narutoalt2": [
-        "Uzumaki Barrage",
-        "Naruto deals 15 damage to one enemy. If he uses this ability again next turn, it will stun its target for one turn.",
-        [1, 0, 0, 0, 0, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_uzumaki_barrage
+        "Senpou - Rasenrengan",
+        "Naruto deals 50 damage to one enemy and stuns them for 2 turns.",
+        [0, 1, 1, 0, 0, 1], Target.SINGLE,
+        default_target("HOSTILE"), exe_rasenrengan
     ],
     "narutoalt3": [
-        "Toad Taijutsu",
-        "Naruto deals 35 damage to one enemy. For 2 turns, that enemy will have their ability"
-        + " costs increased by 2 random.", [1, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_toad_taijutsu
+        "Rasenshuriken",
+        "Naruto deals 35 damage to all enemies and stuns them for one turn.", [0, 1, 1, 0, 1, 0], Target.MULTI_ENEMY,
+        default_target("HOSTILE"), exe_rasenshuriken
     ],
+    "accelerator1": ["Vector Scatter", "Accelerator deals 20 damage to target enemy and stuns them for one turn.", [0, 0, 1, 0, 0, 1], Target.SINGLE, default_target("HOSTILE"), exe_vector_scatter],
+    "accelerator2": ["Plasma Bomb", "Accelerator deals 15 damage to all enemies for 3 turns. During this time, only stun effects can be applied to Accelerator.", [0, 0, 2, 0, 1, 5], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_plasma_bomb],
+    "accelerator3": ["Vector Reflection", "For one turn, Accelerator will ignore all harmful effects. Any enemy that targets him with a new harmful ability will be targeted by Vector Scatter. This ability is invisible.", [0, 0, 1, 0, 0, 2], Target.SINGLE, default_target("SELF"), exe_vector_reflection],
+    "accelerator4": ["Vector Immunity", "Accelerator becomes invulnerable for one turn.", [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_vector_immunity],
     "aizen1": [
         "Shatter, Kyoka Suigetsu",
         "Target enemy has their ability costs increased by one random and are marked by Kyoka Suigetsu for 1 turn. If the enemy is marked with Black Coffin, "
@@ -5520,7 +5543,7 @@ ability_info_db = {
                 [0, 0, 0, 1, 0, 0], Target.SINGLE, default_target("SELF"), exe_la_pucelle],
     "jeanne4": ["Jeanne Dodge", "Jeanne becomes invulnerable for one turn.", [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_jeanne_dodge],
     "jeannealt1": ["Crimson Holy Maiden", "Jeanne stuns herself and becomes permanently invulnerable. Each turn, she suffers 35 affliction damage and deals 15 affliction damage to all enemies.",
-                    [0, 0, 0, 2, 0, 0], Target.SINGLE, default_target("HOSTILE"), exe_crimson_holy_maiden],
+                    [0, 0, 0, 2, 0, 0], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_crimson_holy_maiden],
     "itachi1": [
         "Amaterasu",
         "Itachi deals 10 affliction damage to one enemy for the rest of the game. This effect does not stack.",
@@ -5822,7 +5845,7 @@ ability_info_db = {
         "Wire Shield",
         "Target ally gains 15 permanent destructible defense and is marked with Wire Shield. Until Lubbock uses this ability on an ally already targeted with Wire Shield, this ability will costs no energy. "
         +
-        "If this ability targets an enemy marked with Wire Shield and all living allies are marked, all marked allies become invulnerable for one turn. This effect consumes all active marks.",
+        "If this ability targets an ally marked with Wire Shield and all living allies are marked, all marked allies become invulnerable for one turn. This effect consumes all active marks.",
         [0, 0, 0, 1, 0, 0], Target.SINGLE,
         default_target("HELPFUL"), exe_wire_shield
     ],
@@ -6641,12 +6664,12 @@ ability_info_db = {
     ],
     "touka2":[
         "Nukiashi",
-        "For the next 3 turns, Draw Stance and Raiou are invisible.",
+        "For the next 3 turns, Draw Stance and Raikou are invisible.",
         [0,0,1,0,0,4],
         Target.SINGLE, default_target("SELF"), exe_nukiashi
     ],
     "touka3":[
-        "Raiou",
+        "Raikou",
         "Touka deals 20 damage to one enemy. For one turn, any ability they use has its cooldown increased by 2.",
         [0,1,0,0,0,0],
         Target.SINGLE, default_target("HOSTILE"), exe_raiou

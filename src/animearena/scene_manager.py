@@ -6,7 +6,7 @@ import typing
 import importlib.resources
 from PIL import Image
 from animearena import battle_scene, character
-from animearena.character import character_db
+from animearena.character import get_character_db
 from playsound import playsound
 
 if typing.TYPE_CHECKING:
@@ -14,6 +14,7 @@ if typing.TYPE_CHECKING:
     from animearena.battle_scene import BattleScene
     from animearena.login_scene import LoginScene
     from animearena.tutorial_scene import TutorialScene
+    from animearena.client import ConnectionHandler
 
 def get_image_from_path(file_name: str) -> Image:
     with importlib.resources.path('animearena.resources', file_name) as path:
@@ -32,15 +33,17 @@ class SceneManager:
     login_scene: "LoginScene"
     tutorial_scene: "TutorialScene"
     frame_count: int
+    connection: "ConnectionHandler"
     def __init__(self, window: sdl2.ext.Window = None):
         self.frame_count = 0
         self.surfaces = {}
         self.sounds = {}
+        self.connection = None
         if window:
             self.window = window
             self.factory = sdl2.ext.SpriteFactory(sdl2.ext.SOFTWARE, free=False)
             self.spriterenderer = self.factory.create_sprite_render_system(window)
-        for char in character_db.keys():
+        for char in get_character_db().keys():
             self.surfaces[char + "allyprof"] = get_image_from_path(char + "prof.png")
             self.surfaces[char + "enemyprof"] = get_image_from_path(char + "prof.png").transpose(Image.FLIP_LEFT_RIGHT)
             self.surfaces[char + "banner"] = get_image_from_path(char + "banner.png")
