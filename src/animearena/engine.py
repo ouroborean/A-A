@@ -5,15 +5,12 @@ import logging
 import operator
 import textwrap
 import importlib.resources
-import gc
 from typing import Iterator
 from typing import Literal
 from typing import MutableMapping
 from typing import Optional
 from typing import Tuple
 from typing import Union
-import sys
-import os
 from PIL import Image
 import sdl2
 import sdl2.ext
@@ -21,9 +18,7 @@ import sdl2.sdlttf
 import sdl2.surface
 from sdl2 import endian
 from pathlib import Path
-import math
 import animearena.text_formatter
-from animearena.animation import Animation
 def get_image_from_path(file_name: str) -> Image:
     with importlib.resources.path('animearena.resources', file_name) as path:
         return Image.open(path)
@@ -49,14 +44,13 @@ class Scene:
     sprite_factory: sdl2.ext.SpriteFactory
     ui_factory: sdl2.ext.UIFactory
     triggered_event: bool
-    animations: list[Animation]
     font: None
 
     def __init__(self, sprite_type: Union[Literal[0], Literal[1]]):
         self.animations = []
         self.region = Region()
-        self.sprite_factory = sdl2.ext.SpriteFactory(sprite_type, free=False)
-        self.ui_factory = sdl2.ext.UIFactory(self.sprite_factory, free=False)
+        self.sprite_factory = sdl2.ext.SpriteFactory(sprite_type, free=True)
+        self.ui_factory = sdl2.ext.UIFactory(self.sprite_factory, free=True)
         self.surfaces = dict()
         self.window_closing = False
         self.window_up = False

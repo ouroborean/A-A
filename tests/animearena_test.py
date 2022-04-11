@@ -1,24 +1,14 @@
-from distutils.log import ERROR
-from http import server
-from pickle import PUT
 
-from animearena.energy import Energy
+
 from animearena.scene_manager import SceneManager
 from animearena.character import Character
 from animearena.effects import Effect, EffectType
-from animearena.client import ConnectionHandler
 from animearena.scene_manager import SceneManager
-from animearena import engine
 
 import logging
-import asyncio
 import pytest
-import sdl2
-import sdl2dll
-import sdl2.ext
-import dill as pickle
 
-from animearena.battle_scene import BattleScene, make_battle_scene, CharacterManager, MatchPouch
+from animearena.battle_scene import BattleScene, make_battle_scene, CharacterManager, MatchPouch, AbilityMessage
 
 
 class TestGame:
@@ -77,17 +67,48 @@ class TestGame:
             if i < 3:
                 actor.current_targets.append(self.active_player.pteam[i])
             else:
+                if not actor.primary_target:
+                    actor.primary_target = self.active_player.eteam[i - 3]
                 actor.current_targets.append(self.active_player.eteam[i - 3])
+
+    def queue_enemy_action(self, character_index: int, ability_index: int, target_index_list: list[int]):
+        actor = self.active_player.eteam[character_index]
+        actor.acted = True
+        actor.used_ability = actor.source.current_abilities[ability_index]
+        actor.current_targets.clear()
+        for i in target_index_list:
+            if i < 3:
+                actor.current_targets.append(self.active_player.eteam[i])
+            else:
+                if not actor.primary_target:
+                    actor.primary_target = self.active_player.pteam[i - 3]
+                actor.current_targets.append(self.active_player.pteam[i - 3])
 
     def target_action(self, character_index: int, ability_index: int) -> int:
         actor = self.active_player.pteam[character_index]
         actor.current_targets.clear()
         return actor.source.current_abilities[ability_index].target(actor, self.active_player.pteam, self.active_player.eteam)
 
+    def execute_enemy_abilities(self):
+        for character in self.eteam:
+            if character.acted:
+                self.active_player.ability_messages.append(AbilityMessage(character))
+                character.execute_ability()
+                character.acted = False
+                character.primary_target = None
+            character.check_ability_swaps()
+            character.adjust_targeting_types()
+        for character in self.pteam:
+            character.check_ability_swaps()
+            character.adjust_targeting_types()
+
     def execute_abilities(self):
         for character in self.pteam:
             if character.acted:
+                self.active_player.ability_messages.append(AbilityMessage(character))
                 character.execute_ability()
+                character.acted = False
+                character.primary_target = None
             character.check_ability_swaps()
             character.adjust_targeting_types()
         for character in self.eteam:
@@ -96,7 +117,7 @@ class TestGame:
 
     def execute_empty_round(self):
         self.execute_abilities()
-        self.active_player.resolve_ticking_ability()
+        self.active_player.resolve_ticking_ability("ally")
         self.active_player.sharingan_reflecting = False
         self.active_player.sharingan_reflector = None
 
@@ -172,24 +193,94 @@ class TestGame:
                         mag=51))
 
         #endregion
+        
+        self.execute_enemy_turn()
+
+    def execute_enemy_turn(self):
+        self.execute_enemy_abilities()
+        self.active_player.resolve_ticking_ability("enemy")
+        self.active_player.sharingan_reflecting = False
+        self.active_player.sharingan_reflector = None
+
+        for manager in self.active_player.pteam:
+            if manager.source.name == "kuroko" and manager.check_invuln():
+                manager.progress_mission(1, 1)
+            if manager.source.name == "cmary" and manager.check_invuln() and manager.has_effect(EffectType.ALL_INVULN, "Quickdraw - Sniper"):
+                manager.progress_mission(4, 1)
+
+        self.active_player.tick_effect_duration()
+
+        game_lost = True
+        for manager in self.active_player.pteam:
+            manager.refresh_character()
+            manager.received_ability.clear()
+            if not manager.source.dead:
+                game_lost = False
+            else:
+                temp_yatsufusa_storage = None
+                if manager.has_effect(EffectType.MARK, "Yatsufusa"):
+                    temp_yatsufusa_storage = manager.get_effect(
+                        EffectType.MARK, "Yatsufusa")
+                manager.source.current_effects.clear()
+                if temp_yatsufusa_storage:
+                    manager.source.current_effects.append(
+                        temp_yatsufusa_storage)
+        game_won = True
+        for manager in self.active_player.eteam:
+            manager.refresh_character(True)
+            manager.received_ability.clear()
+            if not manager.source.dead:
+                game_won = False
+            else:
+                temp_yatsufusa_storage = None
+                if manager.has_effect(EffectType.MARK, "Yatsufusa"):
+                    temp_yatsufusa_storage = manager.get_effect(
+                        EffectType.MARK, "Yatsufusa")
+                manager.source.current_effects.clear()
+                if temp_yatsufusa_storage:
+                    manager.source.current_effects.append(
+                        temp_yatsufusa_storage)
+
+        #region Yatsufusa Resurrection handling
+        for manager in self.active_player.eteam:
+            if manager.source.dead and manager.has_effect(
+                    EffectType.MARK, "Yatsufusa"):
+                yatsu = manager.get_effect(EffectType.MARK, "Yatsufusa")
+                manager.source.dead = False
+                yatsu = manager.get_effect(EffectType.MARK, "Yatsufusa").user.progress_mission(1, 1)
+                manager.source.hp = 40
+                manager.remove_effect(
+                    manager.get_effect(EffectType.MARK, "Yatsufusa"))
+                manager.add_effect(
+                    Effect(
+                        yatsu.source, EffectType.UNIQUE, yatsu.user, 280000,
+                        lambda eff:
+                        "This character has been animated by Kurome."))
+                manager.add_effect(
+                    Effect(
+                        yatsu.source, EffectType.DEF_NEGATE, yatsu.user,
+                        280000, lambda eff:
+                        "This character cannot reduce damage or become invulnerable."
+                    ))
+                manager.add_effect(
+                    Effect(
+                        yatsu.source,
+                        EffectType.COST_ADJUST,
+                        yatsu.user,
+                        280000,
+                        lambda eff:
+                        "This character's abilities costs have been increased by one random energy.",
+                        mag=51))
+
+        #endregion
         if game_lost:
             self.active_player.lose_game()
         if game_won and not game_lost:
             self.active_player.win_game()
-
-        pouch1, pouch2 = self.active_player.pickle_match(self.active_player.player_display.team,
-                                           self.active_player.enemy_display.team)
-        match = MatchPouch(pouch1, pouch2)
-        msg = pickle.dumps(match)
-
-        self.swap_turns(msg)
-
-        self.execute_turn()
-
 
     def execute_turn(self):
         self.execute_abilities()
-        self.active_player.resolve_ticking_ability()
+        self.active_player.resolve_ticking_ability("ally")
         self.active_player.sharingan_reflecting = False
         self.active_player.sharingan_reflector = None
 
@@ -270,12 +361,6 @@ class TestGame:
         if game_won and not game_lost:
             self.active_player.win_game()
 
-        pouch1, pouch2 = self.active_player.pickle_match(self.active_player.player_display.team,
-                                           self.active_player.enemy_display.team)
-        match = MatchPouch(pouch1, pouch2)
-        msg = pickle.dumps(match)
-
-        self.swap_turns(msg)
 
     def dump_effects(self, character: CharacterManager):
         logging.debug(f"Dumping effects for {character.source.name}")
@@ -438,6 +523,34 @@ def ichigo_test_game(setup_scene_manager, character_data) -> TestGame:
     enemy_team = get_reset_team([char["snowwhite"], char["naruto"], char["accelerator"]])
     return TestGame(ally_team, enemy_team, scene_manager=setup_scene_manager)
 
+@pytest.fixture
+def orihime_test_game(setup_scene_manager, character_data) -> TestGame:
+    char = character_data
+    ally_team = get_reset_team([char["orihime"], char["ruler"], char["mirio"]])
+    enemy_team = get_reset_team([char["snowwhite"], char["naruto"], char["accelerator"]])
+    return TestGame(ally_team, enemy_team, scene_manager=setup_scene_manager)
+
+@pytest.fixture
+def rukia_test_game(setup_scene_manager, character_data) -> TestGame:
+    char = character_data
+    ally_team = get_reset_team([char["rukia"], char["ruler"], char["mirio"]])
+    enemy_team = get_reset_team([char["snowwhite"], char["naruto"], char["accelerator"]])
+    return TestGame(ally_team, enemy_team, scene_manager=setup_scene_manager)
+
+@pytest.fixture
+def byakuya_test_game(setup_scene_manager, character_data) -> TestGame:
+    char = character_data
+    ally_team = get_reset_team([char["byakuya"], char["ruler"], char["mirio"]])
+    enemy_team = get_reset_team([char["snowwhite"], char["naruto"], char["accelerator"]])
+    return TestGame(ally_team, enemy_team, scene_manager=setup_scene_manager)
+
+@pytest.fixture
+def ichimaru_test_game(setup_scene_manager, character_data) -> TestGame:
+    char = character_data
+    ally_team = get_reset_team([char["ichimaru"], char["ruler"], char["mirio"]])
+    enemy_team = get_reset_team([char["snowwhite"], char["naruto"], char["accelerator"]])
+    return TestGame(ally_team, enemy_team, scene_manager=setup_scene_manager)
+
 def reset_character(character: Character):
     character.hp = 100
     character.current_effects.clear()
@@ -477,8 +590,8 @@ def test_hinata_twin_lion(hinata_test_game: TestGame):
 
 
     #Use Ruler's Counter on Herself.
-    hinata_test_game.queue_action(0, 2, [0])
-    hinata_test_game.execute_turn()
+    hinata_test_game.queue_enemy_action(0, 2, [0])
+    hinata_test_game.execute_enemy_turn()
     
     hinata_test_game.dump_effects(hinata_test_game.eteam[0])
 
@@ -500,17 +613,17 @@ def test_hinata_trigrams(hinata_test_game: TestGame):
     hinata_test_game.execute_turn()
 
     
-    assert hinata_test_game.eteam[2].check_for_dmg_reduction() == 10
+    assert hinata_test_game.pteam[2].check_for_dmg_reduction() == 10
 
-    hinata_test_game.execute_turn()
+    hinata_test_game.execute_enemy_turn()
 
 
     hinata_test_game.queue_action(0, 1, [0, 1, 2, 3, 4, 5])
     hinata_test_game.execute_turn()
 
 
-    assert hinata_test_game.eteam[2].check_for_dmg_reduction() == 10
-    assert hinata_test_game.pteam[2].source.hp == 85
+    assert hinata_test_game.pteam[2].check_for_dmg_reduction() == 10
+    assert hinata_test_game.eteam[2].source.hp == 85
 
 #endregion
 
@@ -534,12 +647,12 @@ def test_trigrams(neji_test_game: TestGame):
 
     neji_test_game.execute_turn()
 
-    assert neji_test_game.pteam[0].source.hp == 70
+    assert neji_test_game.eteam[0].source.hp == 70
 
-    assert neji_test_game.eteam[0].has_effect(EffectType.CONT_USE, "Eight Trigrams - 128 Palms")
+    assert neji_test_game.pteam[0].has_effect(EffectType.CONT_USE, "Eight Trigrams - 128 Palms")
 
-    neji_test_game.queue_action(0, 0, [3])
-    neji_test_game.execute_turn()
+    neji_test_game.queue_enemy_action(0, 0, [3])
+    neji_test_game.execute_enemy_turn()
 
     assert not neji_test_game.pteam[0].has_effect(EffectType.CONT_USE, "Eight Trigrams - 128 Palms")
 
@@ -548,10 +661,10 @@ def test_mountain_crusher(neji_test_game: TestGame):
     neji_test_game.queue_action(0, 1, [3])
     neji_test_game.execute_turn()
 
-    assert neji_test_game.pteam[0].source.hp == 75
+    assert neji_test_game.eteam[0].source.hp == 75
 
-    neji_test_game.queue_action(0, 3, [0])
-    neji_test_game.execute_turn()
+    neji_test_game.queue_enemy_action(0, 3, [0])
+    neji_test_game.execute_enemy_turn()
 
     neji_test_game.queue_action(0, 1, [3])
     neji_test_game.execute_empty_round()
@@ -564,8 +677,8 @@ def test_selfless_genius(neji_test_game: TestGame):
     neji_test_game.queue_action(0, 2, [1])
     neji_test_game.execute_turn()
 
-    neji_test_game.queue_action(0, 1, [4])
-    neji_test_game.execute_turn()
+    neji_test_game.queue_enemy_action(0, 1, [4])
+    neji_test_game.execute_enemy_turn()
 
     assert neji_test_game.pteam[0].source.dead
     assert neji_test_game.pteam[1].has_effect(EffectType.ALL_BOOST, "Selfless Genius")
@@ -607,15 +720,16 @@ def test_flying_raijin(minato_test_game: TestGame):
     minato_test_game.queue_action(0, 0, [3])
     minato_test_game.execute_turn()
 
-    assert minato_test_game.eteam[0].source.current_abilities[0].cooldown_remaining == 0
-    assert minato_test_game.eteam[0].check_invuln()
+    assert minato_test_game.pteam[0].source.current_abilities[0].cooldown_remaining == 0
+    assert minato_test_game.pteam[0].check_invuln()
 
 def test_shiki_fuujin(minato_test_game: TestGame):
 
     minato_test_game.queue_action(0, 2, [3])
     minato_test_game.execute_empty_round()
     assert minato_test_game.pteam[0].source.dead
-    assert minato_test_game.eteam[0].source.current_abilities[0].total_cost == 3
+    minato_test_game.eteam[0].adjust_ability_costs()
+    assert minato_test_game.eteam[0].source.current_abilities[0].total_cost == 2
 
 #endregion
 
@@ -631,10 +745,10 @@ def test_tsukuyomi(itachi_test_game: TestGame):
     itachi_test_game.queue_action(0, 1, [3])
     itachi_test_game.execute_turn()
 
-    assert itachi_test_game.pteam[0].is_stunned()
+    assert itachi_test_game.eteam[0].is_stunned()
 
-    itachi_test_game.queue_action(1, 2, [0])
-    itachi_test_game.execute_turn()
+    itachi_test_game.queue_enemy_action(1, 2, [0])
+    itachi_test_game.execute_enemy_turn()
 
     assert not itachi_test_game.eteam[0].is_stunned()
 
@@ -660,8 +774,8 @@ def test_susano_shatter_failure(itachi_test_game: TestGame):
     itachi_test_game.queue_action(0, 2, [0])
     itachi_test_game.execute_turn()
 
-    itachi_test_game.queue_action(0, 0, [3])
-    itachi_test_game.execute_turn()
+    itachi_test_game.queue_enemy_action(0, 0, [3])
+    itachi_test_game.execute_enemy_turn()
 
     assert not itachi_test_game.pteam[0].has_effect(EffectType.ABILITY_SWAP, "Susano'o")
     assert itachi_test_game.pteam[0].source.current_abilities[0].name == "Amaterasu"
@@ -688,9 +802,9 @@ def test_raikiri_and_dogs(kakashi_test_game: TestGame):
     kakashi_test_game.queue_action(0, 1, [3])
     kakashi_test_game.execute_turn()
 
-    assert kakashi_test_game.pteam[0].is_stunned()
+    assert kakashi_test_game.eteam[0].is_stunned()
 
-    kakashi_test_game.execute_turn()
+    kakashi_test_game.execute_enemy_turn()
 
     kakashi_test_game.queue_action(0, 2, [3])
     kakashi_test_game.execute_abilities()
@@ -701,8 +815,8 @@ def test_copy_ninja(kakashi_test_game: TestGame):
     kakashi_test_game.queue_action(0, 0, [0])
     kakashi_test_game.execute_turn()
 
-    kakashi_test_game.queue_action(2, 0, [3])
-    kakashi_test_game.execute_turn()
+    kakashi_test_game.queue_enemy_action(2, 0, [3])
+    kakashi_test_game.execute_enemy_turn()
 
     kakashi_test_game.dump_effects(kakashi_test_game.eteam[2])
     assert kakashi_test_game.eteam[2].source.hp == 80
@@ -722,16 +836,16 @@ def test_target_kamui(kakashi_test_game: TestGame):
     kakashi_test_game.queue_action(0, 3, [3])
     kakashi_test_game.execute_turn()
 
-    assert kakashi_test_game.pteam[0].source.hp == 80
+    assert kakashi_test_game.eteam[0].source.hp == 80
 
-    kakashi_test_game.queue_action(2, 3, [2])
-    kakashi_test_game.execute_turn()
+    kakashi_test_game.queue_enemy_action(2, 3, [2])
+    kakashi_test_game.execute_enemy_turn()
 
     kakashi_test_game.queue_action(0, 3, [5])
     kakashi_test_game.execute_turn()
 
-    assert kakashi_test_game.pteam[2].source.hp == 80
-    assert kakashi_test_game.pteam[2].has_effect(EffectType.ISOLATE, "Kamui")
+    assert kakashi_test_game.eteam[2].source.hp == 80
+    assert kakashi_test_game.eteam[2].has_effect(EffectType.ISOLATE, "Kamui")
 
 #endregion
 
@@ -741,7 +855,7 @@ def test_shadow_pin(shikamaru_test_game: TestGame):
     shikamaru_test_game.queue_action(0, 2, [3])
     shikamaru_test_game.execute_turn()
 
-    assert not shikamaru_test_game.eteam[0].hostile_target(shikamaru_test_game.pteam[0])
+    assert not shikamaru_test_game.pteam[0].hostile_target(shikamaru_test_game.eteam[0])
 
 def test_shadow_bind_prolif(shikamaru_test_game: TestGame):
     shikamaru_test_game.queue_action(0, 2, [3])
@@ -800,6 +914,227 @@ def test_empowered_getsuga(ichigo_test_game: TestGame):
 
 
     
+
+#endregion
+
+#region Orihime Tests
+
+def test_shunshun_lockout(orihime_test_game: TestGame):
+
+    orihime_test_game.active_player.player_display.team.energy_pool[1] = 4
+    orihime_test_game.active_player.player_display.team.energy_pool[4] = 4
+    
+
+    orihime_test_game.queue_action(0, 0, [0])
+    orihime_test_game.execute_empty_round()
+
+    assert not orihime_test_game.pteam[0].source.current_abilities[0].can_use(orihime_test_game.active_player, orihime_test_game.pteam[0])
+
+    
+    orihime_test_game.queue_action(0, 1, [0])
+    orihime_test_game.execute_empty_round()
+
+    assert not orihime_test_game.pteam[0].source.current_abilities[1].can_use(orihime_test_game.active_player, orihime_test_game.pteam[0])
+
+    assert orihime_test_game.pteam[0].source.current_abilities[2].can_use(orihime_test_game.active_player, orihime_test_game.pteam[0])
+    orihime_test_game.queue_action(0, 2, [0])
+    orihime_test_game.execute_empty_round()
+
+    assert not orihime_test_game.pteam[0].source.current_abilities[2].can_use(orihime_test_game.active_player, orihime_test_game.pteam[0])
+
+def test_koten_zanshun(orihime_test_game: TestGame):
+    orihime_test_game.queue_action(0, 0, [0])
+    orihime_test_game.execute_empty_round()
+
+    orihime_test_game.queue_action(0, 3, [3])
+    orihime_test_game.queue_action(1, 1, [3])
+    orihime_test_game.execute_empty_round()
+
+    assert orihime_test_game.eteam[0].source.hp == 65
+
+def test_soten_kishun(orihime_test_game: TestGame):
+    orihime_test_game.pteam[1].source.hp = 60
+
+    orihime_test_game.queue_action(0, 1, [0])
+    orihime_test_game.execute_empty_round()
+    
+    orihime_test_game.queue_action(0, 3, [1])
+    orihime_test_game.execute_empty_round()
+
+    orihime_test_game.execute_empty_round()
+
+    assert orihime_test_game.pteam[1].source.hp == 100
+
+def test_santen_kesshun(orihime_test_game: TestGame):
+    orihime_test_game.queue_action(0, 2, [0])
+    orihime_test_game.execute_empty_round()
+
+    orihime_test_game.queue_action(0, 3, [1])
+    orihime_test_game.execute_turn()
+
+    assert orihime_test_game.pteam[1].get_dest_def_total() == 30
+
+def test_resisting_shield(orihime_test_game: TestGame):
+    orihime_test_game.queue_action(0, 0, [0])
+    orihime_test_game.execute_empty_round()
+
+    orihime_test_game.queue_action(0, 2, [0])
+    orihime_test_game.execute_empty_round()
+
+    orihime_test_game.queue_action(0, 3, [1])
+    orihime_test_game.execute_turn()
+
+    assert orihime_test_game.pteam[1].get_dest_def_total() == 35
+
+    orihime_test_game.queue_enemy_action(0, 0, [4])
+    orihime_test_game.execute_enemy_turn()
+
+    assert orihime_test_game.pteam[1].source.hp == 100
+    assert orihime_test_game.eteam[0].source.hp == 85
+
+def test_inviolate_shield(orihime_test_game: TestGame):
+
+    orihime_test_game.pteam[0].source.hp = 60
+
+    orihime_test_game.queue_action(0, 1, [0])
+    orihime_test_game.execute_empty_round()
+
+    orihime_test_game.queue_action(0, 2, [0])
+    orihime_test_game.execute_empty_round()
+
+    orihime_test_game.queue_action(0, 3, [0, 1, 2])
+    orihime_test_game.execute_turn()
+
+    orihime_test_game.queue_enemy_action(0, 0, [3])
+    orihime_test_game.execute_enemy_turn()
+
+    assert orihime_test_game.pteam[0].source.hp == 70
+
+    orihime_test_game.execute_turn()
+
+    assert orihime_test_game.pteam[0].has_effect(EffectType.DEST_DEF, "Five-God Inviolate Shield")
+    assert orihime_test_game.pteam[1].has_effect(EffectType.DEST_DEF, "Five-God Inviolate Shield")
+    assert orihime_test_game.pteam[2].has_effect(EffectType.DEST_DEF, "Five-God Inviolate Shield")
+
+    orihime_test_game.queue_enemy_action(0, 0, [3])
+    orihime_test_game.execute_enemy_turn()
+
+    assert not orihime_test_game.pteam[0].has_effect(EffectType.DEST_DEF, "Five-God Inviolate Shield")
+    assert not orihime_test_game.pteam[1].has_effect(EffectType.DEST_DEF, "Five-God Inviolate Shield")
+    assert not orihime_test_game.pteam[2].has_effect(EffectType.DEST_DEF, "Five-God Inviolate Shield")
+
+def test_empowering_shield(orihime_test_game: TestGame):
+
+    orihime_test_game.pteam[1].source.hp = 50
+
+    orihime_test_game.queue_action(0, 0, [0])
+    orihime_test_game.execute_empty_round()
+    
+    orihime_test_game.queue_action(0, 1, [0])
+    orihime_test_game.execute_empty_round()
+
+    orihime_test_game.queue_action(0, 3, [1])
+    orihime_test_game.queue_action(1, 1, [3])
+    orihime_test_game.execute_turn()
+
+    assert orihime_test_game.eteam[0].source.hp == 80
+    assert orihime_test_game.pteam[1].source.hp == 60
+
+def test_dance(orihime_test_game: TestGame):
+
+    orihime_test_game.pteam[0].source.hp = 50
+    orihime_test_game.pteam[1].source.hp = 50
+    orihime_test_game.pteam[2].source.hp = 50
+
+    orihime_test_game.queue_action(0, 0, [0])
+    orihime_test_game.execute_empty_round()
+    
+    orihime_test_game.queue_action(0, 1, [0])
+    orihime_test_game.execute_empty_round()
+
+    orihime_test_game.queue_action(0, 2, [0])
+    orihime_test_game.execute_empty_round()
+
+    orihime_test_game.queue_action(0, 3, [0, 1, 2, 3, 4, 5])
+    orihime_test_game.execute_turn()
+
+    for char in orihime_test_game.pteam:
+        assert char.source.hp == 75
+        assert char.check_invuln()
+
+    for char in orihime_test_game.eteam:
+        assert char.source.hp == 75
+
+def test_shunshun_returning(orihime_test_game: TestGame):
+    orihime_test_game.queue_action(0, 0, [0])
+    orihime_test_game.execute_empty_round()
+
+    orihime_test_game.queue_action(0, 3, [3])
+    orihime_test_game.execute_empty_round()
+
+    assert orihime_test_game.eteam[0].has_effect(EffectType.ALL_DR, "Lone-God Slicing Shield")
+
+    orihime_test_game.queue_action(0, 0, [0])
+    orihime_test_game.execute_empty_round()
+
+    orihime_test_game.queue_action(0, 2, [0])
+    orihime_test_game.execute_empty_round()
+
+    orihime_test_game.queue_action(0, 3, [1])
+    orihime_test_game.execute_empty_round()
+
+    assert not orihime_test_game.eteam[0].has_effect(EffectType.ALL_DR, "Lone-God Slicing Shield")
+
+#endregion
+
+#region Rukia Tests
+
+def test_tsukishiro(rukia_test_game: TestGame):
+    rukia_test_game.execute_turn()
+
+    rukia_test_game.queue_enemy_action(0, 3, [0])
+    rukia_test_game.execute_enemy_turn()
+
+    rukia_test_game.queue_action(0, 0, [3])
+    rukia_test_game.execute_turn()
+
+    assert rukia_test_game.eteam[0].source.hp == 75
+    assert rukia_test_game.eteam[0].is_stunned()
+
+def test_shirafune(rukia_test_game: TestGame):
+    rukia_test_game.queue_action(0, 2, [0])
+    rukia_test_game.execute_turn()
+
+    rukia_test_game.queue_enemy_action(0, 1, [3])
+    rukia_test_game.execute_enemy_turn()
+    
+    rukia_test_game.queue_action(0, 1, [3, 4, 5])
+    rukia_test_game.execute_turn()
+
+    assert rukia_test_game.eteam[1].source.hp == 100
+    assert rukia_test_game.eteam[0].source.hp == 70
+    assert rukia_test_game.eteam[0].is_stunned()
+
+#endregion
+
+#region Byakuya Tests
+
+def test_white_imperial_sword(byakuya_test_game: TestGame):
+    byakuya_test_game.pteam[0].source.hp = 40
+
+    byakuya_test_game.queue_action(0, 2, [0])
+    byakuya_test_game.execute_empty_round()
+
+    byakuya_test_game.queue_action(0, 2, [3])
+    byakuya_test_game.execute_turn()
+
+    assert byakuya_test_game.eteam[0].source.hp == 40
+
+#endregion
+
+#region Ichimaru Tests
+
+
 
 #endregion
 

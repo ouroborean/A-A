@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-import dataclasses
 
 @dataclass
 class Mission:
@@ -9,10 +8,10 @@ class Mission:
 
 mission_db = {
                 "naruto": (Mission(max=30, description="Spend turns under the effect of Shadow Clones."), 
-                           Mission(max=20, description="Stun enemies with Uzumaki Barrage."),
+                           Mission(max=30, description="Deal killing blows while under the effect of Shadow Clones."),
                            Mission(max=25, description="Deal killing blows while in Sage Mode."),
-                           Mission(max=5, description="Strike all 3 enemies with Toad Taijutsu in a single match."),
-                           Mission(max=10, description="Kill enemies with only damage from Rasengan.")
+                           Mission(max=10, description="Deal killing blows with Rasenshuriken."),
+                           Mission(max=10, description="Use Rasengan, Odama Rasengan and Senpou - Rasenrengan against the same enemy.")
                         ),
                 "itachi": (Mission(max=10, description="Apply Amaterasu to all 3 enemies in a single match."),
                            Mission(max=30, description="Have enemies spend turns stunned by Tsukuyomi."),
@@ -178,11 +177,11 @@ mission_db = {
                             Mission(max=30, description="Deal killing blows with Trap of Argalia - Down With A Touch!"),
                             Mission(max=20, description="Remove hostile effects with La Black Luna."),
                             Mission(max=10, description="Deal killing blows to enemies affected by La Black Luna.")),
-                "misaka": (Mission(max=10, description="Deal killing blows with Railgun while under the effect of Electric Rage."),
-                           Mission(max=10, description="Absorb killing blows while under the effect of Electric Rage."),
-                           Mission(max=500, description="Deal or absorb damage with Iron Sand."),
-                           Mission(max=15, description="Strike invulnerable enemies with Railgun."),
-                           Mission(max=1000, description="Deal damage with Railgun.")),
+                "misaka": (Mission(max=20, description="Win matches under the effect of Ultra Railgun."),
+                           Mission(max=30, description="Deal killing blows with Railgun or Ultra Railgun."),
+                           Mission(max=750, description="Absorb damage with Iron Sand."),
+                           Mission(max=40, description="Gain stacks of Overcharge."),
+                           Mission(max=5, description="Win games with Misaka under the effect of Level-6 Shift, where she is the last living member of your team.")),
                 "kuroko": (Mission(max=50, description="Spend turns while invulnerable."),
                            Mission(max=25, description="Stun enemies with Needle Pin."),
                            Mission(max=25, description="Drain energy with Judgement Throw."),
@@ -384,5 +383,11 @@ mission_db = {
                                 Mission(max=0, description=""),
                                 Mission(max=0, description=""),
                                 Mission(max=0, description=""),
-                                )
+                                ),
+                "chelsea": (Mission(max=0, description=""),
+                                Mission(max=0, description=""),
+                                Mission(max=0, description=""),
+                                Mission(max=0, description=""),
+                                Mission(max=0, description=""),
+                                ),
             }

@@ -118,7 +118,7 @@ async def server_loop(scene_manager):
         await asyncio.sleep(.1)
     
 
-async def game_loop(scene_manager, uiprocessor, window, server_loop_task):
+async def game_loop(scene_manager: SceneManager, uiprocessor, window, server_loop_task):
     running = True
     tasktask = asyncio.create_task(server_loop_task)
     while running:
@@ -129,6 +129,8 @@ async def game_loop(scene_manager, uiprocessor, window, server_loop_task):
             if event.type == sdl2.SDL_QUIT:
                 tasktask.cancel()
                 await tasktask
+                if scene_manager.current_scene == scene_manager.battle_scene:
+                    scene_manager.battle_scene.timer.cancel()
                 running = False
                 break
             if event.type == sdl2.SDL_KEYDOWN:
@@ -186,6 +188,8 @@ async def game_loop(scene_manager, uiprocessor, window, server_loop_task):
                     break
         scene_manager.battle_scene.target_clicked = False
         if scene_manager.current_scene == scene_manager.battle_scene:
+            if not scene_manager.battle_scene.waiting_for_turn:
+                scene_manager.battle_scene.draw_timer_region()
             for manager in scene_manager.current_scene.player_display.team.character_managers:
                 if manager.source.hp != manager.source.current_hp:
                     manager.draw_hp_bar()
@@ -205,9 +209,6 @@ async def game_loop(scene_manager, uiprocessor, window, server_loop_task):
         scene_manager.frame_count += 1
         if scene_manager.frame_count > 60:
             scene_manager.frame_count = 0
-        # for animation in scene_manager.current_scene.animations:
-        #     if animation.active and scene_manager.frame_count % animation.rate == 0:
-        #         animation.trigger()
         sleep_duration = max((1.0 / target_fps.get()) - elapsed_time, 0)
         await asyncio.sleep(sleep_duration)
     logging.debug("Broke game loop!")

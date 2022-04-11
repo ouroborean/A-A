@@ -36,7 +36,7 @@ class ByteBuffer():
         self.buff_updated = True
 
     def write_int(self, input: int):
-        self.buff.extend(input.to_bytes(4, 'big'))
+        self.buff.extend(input.to_bytes(4, 'big', signed=True))
         self.buff_updated = True
     
     def write_string(self, input: str):
@@ -57,7 +57,7 @@ class ByteBuffer():
         if self.count() > self.read_pos:
             if self.buff_updated:
                 self.buff_updated = False
-            output = int.from_bytes(self.buff[self.read_pos:self.read_pos+4], 'big')
+            output = int.from_bytes(self.buff[self.read_pos:self.read_pos+4], 'big', signed=True)
             if peek and self.count() > self.read_pos:
                 self.read_pos += 4
             return output

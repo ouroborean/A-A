@@ -1,7 +1,7 @@
 import enum
 import typing
 
-from typing import Optional, Union
+from typing import Union
 
 import sdl2
 import sdl2.ext
@@ -43,7 +43,7 @@ class EffectType(enum.IntEnum):
     CONT_UNIQUE = 26
     MARK = 27
     COOLDOWN_MOD = 28
-    COUNTER = 29
+    COUNTER_RECEIVE = 29
     REFLECT = 30
     CONT_AFF_DMG = 31
     PASSIVE = 32
@@ -66,6 +66,7 @@ class EffectType(enum.IntEnum):
     CONSECUTIVE_TRACKER = 49
     CONSECUTIVE_BUFFER = 50
     SPECIFIC_STUN = 51
+    COUNTER_USE = 52
 
 
 class Effect:

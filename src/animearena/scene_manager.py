@@ -1,11 +1,9 @@
 import sdl2
 import sdl2.ext
-import sdl2dll
 from typing import Tuple
 import typing
 import importlib.resources
 from PIL import Image
-from animearena import battle_scene, character
 from animearena.character import get_character_db
 from playsound import playsound
 
@@ -15,6 +13,7 @@ if typing.TYPE_CHECKING:
     from animearena.login_scene import LoginScene
     from animearena.tutorial_scene import TutorialScene
     from animearena.client import ConnectionHandler
+    from animearena.engine import Scene
 
 def get_image_from_path(file_name: str) -> Image:
     with importlib.resources.path('animearena.resources', file_name) as path:
@@ -34,6 +33,7 @@ class SceneManager:
     tutorial_scene: "TutorialScene"
     frame_count: int
     connection: "ConnectionHandler"
+    current_scene: "Scene"
     def __init__(self, window: sdl2.ext.Window = None):
         self.frame_count = 0
         self.surfaces = {}

@@ -1,12 +1,6 @@
-import pathlib
-import PIL
-from pathlib import Path
-import sdl2
 import sdl2.ext
 import copy
 import typing
-import os
-import sys
 import importlib.resources
 from PIL import Image
 from animearena.energy import Energy
@@ -250,6 +244,7 @@ def make_character_db():
                 " fires energy blasts which become more dangerous with the situation its wielder finds themselves in."),
                 "raba": Character("raba", "Lubbock, an assassin working for Night Raid. With his wire Teigu 'Cross Tail', Lubbock is a versatile killer that can use razor-sharp threads to deliver lethal blows or defend his allies."),
                 "sheele": Character("sheele", "Sheele, an assassin of Night Raid. A compassionate woman who, in a moment of life-threatening danger, discovered she had a talent for murder. She wields Extase, a pair of giant scissors that can cut through anything."),
+                "chelsea": Character("chelsea", "Chelsea, an assassin of Night Raid. Chelsea is a lifetime assassin and the longest-standing member of the Revoluationary Army in Night Raid. Using her Teigu Gaia Foundation, she can take on her enemies' appearances and set deadly traps."),
                 "seryu": Character("seryu", "Seryu Ubiquitous, former member of the Imperial Guard. After Esdeath forms the Jaegers to hunt down Night Raid, Seryu joins the group to get vengeance on the" +
                 " criminals who killed her mentor. Twisted by the darkness in the capitol, and her own sense of justice, Seryu uses her living Teigu 'Koro' to slay evil wherever she finds it."),
                 "kurome": Character("kurome", "Kurome, the younger sister of Akame. Seperated during their youth to be trained as assassins, Kurome and Akame's paths led them to opposite sides of the battlefield. Armed with " + 

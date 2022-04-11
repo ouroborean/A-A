@@ -3,8 +3,6 @@ from typing import Union
 import os
 import threading
 import gc
-import tkinter as tk
-from tkinter import filedialog
 import sdl2
 import sdl2.ext
 import sdl2.surface
@@ -13,15 +11,11 @@ import importlib.resources
 import easygui
 from PIL import Image
 import dill as pickle
-from io import StringIO
-
 from animearena import engine
 from animearena import character
-from animearena import player
-from animearena.character import Character, get_character_db, get_image_from_path
-from animearena.ability import Ability
-from animearena.engine import FilterType
 from animearena.player import Player
+from animearena.character import Character, get_character_db
+from animearena.ability import Ability
 from animearena.mission import mission_db
 from playsound import playsound
 
@@ -637,9 +631,8 @@ class CharacterSelectScene(engine.Scene):
             self.clicked_search = True
             names = [x.name for x in self.selected_team]
             image = {"mode": self.player_profile.mode, "size": self.player_profile.size, "pixels": self.player_profile.tobytes()}
-            player_pouch = [self.player_name, self.player_wins, self.player_losses, image]
-            pickled_player = pickle.dumps(player_pouch)
-            self.scene_manager.connection.send_start_package(names, pickled_player)
+            player_pouch = [self.player_name, self.player_wins, self.player_losses, image["mode"], image["size"], image["pixels"]]
+            self.scene_manager.connection.send_start_package(names, player_pouch)
             self.window_up = True
             self.render_search_panel()
 
@@ -663,6 +656,7 @@ class CharacterSelectScene(engine.Scene):
         self.wintag = self.create_text_display(self.font, f"Wins: {self.player_wins}", BLACK, WHITE, 0, 0, 95)
         self.losstag = self.create_text_display(self.font, f"Losses: {self.player_losses}", BLACK, WHITE, 0, 0, 95)
         if ava_code:
+            
             new_image = pickle.loads(ava_code)
 
             self.player_profile = Image.frombytes(mode = new_image["mode"], size = new_image["size"], data=new_image["pixels"])
@@ -671,16 +665,16 @@ class CharacterSelectScene(engine.Scene):
         
         self.full_render()
 
-    def start_battle(self, enemy_names, pickled_player, energy):
+    def start_battle(self, enemy_names, enemy_pouch, energy):
         """Function called by Scene Manager to move from Character Select Scene to
            In-Game Scene after receiving an enemy start package from the server"""
         enemy_team = [Character(name) for name in enemy_names]
         
-        player_pouch = pickle.loads(pickled_player)
+        enemy_pouch[6] = bytes(enemy_pouch[6])
 
-        enemy_ava = Image.frombytes(player_pouch[3]["mode"], player_pouch[3]["size"], player_pouch[3]["pixels"])
+        enemy_ava = Image.frombytes(enemy_pouch[3], (enemy_pouch[4], enemy_pouch[5]), enemy_pouch[6])
 
-        enemy = Player(player_pouch[0], player_pouch[1], player_pouch[2], enemy_ava)
+        enemy = Player(enemy_pouch[0], enemy_pouch[1], enemy_pouch[2], enemy_ava)
 
         
 

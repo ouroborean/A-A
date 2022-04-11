@@ -2,7 +2,6 @@ import sdl2
 import sdl2.ext
 import sdl2.surface
 import sdl2.sdlttf
-from animearena.player import Player
 from animearena import engine
 from PIL import Image
 import importlib.resources
