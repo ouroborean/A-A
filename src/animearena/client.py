@@ -9,11 +9,29 @@ from animearena.character import Character
 from typing import Callable
 import typing
 from animearena.battle_scene import AbilityMessage
-
+import hashlib
 if typing.TYPE_CHECKING:
     from animearena.scene_manager import SceneManager
 
 VERSION = "0.9.915"
+
+SALT = b'gawr gura for president'
+
+def hash_the_password(password: str) -> str:
+    digest = hashlib.scrypt(password.encode(encoding="utf-8"),
+                            salt=SALT,
+                            n=16384,
+                            r=8,
+                            p=1)
+    return digest.hex()
+
+def nonce_the_digest(digest: str, nonce: int) -> str:
+    new_digest = hashlib.scrypt(digest.encode(encoding='utf-8'),
+                            salt=str(nonce).encode(encoding='utf-8'),
+                            n=16384,
+                            r=8,
+                            p=1)
+    return new_digest.hex()
 
 class ConnectionHandler:
 
@@ -38,7 +56,8 @@ class ConnectionHandler:
             5: self.handle_surrender_notification,
             6: self.handle_reconnection,
             7: self.handle_version_check,
-            8: self.handle_timeout
+            8: self.handle_timeout,
+            9: self.handle_login_nonce
         }
 
     
@@ -55,6 +74,8 @@ class ConnectionHandler:
         print(f"Running on version: {VERSION}. Newest version: {newest_version}")
         if VERSION != newest_version:
             
+            self.scene_manager.login_scene.updating=True
+            self.scene_manager.login_scene.full_render()
             
             s = sys.argv[0]
             
@@ -84,7 +105,6 @@ class ConnectionHandler:
             
             abs_path = pathlib.Path().resolve()
             if os.path.exists("temp.config"):
-                print("Found old config file")
                 with open("temp.config", "r") as f:
                     old_file = f.read().strip()
                 os.remove("temp.config")
@@ -142,7 +162,6 @@ class ConnectionHandler:
     def update_avatar(self, avatar: bytes):
         buffer = ByteBuffer()
         buffer.write_int(4)
-        print(len(list(avatar)))
         buffer.write_int(len(list(avatar)))
         buffer.write_bytes(list(avatar))
         buffer.write_byte(b'\x1f\x1f\x1f')
@@ -162,7 +181,6 @@ class ConnectionHandler:
 
 
     def handle_login_failure(self, data:list[bytes]):
-        print("Received login information back")
         buffer = ByteBuffer()
         buffer.write_bytes(data)
         buffer.read_int()
@@ -242,23 +260,39 @@ class ConnectionHandler:
         
         buffer.write_int(3)
         buffer.write_string(username)
-        buffer.write_string(password)
+        
+        digest = hash_the_password(password)
+        buffer.write_string(digest)
         buffer.write_byte(b'\x1f\x1f\x1f')
-        print(len(buffer.get_byte_array()))
         if self.writer.write(buffer.get_byte_array()):
             self.waiting_for_registration = True
         buffer.clear()
 
-    def send_login_attempt(self, username: str, password: str):
-        print("Sent login")
+    def request_login_nonce(self):
+        buffer = ByteBuffer()
+        buffer.write_int(11)
+        buffer.write_byte(b'\x1f\x1f\x1f')
+        self.writer.write(buffer.get_byte_array())
+        buffer.clear()
+    
+    def handle_login_nonce(self, data:list[bytes]):
+        buffer = ByteBuffer()
+        buffer.write_bytes(data)
+        buffer.read_int()
+        nonce_key = buffer.read_int()
+        digest = hash_the_password(self.scene_manager.password_raw)
+        nonced_digest = nonce_the_digest(digest, nonce_key)
+        self.send_login_attempt(nonced_digest)
+        
+
+    def send_login_attempt(self, password_digest: str):
         buffer = ByteBuffer()
         buffer.write_int(2)
-        buffer.write_string(username.strip())
-        buffer.write_string(password.strip())
+        buffer.write_string(self.scene_manager.username_raw)
+        buffer.write_string(password_digest)
         buffer.write_byte(b'\x1f\x1f\x1f')
         if self.writer.write(buffer.get_byte_array()):
             self.waiting_for_login = True
-        
         buffer.clear()
 
     def send_match_ending(self):
@@ -269,7 +303,6 @@ class ConnectionHandler:
         buffer.clear()
 
     def send_start_package(self, names: list[str], player_pouch: bytes):
-        print("Sending start package!")
         buffer = ByteBuffer()
         buffer.write_int(0)
         for name in names:
@@ -285,10 +318,8 @@ class ConnectionHandler:
         buffer.write_bytes(player_pouch[5])
 
         buffer.write_byte(b'\x1f\x1f\x1f')
-        print(len(buffer.get_byte_array()))
         if self.writer.write(buffer.get_byte_array()):
             self.waiting_for_opponent = True
-            print("Sent start package!")
         buffer.clear()
     
     def send_match_communication(self, ability_messages: list[AbilityMessage], random_spent: list[int]):
@@ -311,20 +342,6 @@ class ConnectionHandler:
         buffer.write_byte(b'\x1f\x1f\x1f')
         self.writer.write(buffer.get_byte_array())
         buffer.clear()
-
-    def check_for_message(self):
-        msg = ""
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.setblocking(0)
-            s.connect(("127.0.0.1", 5692))
-            msg = s.recv(120000)
-        except BlockingIOError:
-            pass
-        except OSError:
-            pass
-        if msg:
-            print(msg.decode('utf-8'))
 
     def handle_reconnection(self, data:list[bytes]):
         buffer = ByteBuffer()
@@ -355,7 +372,6 @@ class ConnectionHandler:
         first_turn = buffer.read_int()
 
         time_remaining = buffer.read_int()
-        print(time_remaining)
 
         turn_count = buffer.read_int()
         all_turns = list()

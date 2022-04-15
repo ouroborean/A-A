@@ -74,6 +74,13 @@ class SpecificMagMission(Mission):
                 return False
         return True
 
+class FullHealthMission(Mission):
+    
+    def conditions_met(self, character: CharacterManager) -> bool:
+        if character.source.hp >= 100:
+            return True
+        return False
+
 class ExclusionMission(Mission):
     
     def __init__(self, mission_num: int, mission_increment: int, eff_req: effect_requirement = None, eff_req_reversed: bool = False, mag_req: int = 0, excluded_effect: effect_requirement = None):
@@ -87,6 +94,13 @@ class ExclusionMission(Mission):
                 return False
         if character.has_effect(self.excluded_effect.type, self.excluded_effect.name):
             return False
+        return True
+    
+class NoDeathMission(Mission):
+    def conditions_met(self, character: CharacterManager) -> bool:
+        for ally in character.player_team:
+            if ally.source.dead:
+                return False
         return True
 
 class AbilityDamageMission:
@@ -184,5 +198,9 @@ win_mission_handler: dict[str, list[Mission]] = {
     "saitama": [Mission(5, 1, effect_requirement(EffectType.SYSTEM, "SaitamaMission5Tracker"), mag_req=3), ExclusionMission(4, 1, effect_requirement(EffectType.SYSTEM, "SaitamaMission4Tracker"), excluded_effect=effect_requirement(EffectType.SYSTEM, "SaitamaMission4Failure"))],
     "touka": [Mission(5, 1, effect_requirement(EffectType.SYSTEM, "ToukaMission5Failure"), eff_req_reversed=True)],
     "swimswim": [LastManStandingMission(3, 1)],
-    "misaka": [Mission(1, 1, effect_requirement(EffectType.MARK, "Ultra Railgun")), LastManStandingMission(5, 1, effect_requirement(EffectType.MARK, "Level-6 Shift"))]
+    "misaka": [Mission(1, 1, effect_requirement(EffectType.MARK, "Ultra Railgun")), LastManStandingMission(5, 1, effect_requirement(EffectType.MARK, "Level-6 Shift"))],
+    "gilgamesh": [FullHealthMission(2, 1)],
+    "jeanne": [NoDeathMission(4, 1), Mission(5, 1, effect_requirement(EffectType.SYSTEM, "JeanneMission5Tracker"))],
+    "accelerator": [Mission(5, 1, effect_requirement(EffectType.SYSTEM, "AcceleratorMission5Tracker")), ExclusionMission(2, 1, effect_requirement(EffectType.SYSTEM, "AcceleratorMission2Tracker"), excluded_effect=effect_requirement(EffectType.SYSTEM, "AcceleratorMission2Failure"))],
+    "chelsea": [FullHealthMission(1, 1), ExclusionMission(5, 1, effect_requirement(EffectType.SYSTEM, "ChelseaMission5Tracker"), excluded_effect=effect_requirement(EffectType.SYSTEM, "ChelseaMission5Failure"))]
 }

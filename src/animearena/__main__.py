@@ -9,9 +9,6 @@ import sdl2
 import sdl2.ext
 import sdl2.sdlttf
 from playsound import playsound
-from animearena import character_select_scene, tutorial_scene
-from animearena import battle_scene
-from animearena import login_scene
 from animearena import client
 from animearena.byte_buffer import ByteBuffer
 from animearena.scene_manager import SceneManager
@@ -21,6 +18,9 @@ from pydub.playback import play
 
 
 WHITE = sdl2.SDL_Color(255, 255, 255)
+
+MAX_RETRIES = 5
+CURRENT_TIMEOUTS = 0
 
 def main():
     """Main game entry point."""
@@ -39,43 +39,35 @@ def main():
     window.show()
     
     
-    uiprocessor = sdl2.ext.UIProcessor()
-    scene_manager = SceneManager(window)
-    cm = client.ConnectionHandler(scene_manager)
-    scene_manager.bind_connection(cm)
-
-    scene_manager.char_select = character_select_scene.make_character_select_scene(scene_manager)
-
-    scene_manager.battle_scene = battle_scene.make_battle_scene(scene_manager)
-
-    scene_manager.login_scene = login_scene.make_login_scene(scene_manager)
-
-    scene_manager.tutorial_scene = tutorial_scene.make_tutorial_scene(scene_manager)
-
-    scene_manager.set_scene_to_current(scene_manager.login_scene)
-    scene_manager.spriterenderer.render(scene_manager.current_scene.renderables())
-
-    server_loop_task = server_loop(scene_manager)
-    game_loop_task = game_loop(scene_manager, uiprocessor, window, server_loop_task)
     
     
+    with SceneManager(window) as scene_manager:
     
-    asyncio.run(game_loop_task)
-    
-    
+        cm = client.ConnectionHandler(scene_manager)
+        
+        scene_manager.bind_connection(cm)
 
+        scene_manager.initialize_scenes()
 
-    sdl2.ext.quit()
-    return 0
+        scene_manager.set_scene_to_current(scene_manager.login_scene)
+
+        server_loop_task = server_loop(scene_manager)
+        
+        game_loop_task = game_loop(scene_manager, window, server_loop_task)
+        
+        asyncio.run(game_loop_task)
+        
+        sdl2.ext.quit()
+        
+        return 0
 
 
 target_fps = contextvars.ContextVar('target_fps', default=60)
 
-async def server_loop(scene_manager):
+async def server_loop(scene_manager: SceneManager):
     VERSION_CHECKED = False
-    max_retries = 5
-    timeouts = 0
     cancelled = False
+    timeouts = 0
     while not scene_manager.connected:
         try:
             #34.125.127.187
@@ -84,7 +76,7 @@ async def server_loop(scene_manager):
             scene_manager.connected = True
             scene_manager.connection.writer = writer
         except asyncio.TimeoutError:
-            if timeouts < max_retries:
+            if timeouts < MAX_RETRIES:
                 timeouts += 1
             else:
                 #TODO Display server connection error message
@@ -112,18 +104,18 @@ async def server_loop(scene_manager):
             buffer.write_bytes(data[:-3])
             packet_id = buffer.read_int(False)
             logging.debug(f"Received packet id: {packet_id}")
-            scene_manager.connection.packets[packet_id](data)
+            scene_manager.dispatch_message(packet_id, data)
             buffer.clear()
         
         await asyncio.sleep(.1)
     
 
-async def game_loop(scene_manager: SceneManager, uiprocessor, window, server_loop_task):
+async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server_loop_task):
     running = True
     tasktask = asyncio.create_task(server_loop_task)
     while running:
         start = time.monotonic()
-        scene_manager.current_scene.triggered_event = False
+        scene_manager.reset_event_trigger()
         events = sdl2.ext.get_events()
         for event in events:
             if event.type == sdl2.SDL_QUIT:
@@ -138,66 +130,19 @@ async def game_loop(scene_manager: SceneManager, uiprocessor, window, server_loo
                     scene_manager.play_sound(scene_manager.sounds["click"])
                     scene_manager.login_scene.send_login()
                 if event.key.keysym.sym == sdl2.SDLK_TAB and scene_manager.current_scene == scene_manager.login_scene:
-                    if scene_manager.login_scene.username_entry:
-                        scene_manager.play_sound(scene_manager.sounds["click"])
-                        scene_manager.login_scene.username_entry = False
-                        scene_manager.login_scene.password_entry = True
-                        current_text = scene_manager.login_scene.password_box.text
-                        scene_manager.login_scene.password_box = scene_manager.login_scene.ui_factory.from_color(sdl2.ext.TEXTENTRY, WHITE, (150, 25))
-                        scene_manager.login_scene.password_box.pressed += scene_manager.login_scene.select_password
-                        scene_manager.login_scene.password_box.input += scene_manager.login_scene.edit_password_text
-                        uiprocessor.activate(scene_manager.login_scene.password_box)
-                        scene_manager.login_scene.password_box.text = current_text
-                        hidden_string = ""
-                        for i in range(len(scene_manager.login_scene.password_box.text)):
-                            hidden_string += "*"
-                        scene_manager.login_scene.print_text_on_box(hidden_string, scene_manager.login_scene.password_box)
-                        scene_manager.login_scene.full_render()
-                    elif scene_manager.login_scene.password_entry:
-                        scene_manager.play_sound(scene_manager.sounds["click"])
-                        scene_manager.login_scene.password_entry = False
-                        scene_manager.login_scene.username_entry = True
-                        current_text = scene_manager.login_scene.username_box.text
-                        scene_manager.login_scene.username_box = scene_manager.login_scene.ui_factory.from_color(sdl2.ext.TEXTENTRY, WHITE, (150, 25))
-                        scene_manager.login_scene.username_box.pressed += scene_manager.login_scene.select_username
-                        scene_manager.login_scene.username_box.input += scene_manager.login_scene.edit_username_text                        
-                        uiprocessor.activate(scene_manager.login_scene.username_box)
-                        scene_manager.login_scene.username_box.text = current_text
-                        scene_manager.login_scene.print_text_on_box(current_text, scene_manager.login_scene.username_box)
-                        scene_manager.login_scene.full_render()
+                    scene_manager.login_scene.tab_between_boxes()
                 if event.key.keysym.sym == sdl2.SDLK_BACKSPACE and scene_manager.current_scene == scene_manager.login_scene:
-                    if scene_manager.login_scene.username_entry:
-                        current_text = scene_manager.login_scene.username_box.text
-                        scene_manager.login_scene.username_box = scene_manager.login_scene.ui_factory.from_color(sdl2.ext.TEXTENTRY, WHITE, (150, 25))
-                        scene_manager.login_scene.username_box.pressed += scene_manager.login_scene.select_username
-                        scene_manager.login_scene.username_box.input += scene_manager.login_scene.edit_username_text                        
-                        uiprocessor.activate(scene_manager.login_scene.username_box)
-                        scene_manager.login_scene.username_box.text = current_text
-                    elif scene_manager.login_scene.password_entry:
-                        current_text = scene_manager.login_scene.password_box.text
-                        scene_manager.login_scene.password_box = scene_manager.login_scene.ui_factory.from_color(sdl2.ext.TEXTENTRY, WHITE, (150, 25))
-                        scene_manager.login_scene.password_box.pressed += scene_manager.login_scene.select_password
-                        scene_manager.login_scene.password_box.input += scene_manager.login_scene.edit_password_text
-                        uiprocessor.activate(scene_manager.login_scene.password_box)
-                        scene_manager.login_scene.password_box.text = current_text
-                    
-                    scene_manager.login_scene.handle_backspace()
+                    scene_manager.login_scene.prepare_backspace()
             for sprite in scene_manager.current_scene.eventables():
-                uiprocessor.dispatch(sprite, event)
+                scene_manager.uiprocessor.dispatch(sprite, event)
                 if scene_manager.current_scene.triggered_event:
                     break
         scene_manager.battle_scene.target_clicked = False
         if scene_manager.current_scene == scene_manager.battle_scene:
             if not scene_manager.battle_scene.waiting_for_turn:
                 scene_manager.battle_scene.draw_timer_region()
-            for manager in scene_manager.current_scene.player_display.team.character_managers:
-                if manager.source.hp != manager.source.current_hp:
-                    manager.draw_hp_bar()
-            for manager in scene_manager.current_scene.enemy_display.team.character_managers:
-                if manager.source.hp != manager.source.current_hp:
-                    manager.draw_hp_bar()
+            scene_manager.battle_scene.check_for_hp_bar_changes()
             scene_manager.battle_scene.get_hovered_button()
-            
             scene_manager.battle_scene.show_hover_text()
         if scene_manager.current_scene.window_closing:
             scene_manager.current_scene.window_closing = False

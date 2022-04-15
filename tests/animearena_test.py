@@ -8,7 +8,7 @@ from animearena.scene_manager import SceneManager
 import logging
 import pytest
 
-from animearena.battle_scene import BattleScene, make_battle_scene, CharacterManager, MatchPouch, AbilityMessage
+from animearena.battle_scene import BattleScene, make_battle_scene, CharacterManager, AbilityMessage
 
 
 class TestGame:

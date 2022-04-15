@@ -368,26 +368,26 @@ mission_db = {
                                  Mission(max=10, description="Deal killing blows after absorbing abilities with Galvanism."),
                                  Mission(max=10, description="Deal killing blows against enemies above half health with Blasted Tree.")),
                 "gilgamesh":    (Mission(max=40, description="Deal killing blows with Gate of Babylon."),
-                                 Mission(max=25, description="Win games with Gilgamesh at full health."),
-                                 Mission(max=20, description="Deal killing blows with Gilgamesh at full health."),
-                                 Mission(max=15, description="Deal killing blows against enemies that were countered by Enkidu, Chains of Heaven."),
+                                 Mission(max=25, description="Win games with Gilgamesh at full health."), 
+                                 Mission(max=20, description="Deal killing blows with Gilgamesh at full health."), 
+                                 Mission(max=15, description="Deal killing blows against enemies that were countered by Enkidu, Chains of Heaven."), 
                                  Mission(max=20, description="Use Enuma Elish against enemies that only use Weapon and Random energy.")),
-                "jeanne":       (Mission(max=0, description=""),
-                                Mission(max=0, description=""),
-                                Mission(max=0, description=""),
-                                Mission(max=0, description=""),
-                                Mission(max=0, description=""),
+                "jeanne":       (Mission(max=35, description="Deal killing blows with allies affected by Flag of the Ruler."), #
+                                Mission(max=25, description="Protect allies with Luminosite Eternelle."), #
+                                Mission(max=40, description="Absorb damaging abilities with Flag of the Ruler."), #
+                                Mission(max=10, description="Win matches where no allied characters die."), #
+                                Mission(max=5, description="Win matches where Jeanne kills herself with Crimson Holy Maiden."), #
                                 ),
-                "accelerator": (Mission(max=0, description=""),
-                                Mission(max=0, description=""),
-                                Mission(max=0, description=""),
-                                Mission(max=0, description=""),
-                                Mission(max=0, description=""),
+                "accelerator": (Mission(max=25, description="Deal killing blows with Accelerator at full health."), #
+                                Mission(max=10, description="Win matches where Accelerator only uses Vector Scatter (at least one)."), #
+                                Mission(max=25, description="Counterattack enemies with Vector Reflection."), #
+                                Mission(max=15, description="Deal killing blows with Plasma Bomb."), #
+                                Mission(max=1, description="Activate Plasma Bomb while Accelerator is your last living character, then win the match."), #
                                 ),
-                "chelsea": (Mission(max=0, description=""),
-                                Mission(max=0, description=""),
-                                Mission(max=0, description=""),
-                                Mission(max=0, description=""),
-                                Mission(max=0, description=""),
+                "chelsea": (Mission(max=10, description="Win matches with Chelsea at full health."), #
+                                Mission(max=25, description="Counter enemies with Those Who Fight In The Shadows."), #
+                                Mission(max=30, description="Deal killing blows with Mortal Wound."), #
+                                Mission(max=15, description="Damage countering enemies with Emergency Smoke."), #
+                                Mission(max=5, description="Win matches where Chelsea only uses Mortal Wound against enemies affected by Those Who Fight In The Shadows (at least one)."), #
                                 ),
             }

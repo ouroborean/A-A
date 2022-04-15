@@ -1,40 +1,27 @@
 from pathlib import Path
 from typing import Union
-import os
 import threading
 import gc
 import sdl2
 import sdl2.ext
 import sdl2.surface
 import sdl2.sdlttf
-import importlib.resources
 import easygui
 from PIL import Image
 import dill as pickle
 from animearena import engine
-from animearena import character
 from animearena.player import Player
 from animearena.character import Character, get_character_db
 from animearena.ability import Ability
 from animearena.mission import mission_db
+from animearena.resource_manager import init_font
 from playsound import playsound
-
-def get_path(file_name: str) -> Path:
-    with importlib.resources.path('animearena.resources', file_name) as path:
-        return path
 
 def play_sound(file_name: str):
     # with importlib.resources.path('animearena.resources', file_name) as path:
     #     playsound(str(path), False)
     pass
 FONTSIZE = 16
-FONT_FILENAME = "Basic-Regular.ttf"
-
-def init_font():
-    with importlib.resources.path('animearena.resources', FONT_FILENAME) as path:
-        return sdl2.sdlttf.TTF_OpenFont(str.encode(os.fspath(path)), FONTSIZE)
-
-
 
 RESOURCES = Path(__file__).parent.parent.parent / "resources"
 BLUE = sdl2.SDL_Color(0, 0, 255)
@@ -44,8 +31,6 @@ PURPLE = sdl2.SDL_Color(255, 60, 255)
 AQUA = sdl2.SDL_Color(30, 190, 210)
 BLACK = sdl2.SDL_Color(0, 0, 0)
 WHITE = sdl2.SDL_Color(255, 255, 255)
-
-TEST_ENEMY_TEAM = [character.get_character("jack"), character.get_character("jiro"), character.get_character("raba")]
 
 class CharacterSelectScene(engine.Scene):
 
@@ -81,7 +66,7 @@ class CharacterSelectScene(engine.Scene):
         self.display_character = None
         self.searching = False
         self.player_name = ""
-        self.font = init_font()
+        self.font = init_font(FONTSIZE)
         self.player_profile_lock = threading.Lock()
         self.selected_team = []
         self.clicked_search = False

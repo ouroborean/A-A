@@ -5,13 +5,13 @@ import typing
 import importlib.resources
 from PIL import Image
 from animearena.character import get_character_db
+from animearena.character_select_scene import CharacterSelectScene, make_character_select_scene
+from animearena.battle_scene import BattleScene, make_battle_scene
+from animearena.login_scene import LoginScene, make_login_scene
+from animearena.tutorial_scene import TutorialScene, make_tutorial_scene
 from playsound import playsound
 
 if typing.TYPE_CHECKING:
-    from animearena.character_select_scene import CharacterSelectScene
-    from animearena.battle_scene import BattleScene
-    from animearena.login_scene import LoginScene
-    from animearena.tutorial_scene import TutorialScene
     from animearena.client import ConnectionHandler
     from animearena.engine import Scene
 
@@ -27,18 +27,25 @@ class SceneManager:
     connected: bool
     surfaces: dict
     sounds: dict
-    char_select: "CharacterSelectScene"
-    battle_scene: "BattleScene"
-    login_scene: "LoginScene"
-    tutorial_scene: "TutorialScene"
+    char_select: CharacterSelectScene
+    battle_scene: BattleScene
+    login_scene: LoginScene
+    tutorial_scene: TutorialScene
     frame_count: int
     connection: "ConnectionHandler"
     current_scene: "Scene"
+    username_raw: str
+    password_raw: str
+    uiprocessor: sdl2.ext.UIProcessor
+    
     def __init__(self, window: sdl2.ext.Window = None):
+        self.username_raw = ""
+        self.password_raw = ""
         self.frame_count = 0
-        self.surfaces = {}
-        self.sounds = {}
+        self.surfaces = dict()
+        self.sounds = dict()
         self.connection = None
+        self.uiprocessor = sdl2.ext.UIProcessor()
         if window:
             self.window = window
             self.factory = sdl2.ext.SpriteFactory(sdl2.ext.SOFTWARE, free=False)
@@ -101,14 +108,30 @@ class SceneManager:
         self.surfaces["how_to"] = get_image_from_path("how_to.png")
         self.connected = False
 
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, type, value, traceback):
+        print("Exited the scene manager!")
+        self.battle_scene.timer.cancel()
+
+    def dispatch_message(self, packet_id: int, data: list[bytes]):
+        self.connection.packets[packet_id](data)
+
     def play_sound(self, file_name: str):
         # with importlib.resources.path('animearena.resources', file_name) as path:
         #     playsound(str(path), False)
         pass
 
+    def initialize_scenes(self):
+        self.char_select = make_character_select_scene(self)
+        self.battle_scene = make_battle_scene(self)
+        self.login_scene = make_login_scene(self)
+        self.tutorial_scene = make_tutorial_scene(self)
 
-    def set_scene_to_current(self, scene):
+    def set_scene_to_current(self, scene: "Scene"):
         self.current_scene = scene
+        self.spriterenderer.render(self.current_scene.renderables())
 
     def bind_connection(self, connection):
         self.connection = connection
@@ -150,3 +173,7 @@ class SceneManager:
         self.window = sdl2.ext.Window(name, size)
         self.window.show()
         self.spriterenderer = self.factory.create_sprite_render_system(self.window)
+        
+    def reset_event_trigger(self):
+        self.current_scene.triggered_event = False  
+    

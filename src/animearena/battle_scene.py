@@ -1,15 +1,12 @@
-from time import time
 import sdl2
 import sdl2.ext
 import sdl2.surface
 import sdl2.sdlttf
 import itertools
 import textwrap
-import os
-import importlib.resources
 from animearena import engine
 from animearena.character import Character, get_character_db
-from animearena.ability import Ability, Target
+from animearena.ability import Ability, Target, DamageType
 from animearena.energy import Energy
 from animearena.effects import Effect, EffectType
 from animearena.player import Player
@@ -17,25 +14,18 @@ from animearena.character_manager import CharacterManager
 from random import randint
 from playsound import playsound
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 import typing
 from animearena.mission_handler import MissionHandler
 from animearena.turn_timer import TurnTimer
+from animearena.resource_manager import init_font
 
 if typing.TYPE_CHECKING:
     from animearena.scene_manager import SceneManager
 
-FONT_FILENAME = "Basic-Regular.ttf"
 FONTSIZE = 16
 COOLDOWN_FONTSIZE = 100
-STACK_FONTSIZE = 28
-INNER_STACK_FONTSIZE = 22
 
-
-def init_font(size: int):
-    with importlib.resources.path('animearena.resources',
-                                  FONT_FILENAME) as path:
-        return sdl2.sdlttf.TTF_OpenFont(str.encode(os.fspath(path)), size)
 
 
 def play_sound(file_name: str):
@@ -43,8 +33,6 @@ def play_sound(file_name: str):
     #     playsound(str(path), False)
     pass
 
-
-RESOURCES = Path(__file__).parent.parent.parent / "resources"
 BLUE = sdl2.SDL_Color(0, 0, 255)
 RED = sdl2.SDL_Color(255, 0, 0)
 GREEN = sdl2.SDL_Color(50, 190, 50)
@@ -53,7 +41,6 @@ AQUA = sdl2.SDL_Color(30, 190, 210)
 BLACK = sdl2.SDL_Color(0, 0, 0)
 WHITE = sdl2.SDL_Color(255, 255, 255)
 TRANSPARENT = sdl2.SDL_Color(255, 255, 255, 255)
-
 
 class AbilityMessage:
 
@@ -285,8 +272,6 @@ class BattleScene(engine.Scene):
         self.moving_first = False
         self.font = init_font(FONTSIZE)
         self.cooldown_font = init_font(COOLDOWN_FONTSIZE)
-        self.stack_font = init_font(STACK_FONTSIZE)
-        self.inner_stack_font = init_font(INNER_STACK_FONTSIZE)
         self.selected_ability = None
         self.acting_character = None
         self.exchanging_energy = False
@@ -883,6 +868,14 @@ class BattleScene(engine.Scene):
 
     #endregion
 
+    def check_for_hp_bar_changes(self):
+        for manager in self.pteam:
+            if manager.source.hp != manager.source.current_hp:
+                manager.draw_hp_bar()
+        for manager in self.eteam:
+            if manager.source.hp != manager.source.current_hp:
+                manager.draw_hp_bar()
+
     def start_timer(self, time: int = 90) -> TurnTimer:
         if self.timer:
             self.timer.cancel()
@@ -1060,14 +1053,14 @@ class BattleScene(engine.Scene):
                 if eff.check_waiting() and self.is_allied_effect(
                         eff, team_id) and (eff.mag > 15
                                            or not manager.deflecting()):
-                    eff.user.deal_eff_damage(eff.mag, manager, eff)
+                    eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.NORMAL)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_PIERCE_DMG)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(
                         eff, team_id) and (eff.mag > 15
                                            or not manager.deflecting()):
-                    eff.user.deal_eff_pierce_damage(eff.mag, manager, eff)
+                    eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.PIERCING)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_AFF_DMG)
             for eff in gen:
@@ -1076,7 +1069,7 @@ class BattleScene(engine.Scene):
                                            or not manager.deflecting()):
                     if eff.name == "Doping Rampage":
                         self.dying_to_doping = True
-                    eff.user.deal_eff_aff_damage(eff.mag, manager, eff)
+                    eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.AFFLICTION)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_HEAL)
             for eff in gen:
@@ -1109,21 +1102,21 @@ class BattleScene(engine.Scene):
                 if eff.check_waiting() and self.is_allied_effect(
                         eff, team_id) and (eff.mag > 15
                                            or not manager.deflecting()):
-                    eff.user.deal_eff_damage(eff.mag, manager, eff)
+                    eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.NORMAL)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_PIERCE_DMG)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(
                         eff, team_id) and (eff.mag > 15
                                            or not manager.deflecting()):
-                    eff.user.deal_eff_pierce_damage(eff.mag, manager, eff)
+                    eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.PIERCING)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_AFF_DMG)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(
                         eff, team_id) and (eff.mag > 15
                                            or not manager.deflecting()):
-                    eff.user.deal_eff_aff_damage(eff.mag, manager, eff)
+                    eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.AFFLICTION)
             gen = (eff for eff in manager.source.current_effects
                    if eff.eff_type == EffectType.CONT_HEAL)
             for eff in gen:
@@ -1371,7 +1364,13 @@ class BattleScene(engine.Scene):
                         eff.removing = True
                 eff.tick_duration()
 
+                #Effects that trigger upon ending
+
                 if eff.duration == 0:
+
+                    if eff.name == "Bridal Chest":
+                        if eff.user.has_effect(EffectType.SYSTEM, "FrankensteinMission2Counter"):
+                            eff.user.remove_effect(eff.user.get_effect(EffectType.SYSTEM, "FrankensteinMission2Counter"))
 
                     if eff.name == "Lightning Palm" or eff.name == "Narukami" or eff.name == "Whirlwind Rush":
                         if not eff.user.has_effect(EffectType.SYSTEM,
@@ -1409,7 +1408,7 @@ class BattleScene(engine.Scene):
                         for enemy in self.enemy_display.team.character_managers:
                             if enemy.final_can_effect(
                                     manager.check_bypass_effects()):
-                                eff.user.deal_eff_damage(40, enemy, eff)
+                                eff.user.deal_eff_damage(40, enemy, eff, DamageType.NORMAL)
                     if eff.name == "Lightning Dragon's Roar":
                         manager.add_effect(
                             Effect(Ability("laxus2"),
@@ -1445,7 +1444,7 @@ class BattleScene(engine.Scene):
                                     "Illusory Breakdown").user == manager:
                                 if emanager.final_can_effect(
                                         manager.check_bypass_effects()):
-                                    manager.deal_eff_damage(25, emanager, eff)
+                                    manager.deal_eff_damage(25, emanager, eff, DamageType.NORMAL)
                                     emanager.add_effect(
                                         Effect(
                                             Ability("chrome2"),
@@ -1463,7 +1462,7 @@ class BattleScene(engine.Scene):
                                     "Mental Immolation").user == manager:
                                 if emanager.final_can_effect(
                                         manager.check_bypass_effects()):
-                                    manager.deal_eff_damage(20, emanager, eff)
+                                    manager.deal_eff_damage(20, emanager, eff, DamageType.NORMAL)
                                     eff.user.progress_mission(3, 1)
                                     emanager.source.energy_contribution -= 1
                                     manager.check_on_drain(emanager)
@@ -1475,12 +1474,12 @@ class BattleScene(engine.Scene):
                                     EffectType.MARK,
                                     "Mental Annihilation").user == manager:
                                 if emanager.final_can_effect("BYPASS"):
-                                    manager.deal_eff_damage(35, emanager, eff)
+                                    manager.deal_eff_damage(35, emanager, eff, DamageType.NORMAL)
                     if eff.name == "Illusory World Destruction" and eff.mag > 0:
                         for emanager in enemy_team:
                             if emanager.final_can_effect(
                                     manager.check_bypass_effects()):
-                                manager.deal_eff_damage(25, emanager, eff)
+                                manager.deal_eff_damage(25, emanager, eff, DamageType.NORMAL)
                                 emanager.add_effect(
                                     Effect(
                                         Ability("chromealt2"),
@@ -1543,257 +1542,7 @@ class BattleScene(engine.Scene):
             if eff.duration > 0 and not eff.removing
         ]
         self.sharingan_reflected_effects = new_reflected_list
-
-    def test_enemy_tick_effect_duration(self):
-        player_team = self.enemy_display.team.character_managers
-        enemy_team = self.player_display.team.character_managers
-
-        for manager in player_team:
-            for eff in manager.source.current_effects:
-
-                #region Spend Turn Under Effect Mission Check
-                if not eff.eff_type == EffectType.SYSTEM:
-                    #region Spend Enemy Turn Under Effect
-
-                    if eff.name == "Uzumaki Barrage" and eff.eff_type == EffectType.ALL_STUN:
-                        if manager.is_stunned():
-                            eff.user.progress_mission(2, 1)
-                    if eff.name == "Tsukuyomi" and eff.eff_type == EffectType.ALL_STUN:
-                        if manager.is_stunned():
-                            eff.user.progress_mission(2, 1)
-                    if eff.name == "Alaudi's Handcuffs" and eff.eff_type == EffectType.ALL_STUN:
-                        if manager.is_stunned():
-                            eff.user.progress_mission(4, 1)
-                    #endregion
-                    if eff.name == "Active Combat Mode" and eff.eff_type == EffectType.CONT_DEST_DEF:
-                        eff.user.progress_mission(2, 1)
-                    if eff.name == "Dive":
-                        eff.user.progress_mission(4, 1)
-                    if eff.name == "Ally Mobilization":
-                        eff.user.progress_mission(2, 1)
-                    if eff.name == "Loyal Guard" and manager.check_invuln():
-                        manager.progress_mission(3, 1)
-                    if eff.name == "Fog of London" and eff.eff_type == EffectType.MARK and not eff.user.has_effect(
-                            EffectType.SYSTEM, "JackMission5Success"):
-                        if not eff.user.has_effect(EffectType.SYSTEM,
-                                                   "JackMission5Tracker"):
-                            eff.user.add_effect(
-                                Effect("JackMission5Tracker",
-                                       EffectType.SYSTEM,
-                                       eff.user,
-                                       280000,
-                                       lambda eff: "",
-                                       mag=0,
-                                       system=True))
-                        else:
-                            eff.user.get_effect(
-                                EffectType.SYSTEM,
-                                "JackMission5Tracker").alter_mag(1)
-                            if eff.user.get_effect(
-                                    EffectType.SYSTEM,
-                                    "JackMission5Tracker").mag >= 10:
-                                eff.user.add_effect(
-                                    Effect("JackMission5Success",
-                                           EffectType.SYSTEM,
-                                           eff.user,
-                                           280000,
-                                           lambda eff: "",
-                                           system=True))
-                                eff.user.remove_effect(EffectType.SYSTEM,
-                                                       "JackMission5Tracker")
-                    if eff.name == "Shadow Clones" and eff.eff_type == EffectType.ALL_DR:
-                        eff.user.progress_mission(1, 1)
-                    if eff.name == "Asari Ugetsu" and eff.eff_type == EffectType.ALL_DR:
-                        eff.user.progress_mission(5, 1)
-                    if eff.name == "Flying Raijin" and eff.eff_type == EffectType.ALL_INVULN:
-                        eff.user.progress_mission(5, 1)
-                    if eff.name == "Kamui" and eff.eff_type == EffectType.IGNORE:
-                        eff.user.progress_mission(5, 1)
-                    if eff.name == "Ice, Make Unlimited":
-                        eff.user.progress_mission(1, 1)
-                    if eff.name == "Summon Gyudon" and eff.eff_type == EffectType.MARK:
-                        eff.user.progress_mission(5, 1)
-
-                #endregion
-                if eff.eff_type == EffectType.CONSECUTIVE_TRACKER:
-                    if not manager.has_effect(EffectType.CONSECUTIVE_BUFFER,
-                                              eff.name):
-                        eff.removing = True
-
-                eff.tick_duration()
-
-                if eff.duration == 0:
-
-                    if eff.name == "Lightning Palm" or eff.name == "Narukami" or eff.name == "Whirlwind Rush":
-                        if not eff.user.has_effect(EffectType.SYSTEM,
-                                                   "KilluaMission5Tracker"):
-                            eff.user.add_effect(
-                                Effect("KilluaMission5Failure",
-                                       EffectType.SYSTEM,
-                                       eff.user,
-                                       280000,
-                                       lambda eff: "",
-                                       system=True))
-
-                    if eff.name == "Quirk - Transform":
-                        for effect in manager.source.current_effects:
-                            if effect.user == manager:
-                                manager.remove_effect(effect)
-                        manager.toga_transform("toga")
-                        manager.add_effect(
-                            Effect("TogaReturnSignal",
-                                   EffectType.SYSTEM,
-                                   manager,
-                                   280000,
-                                   lambda eff: "",
-                                   system=True))
-
-                    if eff.name == "Bunny Assault" and eff.eff_type == EffectType.CONT_USE:
-                        if manager.has_effect(EffectType.DEST_DEF,
-                                              "Perfect Paper - Rampage Suit"):
-                            manager.get_effect(
-                                EffectType.DEST_DEF,
-                                "Perfect Paper - Rampage Suit").alter_dest_def(
-                                    20)
-                            manager.progress_mission(3, 20)
-                    if eff.name == "Thunder Palace":
-                        for enemy in self.enemy_display.team.character_managers:
-                            if enemy.final_can_effect(
-                                    manager.check_bypass_effects()):
-                                eff.user.deal_eff_damage(40, enemy, eff)
-                    if eff.name == "Lightning Dragon's Roar":
-                        manager.add_effect(
-                            Effect(Ability("laxus2"),
-                                   EffectType.ALL_DR,
-                                   eff.user,
-                                   2,
-                                   lambda eff:
-                                   "This character will take 10 more damage.",
-                                   mag=-10))
-                    if eff.name == "Mahapadma" and eff.eff_type == EffectType.MARK:
-                        manager.add_effect(
-                            Effect(Ability("esdeathalt1"), EffectType.ALL_STUN,
-                                   manager, 5,
-                                   lambda eff: "Esdeath is stunned."))
-                    if eff.name == "Quickdraw - Rifle" and eff.eff_type == EffectType.CONT_USE:
-                        manager.full_remove_effect("Quickdraw - Rifle",
-                                                   manager)
-                        manager.add_effect(
-                            Effect(
-                                Ability("cmaryalt2"),
-                                EffectType.ABILITY_SWAP,
-                                manager,
-                                280000,
-                                lambda eff:
-                                "Quickdraw - Rifle has been replaced by Quickdraw - Sniper",
-                                mag=12))
-                    if eff.name == "Illusory Breakdown" and eff.mag > 0:
-                        for emanager in enemy_team:
-                            if emanager.has_effect(
-                                    EffectType.MARK, "Illusory Breakdown"
-                            ) and emanager.get_effect(
-                                    EffectType.MARK,
-                                    "Illusory Breakdown").user == manager:
-                                if emanager.final_can_effect(
-                                        manager.check_bypass_effects()):
-                                    manager.deal_eff_damage(25, emanager, eff)
-                                    emanager.add_effect(
-                                        Effect(
-                                            Ability("chrome2"),
-                                            EffectType.ALL_STUN, manager, 2,
-                                            lambda eff:
-                                            "This character is stunned."))
-                                    if emanager.meets_stun_check():
-                                        manager.check_on_stun(emanager)
-                    if eff.name == "Mental Immolation" and eff.mag > 0:
-                        for emanager in enemy_team:
-                            if emanager.has_effect(
-                                    EffectType.MARK, "Mental Immolation"
-                            ) and emanager.get_effect(
-                                    EffectType.MARK,
-                                    "Mental Immolation").user == manager:
-                                if emanager.final_can_effect(
-                                        manager.check_bypass_effects()):
-                                    manager.deal_eff_damage(20, emanager, eff)
-                                    eff.user.progress_mission(3, 1)
-                                    emanager.source.energy_contribution -= 1
-                                    manager.check_on_drain(emanager)
-                    if eff.name == "Mental Annihilation" and eff.mag > 0:
-                        for emanager in enemy_team:
-                            if emanager.has_effect(
-                                    EffectType.MARK, "Mental Annihilation"
-                            ) and emanager.get_effect(
-                                    EffectType.MARK,
-                                    "Mental Annihilation").user == manager:
-                                if emanager.final_can_effect("BYPASS"):
-                                    manager.deal_eff_damage(35, emanager, eff)
-                    if eff.name == "Illusory World Destruction" and eff.mag > 0:
-                        for emanager in enemy_team:
-                            if emanager.final_can_effect(
-                                    manager.check_bypass_effects()):
-                                manager.deal_eff_damage(25, emanager, eff)
-                                emanager.add_effect(
-                                    Effect(
-                                        Ability("chromealt2"),
-                                        EffectType.ALL_STUN, manager, 2, lambda
-                                        eff: "This character is stunned."))
-                                if emanager.meets_stun_check(emanager):
-                                    manager.check_on_stun(emanager)
-                    if not manager.has_effect(
-                            EffectType.INVIS_END,
-                            eff.name) and eff.invisible == True:
-                        manager.add_effect(
-                            Effect(eff.source, EffectType.INVIS_END, eff.user,
-                                   2, lambda eff: f"{eff.name} has ended."))
-            new_list = [
-                eff for eff in manager.source.current_effects
-                if eff.duration > 0 and not eff.removing
-            ]
-
-            manager.source.current_effects = new_list
-
-        for manager in enemy_team:
-            for eff in manager.source.current_effects:
-                eff.tick_duration()
-                if eff.name == "Consecutive Normal Punches":
-                    if manager.has_effect(
-                            EffectType.SYSTEM, "SaitamaMission2Tracker"
-                    ) and not eff.user.source.mission2complete:
-                        manager.get_effect(
-                            EffectType.SYSTEM,
-                            "SaitamaMission2Tracker").alter_mag(1)
-                        if manager.get_effect(
-                                EffectType.SYSTEM,
-                                "SaitamaMission2Tracker").mag >= 7:
-                            eff.user.source.mission2complete = True
-                            eff.user.progress_mission(2, 1)
-                        else:
-                            manager.get_effect(
-                                EffectType.SYSTEM,
-                                "SaitamaMission2Tracker").duration += 2
-                if eff.duration == 0:
-                    if eff.invisible and not manager.has_effect(
-                            EffectType.INVIS_END, eff.name):
-                        manager.add_effect(
-                            Effect(eff.source, EffectType.INVIS_END, eff.user,
-                                   2, lambda eff: f"{eff.name} has ended."))
-                    if eff.name == "In The Name Of Ruler!" and eff.eff_type == EffectType.ALL_STUN:
-                        eff.user.progress_mission(1, 1)
-                    if eff.name == "Hidden Mine" and eff.eff_Type == EffectType.UNIQUE:
-                        eff.user.progress_mission(5, 1)
-                    if eff.name == "Illusory Disorientation":
-                        eff.user.progress_mission(5, 1)
-            new_list = [
-                eff for eff in manager.source.current_effects
-                if eff.duration > 0 and not eff.removing
-            ]
-            manager.source.current_effects = new_list
-        new_reflected_list = [
-            eff for eff in self.sharingan_reflected_effects
-            if eff.duration > 0 and not eff.removing
-        ]
-        self.sharingan_reflected_effects = new_reflected_list
-
+        
     def turn_start(self, catching_up: bool = False):
         self.sharingan_reflecting = False
         self.sharingan_reflector = None

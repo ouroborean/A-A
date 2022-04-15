@@ -8,6 +8,7 @@ import sdl2.surface
 import sdl2.sdlttf
 from playsound import playsound
 from animearena import engine
+from animearena import resource_manager
 
 BLUE = sdl2.SDL_Color(0, 0, 255)
 RED = sdl2.SDL_Color(255, 0, 0)
@@ -16,30 +17,19 @@ PURPLE = sdl2.SDL_Color(255, 60, 255)
 AQUA = sdl2.SDL_Color(30, 190, 210)
 BLACK = sdl2.SDL_Color(0, 0, 0)
 WHITE = sdl2.SDL_Color(255, 255, 255)
-RESOURCES = Path(__file__).parent.parent.parent / "resources"
 FONTSIZE = 16
-FONT_FILENAME = "Basic-Regular.ttf"
-
-def init_font():
-    with importlib.resources.path('animearena.resources', FONT_FILENAME) as path:
-        return sdl2.sdlttf.TTF_OpenFont(str.encode(os.fspath(path)), FONTSIZE)
 
 def play_sound(file_name: str):
     # with importlib.resources.path('animearena.resources', file_name) as path:
     #     playsound(str(path), False)
     pass
 
-def get_path(file_name: str) -> Path:
-    with importlib.resources.path('animearena.resources', file_name) as path:
-        return path
-
 class LoginScene(engine.Scene):
-
 
     def __init__(self, scene_manager, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.scene_manager = scene_manager
-        self.font = init_font()
+        self.font = resource_manager.init_font(FONTSIZE)
         self.username_entry = False
         self.password_entry = False
         self.clicked_login = False
@@ -68,6 +58,23 @@ class LoginScene(engine.Scene):
         if self.updating:
             self.add_bordered_sprite(self.update_panel_region, self.update_panel_border, WHITE, 0, 0)
             self.update_panel_region.add_sprite(self.update_message, 58, 100)
+
+    def prepare_backspace(self):
+        if self.username_entry:
+            current_text = self.username_box.text
+            self.username_box = self.ui_factory.from_color(sdl2.ext.TEXTENTRY, WHITE, (150, 25))
+            self.username_box.pressed += self.select_username
+            self.username_box.input += self.edit_username_text                        
+            self.scene_manager.uiprocessor.activate(self.username_box)
+            self.username_box.text = current_text
+        elif self.password_entry:
+            current_text = self.password_box.text
+            self.password_box = self.ui_factory.from_color(sdl2.ext.TEXTENTRY, WHITE, (150, 25))
+            self.password_box.pressed += self.select_password
+            self.password_box.input += self.edit_password_text
+            self.scene_manager.uiprocessor.activate(self.password_box)
+            self.password_box.text = current_text
+        self.handle_backspace()
 
     def handle_backspace(self):
         if self.username_entry:
@@ -122,7 +129,9 @@ class LoginScene(engine.Scene):
     def send_login(self):
         if not self.clicked_login and not self.clicked_register and self.scene_manager.connected:
             self.clicked_login = True
-            self.scene_manager.connection.send_login_attempt(self.username_box.text, self.password_box.text)
+            self.scene_manager.username_raw = self.username_box.text.strip()
+            self.scene_manager.password_raw = self.password_box.text.strip()
+            self.scene_manager.connection.request_login_nonce()
 
     def register_click(self, button, sender):
         if not self.clicked_login and not self.clicked_register and self.scene_manager.connected:
@@ -150,7 +159,35 @@ class LoginScene(engine.Scene):
             hidden_string += "*"
         self.print_text_on_box(hidden_string, entry)
         
-
+    def tab_between_boxes(self):
+        if self.username_entry:
+            self.scene_manager.play_sound(self.scene_manager.sounds["click"])
+            self.username_entry = False
+            self.password_entry = True
+            current_text = self.password_box.text
+            self.password_box = self.ui_factory.from_color(sdl2.ext.TEXTENTRY, WHITE, (150, 25))
+            self.password_box.pressed += self.select_password
+            self.password_box.input += self.edit_password_text
+            self.scene_manager.uiprocessor.activate(self.password_box)
+            self.password_box.text = current_text
+            hidden_string = ""
+            for i in range(len(self.password_box.text)):
+                hidden_string += "*"
+            self.print_text_on_box(hidden_string, self.password_box)
+            self.full_render()
+        elif self.password_entry:
+            self.scene_manager.play_sound(self.scene_manager.sounds["click"])
+            self.password_entry = False
+            self.username_entry = True
+            current_text = self.username_box.text
+            self.username_box = self.ui_factory.from_color(sdl2.ext.TEXTENTRY, WHITE, (150, 25))
+            self.username_box.pressed += self.select_username
+            self.username_box.input += self.edit_username_text                        
+            self.scene_manager.uiprocessor.activate(self.username_box)
+            self.username_box.text = current_text
+            self.print_text_on_box(current_text, self.username_box)
+            self.full_render()
+            
 
     def select_password(self, button, sender):
         play_sound(self.scene_manager.sounds["click"])
