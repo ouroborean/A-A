@@ -118,8 +118,10 @@ class Effect:
     def tick_duration(self):
         self.duration -= 1
 
-    def alter_mag(self, mod: int):
+    def alter_mag(self, mod: int, max: int = 0):
         self.mag = self.mag + mod
+        if max and self.mag > max:
+            self.mag = max
 
     def alter_dest_def(self, mod: int):
         self.mag += mod

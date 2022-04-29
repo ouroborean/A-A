@@ -153,7 +153,7 @@ mission_db = {
                           ),
                 "lucy": (Mission(max=2000, description="Mitigate damage with Aquarius."),
                           Mission(max=25, description="Replicate abilities with Gemini."),
-                          Mission(max=15, description="Deal killing blows with replicated damage."),
+                          Mission(max=15, description="Deal killing blows with Gemini active."),
                           Mission(max=1, description="Maintain Aquarius for 4 consecutive turns."),
                           Mission(max=5, description="Win games where Lucy only uses replicated abilities."),
                           ),

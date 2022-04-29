@@ -13,7 +13,7 @@ import hashlib
 if typing.TYPE_CHECKING:
     from animearena.scene_manager import SceneManager
 
-VERSION = "0.9.915"
+VERSION = "0.9.942"
 
 SALT = b'gawr gura for president'
 
@@ -236,6 +236,7 @@ class ConnectionHandler:
             executed_ability = AbilityMessage()
             executed_ability.assign_user_id(buffer.read_int())
             executed_ability.assign_ability_id(buffer.read_int())
+            executed_ability.set_primary_target(buffer.read_int())
             ally_targets = buffer.read_int()
             for j in range(ally_targets):
                 executed_ability.add_to_ally_targets(buffer.read_int())
@@ -247,12 +248,19 @@ class ConnectionHandler:
         for i in range(4):
             buffer.read_int()
         
+        random_rolls_len = buffer.read_int()
+        random_rolls = list()
+        for _ in range(random_rolls_len):
+            id = buffer.read_int()
+            random_rolls.append(id)
         potential_energy = list()
 
         for i in range(6):
             potential_energy.append(buffer.read_int())
 
-        self.scene_manager.battle_scene.enemy_execution_loop(executed_abilities, potential_energy)
+        
+        
+        self.scene_manager.battle_scene.enemy_execution_loop(executed_abilities, potential_energy, random_rolls)
         buffer.clear()
 
     def send_registration(self, username: str, password: str):
@@ -322,13 +330,14 @@ class ConnectionHandler:
             self.waiting_for_opponent = True
         buffer.clear()
     
-    def send_match_communication(self, ability_messages: list[AbilityMessage], random_spent: list[int]):
+    def send_match_communication(self, ability_messages: list[AbilityMessage], random_spent: list[int], random_rolls: list[int]):
         buffer = ByteBuffer()
         buffer.write_int(1)
         buffer.write_int(len(ability_messages))
         for message in ability_messages:
             buffer.write_int(message.user_id)
             buffer.write_int(message.ability_id)
+            buffer.write_int(message.primary_id)
             buffer.write_int(len(message.ally_targets))
             for ally in message.ally_targets:
                 buffer.write_int(ally)
@@ -337,7 +346,9 @@ class ConnectionHandler:
                 buffer.write_int(enemy)
         for i in random_spent:
             buffer.write_int(i)
-        
+        buffer.write_int(len(random_rolls))
+        for i in random_rolls:
+            buffer.write_int(i)
         
         buffer.write_byte(b'\x1f\x1f\x1f')
         self.writer.write(buffer.get_byte_array())
@@ -376,6 +387,7 @@ class ConnectionHandler:
         turn_count = buffer.read_int()
         all_turns = list()
         all_random_expenditure = list()
+        all_random_rolls = list()
         for _ in range(turn_count):
             used_ability_count = buffer.read_int()
             executed_abilities = list()
@@ -383,6 +395,7 @@ class ConnectionHandler:
                 executed_ability = AbilityMessage()
                 executed_ability.assign_user_id(buffer.read_int())
                 executed_ability.assign_ability_id(buffer.read_int())
+                executed_ability.set_primary_target(buffer.read_int())
                 ally_targets = buffer.read_int()
                 for _ in range(ally_targets):
                     executed_ability.add_to_ally_targets(buffer.read_int())
@@ -393,8 +406,15 @@ class ConnectionHandler:
             random_spent = list()
             for _ in range(4):
                 random_spent.append(buffer.read_int())
+            
+            random_rolls = list()
+            random_roll_len = buffer.read_int()
+            for _ in range(random_roll_len):
+                id = buffer.read_int()
+                random_rolls.append(id)
+            
             all_random_expenditure.append(random_spent)    
-                
+            all_random_rolls.append(random_rolls)
             all_turns.append(executed_abilities)
 
         pool_count = buffer.read_int()
@@ -427,7 +447,8 @@ class ConnectionHandler:
         for manager in self.scene_manager.battle_scene.player_display.team.character_managers:
             manager.update()
 
-        self.scene_manager.battle_scene.handle_reconnection_catchup(first_turn, all_turns, energy_pools, all_random_expenditure, time_remaining)
+        
+        self.scene_manager.battle_scene.handle_reconnection_catchup(first_turn, all_turns, energy_pools, all_random_expenditure, all_random_rolls, time_remaining)
 
     def send_match_statistics(self, characters, won):
         buffer = ByteBuffer()

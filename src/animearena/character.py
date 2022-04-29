@@ -63,7 +63,7 @@ class Character:
         self.char_select_desc = None
         self.sistema_CAI_stage = 1
         self.energy_contribution = 1
-        self.hp = 100
+        self.hp = 200
         self.full_dr = 0
         self.invulnerable = False
         self.isolated = False
@@ -77,7 +77,7 @@ class Character:
         self.first_countered = False
         self.damage_reduction = 0
         self.current_effects = []
-        self.current_hp = 100
+        self.current_hp = 200
         self.mission1progress = 0
         self.mission2progress = 0
         self.mission3progress = 0
@@ -185,7 +185,7 @@ def make_character_db():
                 " extra-dimensionally stored armor and weapons. With an offensive and defensive tool for every situation, there are few foes in the entire world who can call themselves Erza's equal in battle."),
                 "gajeel": Character("gajeel", "Gajeel Redfox, the Iron Dragon Slayer. Raised, like Natsu, by a mighty dragon, Gajeel is a proud and standoffish wizard of Fairy Tail. He can" +
                 " make his body hard as iron and transform it into weapons to deal brutal blows."),
-                "wendy": Character("wendy", "Wendy Marvell, the Sky Dragon Slayer. Raised by the dragon Grandeeney, Wendy is a timid, supportive girl " +
+                "wendy": Character("wendy", "Wendy Marvell, the Sky Dragon Slayer. Raised by the dragon Grandine, Wendy is a timid, supportive girl " +
                 "who values her friends and her guild above all other things. She wields both powerful wind techniques and support magic, making her" +
                 " a formidable Fairy Tail wizard despite her shyness."),
                 "levy": Character("levy","Levy McGarden, a wizard of Fairy Tail. Levy is a studious and shrewd wizard who always keeps a level head. Her versatile magic allows her to create magical effects" +

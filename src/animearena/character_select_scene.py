@@ -665,7 +665,7 @@ class CharacterSelectScene(engine.Scene):
 
         for character in self.selected_team:
             character.dead = False
-            character.hp = 100
+            character.hp = 200
             character.current_effects = []
             character.targeted = False
             character.acted = False

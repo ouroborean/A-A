@@ -48,16 +48,25 @@ class AbilityMessage:
     ability_id: int
     ally_targets: list[int]
     enemy_targets: list[int]
+    random_rolls: list[int]
+    primary_id: int
 
     def __init__(self, manager: Optional["CharacterManager"] = None):
         self.ally_targets = list()
         self.enemy_targets = list()
+        self.random_rolls = list()
         if manager:
             self.user_id = manager.char_id
             for i, ability in enumerate(manager.source.current_abilities):
                 if ability.name == manager.used_ability.name:
                     self.ability_id = i
-
+            if manager.primary_target:
+                if manager.primary_target.id == "ally":
+                    self.primary_id = manager.primary_target.char_id
+                elif manager.primary_target.id == "enemy":
+                    self.primary_id = manager.primary_target.char_id + 3
+            else:
+                self.primary_id = 69
             for target in manager.current_targets:
                 if target.id == "ally":
                     self.ally_targets.append(target.char_id)
@@ -75,6 +84,9 @@ class AbilityMessage:
 
     def add_to_enemy_targets(self, target_id: int):
         self.enemy_targets.append(target_id)
+    
+    def set_primary_target(self, target_id: int):
+        self.primary_id = target_id
 
 
 class Team():
@@ -231,7 +243,10 @@ class BattleScene(engine.Scene):
     ability_messages: list["AbilityMessage"]
     scene_manager: "SceneManager"
     random_spent: list
-
+    random_rolls: list
+    replay_random_rolls: list
+    catching_up: bool
+    
     @property
     def pteam(self):
         return self.player_display.team.character_managers
@@ -246,6 +261,7 @@ class BattleScene(engine.Scene):
 
     def __init__(self, scene_manager, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.catching_up = False
         self.ability_messages = list()
         self.timer = TurnTimer(1, self.empty_placeholder)
         self.random_spent = [0, 0, 0, 0]
@@ -254,6 +270,7 @@ class BattleScene(engine.Scene):
         self.waiting_for_turn = True
         self.first_turn = True
         self.acting_order = list()
+        self.replay_random_rolls = list()
         self.target_clicked = False
         self.sharingan_reflecting = False
         self.sharingan_reflector = None
@@ -282,7 +299,7 @@ class BattleScene(engine.Scene):
         self.enemy_detail_character = None
         self.enemy_detail_ability = None
         self.active_effect_buttons = list()
-
+        self.random_rolls = list()
         self.offered_pool = {
             Energy.PHYSICAL: 0,
             Energy.SPECIAL: 0,
@@ -386,7 +403,7 @@ class BattleScene(engine.Scene):
 
     def confirm_button_click(self, _button, _sender):
         self.execution_loop()
-        
+
         for attr, i in self.offered_pool.items():
             if attr < 4:
                 self.random_spent[attr] = i
@@ -758,8 +775,8 @@ class BattleScene(engine.Scene):
             self.add_bordered_sprite(self.turn_end_region, self.turn_label,
                                      WHITE, 0, 55)
             self.draw_timer_region()
-    
-        
+
+
 
     def draw_any_cost_expenditure_window(self):
         self.turn_expend_region.clear()
@@ -886,15 +903,16 @@ class BattleScene(engine.Scene):
 
     def handle_reconnection_catchup(self, first_turn: bool,
                                     stored_turns: list[list["AbilityMessage"]],
-                                    energy_pools: list[list[int]], all_random_expenditure: list[list[int]], time_remaining: int):
-        
+                                    energy_pools: list[list[int]], all_random_expenditure: list[list[int]], all_random_rolls: list[list[int]], time_remaining: int):
 
+        self.catching_up = True
         for manager in self.pteam:
             manager.selected_ability = manager.source.current_abilities[0]
             manager.selected_button = manager.current_ability_sprites[0]
-        
+
         if not stored_turns:
             self.waiting_for_turn = not first_turn
+            self.catching_up = False
             print(first_turn)
             self.moving_first = first_turn
             if not self.waiting_for_turn:
@@ -903,20 +921,27 @@ class BattleScene(engine.Scene):
         else:
             self.waiting_for_turn = True
             if first_turn:
-                self.player_catchup_execution(stored_turns, energy_pools, all_random_expenditure, time_remaining)
+                self.player_catchup_execution(stored_turns, energy_pools, all_random_expenditure, all_random_rolls, time_remaining)
             else:
-                self.enemy_catchup_execution(stored_turns, energy_pools, all_random_expenditure, time_remaining)
+                self.enemy_catchup_execution(stored_turns, energy_pools, all_random_expenditure, all_random_rolls, time_remaining)
 
-    def player_catchup_execution(self, stored_turns: list[list["AbilityMessage"]], energy_pools: list[list[int]], all_random_expenditure: list[list[int]], time_remaining: int):
+    def player_catchup_execution(self, stored_turns: list[list["AbilityMessage"]], energy_pools: list[list[int]], all_random_expenditure: list[list[int]], all_random_rolls: list[list[int]], time_remaining: int):
         current_turn = stored_turns[0]
         stored_turns = stored_turns[1:]
         current_random_expenditure = all_random_expenditure[0]
         all_random_expenditure = all_random_expenditure[1:]
-        
-        
+        self.random_rolls = all_random_rolls[0]
+        all_random_rolls = all_random_rolls[1:]
+
         for ability in current_turn:
             self.pteam[ability.user_id].used_ability = self.pteam[
                 ability.user_id].source.current_abilities[ability.ability_id]
+
+            if ability.primary_id != 69:
+                if ability.primary_id < 3:
+                    self.pteam[ability.user_id].primary_target = self.pteam[ability.primary_id]
+                else:
+                    self.pteam[ability.user_id].primary_target = self.eteam[ability.primary_id - 3]
 
             for num in ability.ally_targets:
                 self.pteam[ability.user_id].current_targets.append(
@@ -934,35 +959,44 @@ class BattleScene(engine.Scene):
         for i, energy in enumerate(current_random_expenditure):
             self.player_display.team.energy_pool[i] -= energy
             self.player_display.team.energy_pool[4] -= energy
-        
-        
 
-        self.turn_end(catching_up=True)
-        
+
+
+        self.turn_end()
+
         #TODO if stored_turns still has turns left, activate enemy_catchup_execution, else set player state to waiting
         if stored_turns:
-            self.enemy_catchup_execution(stored_turns, energy_pools, all_random_expenditure, time_remaining)
-        
-        
-    
-    def enemy_catchup_execution(self, stored_turns: list[list["AbilityMessage"]], energy_pools: list[list[int]], all_random_expenditure: list[list[int]], time_remaining: int):
+            self.enemy_catchup_execution(stored_turns, energy_pools, all_random_expenditure, all_random_rolls, time_remaining)
+        else:
+            self.catching_up = False
+
+
+
+    def enemy_catchup_execution(self, stored_turns: list[list["AbilityMessage"]], energy_pools: list[list[int]], all_random_expenditure: list[list[int]], all_random_rolls: list[list[int]], time_remaining: int):
         current_turn = stored_turns[0]
         stored_turns = stored_turns[1:]
         this_turn_pool = energy_pools[0]
         energy_pools = energy_pools[1:]
+        
+        random_rolls = all_random_rolls[0]
+        all_random_rolls = all_random_rolls[1:]
+    
         all_random_expenditure = all_random_expenditure[1:]
         #TODO Execute all abilities in current_turn
-        self.enemy_execution_loop(current_turn, this_turn_pool, stored_turns)
-        
+        self.enemy_execution_loop(current_turn, this_turn_pool, random_rolls)
+
         #TODO if stored_turns still has turns left, and activate player_catchup_execution,
         #else set player state to active
         if stored_turns:
-            self.player_catchup_execution(stored_turns, energy_pools, all_random_expenditure, time_remaining)
+            self.player_catchup_execution(stored_turns, energy_pools, all_random_expenditure, all_random_rolls, time_remaining)
         else:
             self.timer = self.start_timer(time_remaining)
+            self.waiting_for_turn = False
+            self.catching_up = False
+            self.random_rolls = list()
             self.full_update()
-        
-            
+
+
 
     def execution_loop(self):
         for manager in self.acting_order:
@@ -972,12 +1006,20 @@ class BattleScene(engine.Scene):
         self.acting_order.clear()
 
     def enemy_execution_loop(self, executed_abilities: list["AbilityMessage"],
-                             potential_energy: list[int], catching_up: bool = False):
+                             potential_energy: list[int], random_rolls: list[int]):
 
+        self.random_rolls = random_rolls
+        
         for ability in executed_abilities:
             self.eteam[ability.user_id].used_ability = self.eteam[
                 ability.user_id].source.current_abilities[ability.ability_id]
 
+            if ability.primary_id != 69: #lol
+                if ability.primary_id < 3:
+                    self.eteam[ability.user_id].primary_target = self.eteam[ability.primary_id]
+                else:
+                    self.eteam[ability.user_id].primary_target = self.pteam[ability.primary_id - 3]
+            
             for num in ability.ally_targets:
                 self.eteam[ability.user_id].current_targets.append(
                     self.eteam[num])
@@ -998,7 +1040,7 @@ class BattleScene(engine.Scene):
             character.check_ability_swaps(ffs_shokuhou=True)
         self.handle_energy_gain(potential_energy)
 
-        self.turn_start(catching_up)
+        self.turn_start()
 
     def handle_energy_gain(self, potential_pool: list[int]):
 
@@ -1093,7 +1135,7 @@ class BattleScene(engine.Scene):
                    if eff.eff_type == EffectType.CONT_UNIQUE)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(eff, team_id):
-                    manager.check_unique_cont(eff)
+                    manager.check_unique_cont(eff, team_id)
 
         for manager in self.enemy_display.team.character_managers:
             gen = (eff for eff in manager.source.current_effects
@@ -1140,15 +1182,15 @@ class BattleScene(engine.Scene):
                    if eff.eff_type == EffectType.CONT_UNIQUE)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(eff, team_id):
-                    manager.check_unique_cont(eff)
+                    manager.check_unique_cont(eff, team_id)
 
     def handle_timeout(self):
-        #TODO 
+        #TODO
         #     lock player out of continued input (Set waiting for turn, full_update)
         #     refund spent energy
         #     clear character's acted status
         #     resolve continuous effects
-        #     
+        #
         self.waiting_for_turn = True
         self.exchanging_energy = False
         self.return_targeting_to_default()
@@ -1161,7 +1203,7 @@ class BattleScene(engine.Scene):
         self.turn_end()
         self.full_update()
         pass
-    
+
     def tick_ability_cooldown(self):
         for manager in self.player_display.team.character_managers:
             for ability in manager.source.main_abilities:
@@ -1171,12 +1213,12 @@ class BattleScene(engine.Scene):
                 ability.cooldown_remaining = max(
                     ability.cooldown_remaining - 1, 0)
 
-    def turn_end(self, catching_up = False):
+    def turn_end(self):
         self.sharingan_reflecting = False
         self.sharingan_reflector = None
-        
+
         self.resolve_ticking_ability("ally")
-        
+
         # Kuroko invulnerability check #
         for manager in self.player_display.team.character_managers:
             if manager.source.name == "kuroko" and manager.check_invuln():
@@ -1266,12 +1308,13 @@ class BattleScene(engine.Scene):
         if game_won and not game_lost:
             self.win_game()
 
-        
-        
-        if not catching_up:
+
+
+        if not self.catching_up:
             self.scene_manager.connection.send_match_communication(
-                self.ability_messages, self.random_spent)
+                self.ability_messages, self.random_spent, self.random_rolls)
             self.ability_messages.clear()
+            self.random_rolls.clear()
             self.random_spent = [0, 0, 0, 0]
 
     def get_energy_pool(self) -> list:
@@ -1341,9 +1384,9 @@ class BattleScene(engine.Scene):
                                                280000,
                                                lambda eff: "",
                                                system=True))
-                                    eff.user.remove_effect(
+                                    eff.user.remove_effect(eff.user.get_effect(
                                         EffectType.SYSTEM,
-                                        "JackMission5Tracker")
+                                        "JackMission5Tracker"))
                         if eff.name == "Shadow Clones" and eff.eff_type == EffectType.ALL_DR:
                             eff.user.progress_mission(1, 1)
                         if eff.name == "Asari Ugetsu" and eff.eff_type == EffectType.ALL_DR:
@@ -1542,15 +1585,17 @@ class BattleScene(engine.Scene):
             if eff.duration > 0 and not eff.removing
         ]
         self.sharingan_reflected_effects = new_reflected_list
-        
-    def turn_start(self, catching_up: bool = False):
+
+    def turn_start(self):
         self.sharingan_reflecting = False
         self.sharingan_reflector = None
-        if not catching_up:
+        if not self.catching_up:
             self.waiting_for_turn = False
             self.timer = self.start_timer()
+            self.random_rolls = list()
         self.round_any_cost = 0
         self.acting_character = None
+        
         play_sound(self.scene_manager.sounds["turnstart"])
         game_lost = True
         for manager in self.player_display.team.character_managers:
@@ -1715,7 +1760,7 @@ class BattleScene(engine.Scene):
     def win_game_mission_check(self):
         for character in self.pteam:
             MissionHandler.handle_win_mission(character)
-            
+
 
     def get_character_from_team(self, name: str,
                                 team: list["CharacterManager"]):
@@ -2189,50 +2234,38 @@ class BattleScene(engine.Scene):
             self.update_energy_region()
 
             for manager in self.player_display.team.character_managers:
-                manager.source.current_hp = 100
+                manager.source.current_hp = 200
                 manager.update()
 
             for manager in self.enemy_display.team.character_managers:
-                manager.source.current_hp = 100
+                manager.source.current_hp = 200
                 manager.update_limited()
             self.draw_player_region()
             self.draw_enemy_region()
             self.draw_surrender_region()
 
+    def targeting_all_allies(self, primary_target: "CharacterManager"):
+        return self.selected_ability.target_type == Target.MULTI_ALLY or self.selected_ability.target_type == Target.ALL_TARGET or (
+            self.selected_ability.target_type == Target.MULTI_EITHER
+            and primary_target in self.pteam)
+        
+    def targeting_all_enemies(self, primary_target: "CharacterManager"):
+        return self.selected_ability.target_type == Target.MULTI_ENEMY or self.selected_ability.target_type == Target.ALL_TARGET or (
+            self.selected_ability.target_type == Target.MULTI_EITHER
+            and primary_target in self.eteam)
+
     def apply_targeting(self, primary_target: "CharacterManager"):
+        self.selected_ability.primary_target = primary_target
         if self.selected_ability.target_type == Target.SINGLE:
             self.acting_character.add_current_target(primary_target)
             primary_target.add_received_ability(self.selected_ability)
-        elif self.selected_ability.target_type == Target.MULTI_ALLY:
-            self.selected_ability.primary_target = primary_target
-            for manager in self.player_display.team.character_managers:
-                if manager.targeted:
-                    self.acting_character.add_current_target(manager)
-                    manager.add_received_ability(self.selected_ability)
-        elif self.selected_ability.target_type == Target.MULTI_ENEMY:
-            self.selected_ability.primary_target = primary_target
-            for manager in self.enemy_display.team.character_managers:
-                if manager.targeted:
-                    self.acting_character.add_current_target(manager)
-                    manager.add_received_ability(self.selected_ability)
-        elif self.selected_ability.target_type == Target.ALL_TARGET:
-            self.selected_ability.primary_target = primary_target
-            for manager in self.enemy_display.team.character_managers:
-                if manager.targeted:
-                    self.acting_character.add_current_target(manager)
-                    manager.add_received_ability(self.selected_ability)
-            for manager in self.player_display.team.character_managers:
-                if manager.targeted:
-                    self.acting_character.add_current_target(manager)
-                    manager.add_received_ability(self.selected_ability)
-        elif self.selected_ability.target_type == Target.MULTI_EITHER:
-            self.selected_ability.primary_target = primary_target
-            if primary_target in self.player_display.team.character_managers:
+        else:
+            if self.targeting_all_allies(primary_target):
                 for manager in self.player_display.team.character_managers:
                     if manager.targeted:
                         self.acting_character.add_current_target(manager)
                         manager.add_received_ability(self.selected_ability)
-            elif primary_target in self.enemy_display.team.character_managers:
+            if self.targeting_all_enemies(primary_target):
                 for manager in self.enemy_display.team.character_managers:
                     if manager.targeted:
                         self.acting_character.add_current_target(manager)
