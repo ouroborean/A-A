@@ -153,10 +153,10 @@ class SceneManager:
         self.set_scene_to_current(self.char_select)
         self.char_select.settle_player(player.name, player.wins, player.losses, player.medals, self.package_mission_data(player.missions), mission_complete = player.missions_complete)
 
-    def start_battle(self, player_team, enemy_team, player, enemy, energy):
+    def start_battle(self, player_team, enemy_team, player, enemy, energy, seed):
         self.play_sound(self.sounds["game_start"])
         self.change_window_size(900, 1000)
-        self.battle_scene.setup_scene(player_team, enemy_team, player, enemy, energy)
+        self.battle_scene.setup_scene(player_team, enemy_team, player, enemy, energy, seed)
         self.set_scene_to_current(self.battle_scene)
 
     def start_tutorial(self, player):

@@ -13,7 +13,7 @@ import hashlib
 if typing.TYPE_CHECKING:
     from animearena.scene_manager import SceneManager
 
-VERSION = "0.9.942"
+VERSION = "0.9.943"
 
 SALT = b'gawr gura for president'
 
@@ -248,11 +248,6 @@ class ConnectionHandler:
         for i in range(4):
             buffer.read_int()
         
-        random_rolls_len = buffer.read_int()
-        random_rolls = list()
-        for _ in range(random_rolls_len):
-            id = buffer.read_int()
-            random_rolls.append(id)
         potential_energy = list()
 
         for i in range(6):
@@ -260,7 +255,7 @@ class ConnectionHandler:
 
         
         
-        self.scene_manager.battle_scene.enemy_execution_loop(executed_abilities, potential_energy, random_rolls)
+        self.scene_manager.battle_scene.enemy_execution_loop(executed_abilities, potential_energy)
         buffer.clear()
 
     def send_registration(self, username: str, password: str):
@@ -330,7 +325,7 @@ class ConnectionHandler:
             self.waiting_for_opponent = True
         buffer.clear()
     
-    def send_match_communication(self, ability_messages: list[AbilityMessage], random_spent: list[int], random_rolls: list[int]):
+    def send_match_communication(self, ability_messages: list[AbilityMessage], random_spent: list[int]):
         buffer = ByteBuffer()
         buffer.write_int(1)
         buffer.write_int(len(ability_messages))
@@ -346,9 +341,6 @@ class ConnectionHandler:
                 buffer.write_int(enemy)
         for i in random_spent:
             buffer.write_int(i)
-        buffer.write_int(len(random_rolls))
-        for i in random_rolls:
-            buffer.write_int(i)
         
         buffer.write_byte(b'\x1f\x1f\x1f')
         self.writer.write(buffer.get_byte_array())
@@ -358,7 +350,7 @@ class ConnectionHandler:
         buffer = ByteBuffer()
         buffer.write_bytes(data)
         buffer.read_int()
-
+        seed = buffer.read_int()
         # get player team names
         player_character_names = [buffer.read_string().strip() for i in range(3)]
 
@@ -387,7 +379,6 @@ class ConnectionHandler:
         turn_count = buffer.read_int()
         all_turns = list()
         all_random_expenditure = list()
-        all_random_rolls = list()
         for _ in range(turn_count):
             used_ability_count = buffer.read_int()
             executed_abilities = list()
@@ -407,14 +398,7 @@ class ConnectionHandler:
             for _ in range(4):
                 random_spent.append(buffer.read_int())
             
-            random_rolls = list()
-            random_roll_len = buffer.read_int()
-            for _ in range(random_roll_len):
-                id = buffer.read_int()
-                random_rolls.append(id)
-            
             all_random_expenditure.append(random_spent)    
-            all_random_rolls.append(random_rolls)
             all_turns.append(executed_abilities)
 
         pool_count = buffer.read_int()
@@ -436,7 +420,7 @@ class ConnectionHandler:
 
         self.scene_manager.char_select.selected_team = [Character(name) for name in player_character_names]
 
-        self.scene_manager.char_select.start_battle(enemy_character_names, enemy_pouch, energy)
+        self.scene_manager.char_select.start_battle(enemy_character_names, enemy_pouch, energy, seed)
 
 
 
@@ -448,7 +432,7 @@ class ConnectionHandler:
             manager.update()
 
         
-        self.scene_manager.battle_scene.handle_reconnection_catchup(first_turn, all_turns, energy_pools, all_random_expenditure, all_random_rolls, time_remaining)
+        self.scene_manager.battle_scene.handle_reconnection_catchup(first_turn, all_turns, energy_pools, all_random_expenditure, time_remaining)
 
     def send_match_statistics(self, characters, won):
         buffer = ByteBuffer()
@@ -469,6 +453,7 @@ class ConnectionHandler:
         buffer = ByteBuffer()
         buffer.write_bytes(data)
         packet_id = buffer.read_int()
+        seed = buffer.read_int()
         first_turn = buffer.read_int()
         if first_turn:
             self.scene_manager.battle_scene.waiting_for_turn = False
@@ -499,7 +484,7 @@ class ConnectionHandler:
         player_pouch = [player_name, player_wins, player_losses, player_image_mode, player_image_width, player_image_height, player_image_bytes]
 
 
-        self.scene_manager.char_select.start_battle(names, player_pouch, energy)
+        self.scene_manager.char_select.start_battle(names, player_pouch, energy, seed)
 
 
     

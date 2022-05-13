@@ -1,11 +1,12 @@
 import enum
 import typing
 
-from typing import Union
+from typing import Union, Tuple
 
 import sdl2
 import sdl2.ext
 
+from animearena.ability_type import AbilityType
 
 if typing.TYPE_CHECKING:
     from animearena.character_manager import CharacterManager
@@ -82,6 +83,10 @@ class Effect:
     invisible: bool
     system: bool
     removing: bool
+    instant: bool
+    action: bool
+    unique: bool
+    affliction: bool
 
     def __init__(self,
                  source: Union["Ability", str],
@@ -95,6 +100,9 @@ class Effect:
         self.eff_type = eff_type
         self.mag = mag
         self.duration = duration
+        self.action = False
+        self.instant = False
+        self.unique = False
         if type(source) == str:
             self.name = source
             self.db_name = source
@@ -103,6 +111,14 @@ class Effect:
             self.db_name = source.db_name
             self.source = source
             self.eff_img = source.image
+            
+            if AbilityType.ACTION in source.types:
+                self.action = True
+            elif AbilityType.INSTANT in source.types:
+                self.instant = True
+            if AbilityType.UNIQUE in source.types:
+                self.unique = True
+            
         self.user = user
         self.user_id = self.user.id
         self.desc = desc
@@ -111,6 +127,16 @@ class Effect:
         self.invisible = invisible
         self.system = system
         self.removing = False
+        
+
+    def __eq__(self, __o: object) -> bool:
+        if isinstance(__o, Tuple):
+            return (self.eff_type == __o[0] and self.name == __o[1])
+        if isinstance(__o, Effect):
+            return (self.eff_type == __o.eff_type and self.name == __o.name)
+
+    def __str__(self) -> str:
+        return self.name + "(" + self.eff_type.name + ") <User: " + self.user.id + " " + self.user.source.name + ">"
 
     def get_desc(self) -> str:
         return self.desc(self)

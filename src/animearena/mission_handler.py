@@ -33,7 +33,7 @@ class WinMission:
     def conditions_met(self, character: "CharacterManager") -> bool:
         if self.eff_req:
             effect_requirement_met = (character.has_effect(self.eff_req.eff_type, self.eff_req.name) != self.eff_req_reversed)
-            if not effect_requirement_met or character.get_effect(self.eff_req.eff_type, self.eff_req.name).mag < self.mag_req:
+            if not effect_requirement_met or (character.has_effect(self.eff_req.eff_type, self.eff_req.name) and character.get_effect(self.eff_req.eff_type, self.eff_req.name).mag < self.mag_req):
                 return False
         return True
     
@@ -74,7 +74,7 @@ class SpecificMagMission(WinMission):
     def conditions_met(self, character: "CharacterManager") -> bool:
         if self.eff_req:
             effect_requirement_met = (character.has_effect(self.eff_req.eff_type, self.eff_req.name) != self.eff_req_reversed)
-            if not effect_requirement_met or character.get_effect(self.eff_req.eff_type, self.eff_req.name).mag != self.mag_req:
+            if not effect_requirement_met or (character.has_effect(self.eff_req.eff_type, self.eff_req.name) and character.get_effect(self.eff_req.eff_type, self.eff_req.name).mag != self.mag_req):
                 return False
         return True
 
@@ -94,7 +94,7 @@ class ExclusionMission(WinMission):
     def conditions_met(self, character: "CharacterManager") -> bool:
         if self.eff_req:
             effect_requirement_met = (character.has_effect(self.eff_req.eff_type, self.eff_req.name) != self.eff_req_reversed)
-            if not effect_requirement_met or character.get_effect(self.eff_req.eff_type, self.eff_req.name).mag < self.mag_req:
+            if not effect_requirement_met or (character.has_effect(self.eff_req.eff_type, self.eff_req.name) and character.get_effect(self.eff_req.eff_type, self.eff_req.name).mag < self.mag_req):
                 return False
         if character.has_effect(self.excluded_effect.eff_type, self.excluded_effect.name):
             return False
@@ -136,11 +136,11 @@ class AbilityDamageMission:
         output = True
         if self.eff_req:
             effect_requirement_met = (character.has_effect(self.eff_req.eff_type, self.eff_req.name) != self.eff_req_reversed)
-            if not effect_requirement_met or character.get_effect(self.eff_req.eff_type, self.eff_req.name).mag < self.mag_req or (self.ability_req and source != self.ability_req):
+            if not effect_requirement_met or (character.has_effect(self.eff_req.eff_type, self.eff_req.name) and character.get_effect(self.eff_req.eff_type, self.eff_req.name).mag < self.mag_req) or (self.ability_req and source != self.ability_req):
                 output = False
         if self.target_eff_req:
             target_effect_requirement_met = (target.has_effect(self.target_eff_req.eff_type, self.target_eff_req.name) != self.target_eff_req_reversed)
-            if not target_effect_requirement_met or target.get_effect(self.target_eff_req.eff_type, self.target_eff_req.name).mag < self.target_mag_req:
+            if not target_effect_requirement_met or (target.has_effect(self.target_eff_req.eff_type, self.target_eff_req.name) and target.get_effect(self.target_eff_req.eff_type, self.target_eff_req.name).mag < self.target_mag_req):
                 output = False
         return output
     
@@ -189,11 +189,11 @@ class KillingBlowMission:
         output = True
         if self.user_eff_req:
             effect_requirement_met = (character.has_effect(self.user_eff_req.eff_type, self.user_eff_req.name) != self.eff_req_reversed)
-            if not effect_requirement_met or character.get_effect(self.user_eff_req.eff_type, self.user_eff_req.name).mag < self.mag_req or (self.ability_req and source != self.ability_req):
+            if not effect_requirement_met or (character.has_effect(self.user_eff_req.eff_type, self.user_eff_req.name) and character.get_effect(self.user_eff_req.eff_type, self.user_eff_req.name).mag < self.mag_req) or (self.ability_req and source != self.ability_req):
                 output = False
         if self.target_eff_req:
             target_effect_requirement_met = (target.has_effect(self.target_eff_req.eff_type, self.target_eff_req.name) != self.target_eff_req_reversed)
-            if not target_effect_requirement_met or target.get_effect(self.target_eff_req.eff_type, self.target_eff_req.name).mag < self.target_mag_req:
+            if not target_effect_requirement_met or (target.has_effect(self.target_eff_req.eff_type, self.target_eff_req.name) and target.get_effect(self.target_eff_req.eff_type, self.target_eff_req.name).mag < self.target_mag_req):
                 output = False
         return output
     
@@ -275,12 +275,12 @@ class KillingBlowMultiEffectMission(KillingBlowMission):
         if self.user_eff_reqs:
             for req in self.user_eff_reqs:
                 effect_requirement_met = (character.has_effect(req.eff_type, req.name) != self.eff_req_reversed)
-                if not effect_requirement_met or character.get_effect(req.eff_type, req.name).mag < self.mag_req or (self.ability_req and source != self.ability_req):
+                if not effect_requirement_met or (character.has_effect(req.eff_type, req.name) and character.get_effect(req.eff_type, req.name).mag < self.mag_req) or (self.ability_req and source != self.ability_req):
                     output = False
         if self.target_eff_reqs:
             for req in self.target_eff_reqs:
-                target_effect_requirement_met = (target.has_effect(self.target_eff_req.eff_type, self.target_eff_req.name) != self.target_eff_req_reversed)
-                if not target_effect_requirement_met or target.get_effect(self.target_eff_req.eff_type, self.target_eff_req.name).mag < self.target_mag_req:
+                target_effect_requirement_met = (target.has_effect(req.eff_type, req.name) != self.target_eff_req_reversed)
+                if not target_effect_requirement_met or (target.has_effect(req.eff_type, req.name) and target.get_effect(req.eff_type, req.name).mag < self.target_mag_req):
                     output = False
         return output    
 
@@ -363,11 +363,11 @@ class KillingBlowTrigger:
         output = True
         if self.user_eff_req:
             effect_requirement_met = (character.has_effect(self.user_eff_req.eff_type, self.user_eff_req.name) != self.user_eff_reversed)
-            if not effect_requirement_met or character.get_effect(self.user_eff_req.eff_type, self.user_eff_req.name).mag < self.user_mag or (self.ability_req and source != self.ability_req) or not all([state(character) for state in self.user_states]):
+            if not effect_requirement_met or (character.has_effect(self.user_eff_req.eff_type, self.user_eff_req.name) and character.get_effect(self.user_eff_req.eff_type, self.user_eff_req.name).mag < self.user_mag) or (self.ability_req and source != self.ability_req) or not all([state(character) for state in self.user_states]):
                 output = False
         if self.target_eff_req:
             target_effect_requirement_met = (target.has_effect(self.target_eff_req.eff_type, self.target_eff_req.name) != self.target_eff_reversed)
-            if not target_effect_requirement_met or target.get_effect(self.target_eff_req.eff_type, self.target_eff_req.name).mag < self.target_mag or (self.ability_req and source != self.ability_req) or not all([state(target) for state in self.user_states]):
+            if not target_effect_requirement_met or (target.has_effect(self.target_eff_req.eff_type, self.target_eff_req.name) and target.get_effect(self.target_eff_req.eff_type, self.target_eff_req.name).mag < self.target_mag) or (self.ability_req and source != self.ability_req) or not all([state(target) for state in self.user_states]):
                 output = False
         return output
     
@@ -526,13 +526,12 @@ killing_blow_mission_handler: dict[str, list[KillingBlowMission]] = {
     "neji": [KillingBlowTargetStateMission(1, "Eight Trigrams - Mountain Crusher", states=[invuln,])],
     "hinata": [KillingBlowTwinLionMission(1, "Gentle Step - Twin Lion Fists")],
     "shikamaru": [KillingBlowMission(2, "Shadow Neck Bind", EffectRequirement(EffectType.SYSTEM, "ShikamaruMission2Tracker"), user_mag_req=2)],
-    "kakashi": [KillingBlowMission(2, "Raikiri", target_effect_req=EffectRequirement(EffectType.ALL_STUN, "Summon - Nin-dogs")), KillingBlowMission(4, target_effect_req=EffectRequirement(EffectType.SYSTEM, "KakashiMission4Tracker"), target_eff_req_reversed=True)],
+    "kakashi": [KillingBlowMission(2, "Raikiri", target_effect_req=EffectRequirement(EffectType.MARK, "Summon - Nin-dogs")), KillingBlowMission(4, target_effect_req=EffectRequirement(EffectType.SYSTEM, "KakashiMission4Tracker"), target_eff_req_reversed=True)],
     "ichigo": [KillingBlowMission(2, user_eff_req=EffectRequirement(EffectType.ALL_INVULN, "Tensa Zangetsu")), KillingBlowHealthThresholdMission(5, threshold=30, greater_than=False)],
     "ichimaru": [KillingBlowMission(1, "Kill, Kamishini no Yari")],
     "aizen": [KillingBlowMission(3, "Overwhelming Power")],
     "midoriya": [KillingBlowMission(4, "One For All - Shoot Style")],
     "mirio": [KillingBlowMission(5, "Phantom Menace")],
-    "toga": [KillingBlowMission(5, user_eff_req=EffectRequirement(EffectType.UNIQUE, "Quirk - Transform"), eff_req_reversed=True), KillingBlowMission(4, user_eff_req=EffectRequirement(EffectType.UNIQUE, "Quirk - Transform"))],
     "shigaraki": [KillingBlowMission(2)],
     "jiro": [KillingBlowMission(4, target_effect_req=EffectRequirement(EffectType.SYSTEM, "JiroMission4Tracker")), KillingBlowMission(3, ability_req = "Heartbeat Distortion", user_eff_req=EffectRequirement(EffectType.UNIQUE, "Heartbeat Surround")), KillingBlowMission(3, ability_req = "Heartbeat Surround", user_eff_req=EffectRequirement(EffectType.UNIQUE, "Heartbeat Distortion"))],
     "natsu": [KillingBlowMission(3)],
@@ -557,7 +556,7 @@ killing_blow_mission_handler: dict[str, list[KillingBlowMission]] = {
     "leone": [KillingBlowMission(2), KillingBlowMission(3, target_effect_req=EffectRequirement(EffectType.MARK, "Beast Instinct"))],
     "lubbock": [KillingBlowMission(3, ability_req="Heartseeker Thrust")],
     "sheele": [KillingBlowMission(1), KillingBlowTargetStateMission(2, states=[ignoring, countering]), KillingBlowMission(5, target_effect_req=EffectRequirement(EffectType.ALL_STUN, "Trump Card - Blinding Light"))],
-    "seryu": [KillingBlowHandoffMission(2, ability_req="Insatiable Justice"), KillingBlowMission(3, ability_req="Body Modification - Arm Gun", target_effect_req=EffectRequirement(EffectType.ALL_BOOST, "Berserker Howl")), KillingBlowMission(5, ability_req="Body Modification - Self Destruct"), KillingBlowMultiEffectMission(4, target_effect_reqs=[EffectRequirement(EffectType.SYSTEM, "SeryuKoroTracker"), EffectRequirement(EffectType.SYSTEM, "SeryuArmGunTracker")])],
+    "seryu": [KillingBlowMission(2, ability_req="Insatiable Justice"), KillingBlowMission(3, ability_req="Body Modification - Arm Gun", target_effect_req=EffectRequirement(EffectType.ALL_BOOST, "Berserker Howl")), KillingBlowMission(5, ability_req="Body Modification - Self Destruct"), KillingBlowMultiEffectMission(4, target_effect_reqs=[EffectRequirement(EffectType.SYSTEM, "SeryuKoroTracker"), EffectRequirement(EffectType.SYSTEM, "SeryuArmGunTracker")])],
     "kurome": [KillingBlowMission(2, ability_req="Mass Animation", user_eff_req=EffectRequirement(EffectType.STACK, "Yatsufusa")), KillingBlowMission(5, user_eff_req=EffectRequirement(EffectType.MARK, "Doping Rampage"))],
     "esdeath": [KillingBlowMission(1, target_effect_req=EffectRequirement(EffectType.MARK, "Frozen Castle")), KillingBlowMission(4, target_effect_req=EffectRequirement(EffectType.ALL_STUN, "Mahapadma"))],
     "ripple": [KillingBlowMission(3, target_effect_req=EffectRequirement(EffectType.CONT_PIERCE_DMG, "Night of Countless Stars")), KillingBlowTargetStateMission(4, states=[invuln,])],

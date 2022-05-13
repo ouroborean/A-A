@@ -1,6 +1,7 @@
 import sdl2.ext
 import copy
 import typing
+import logging
 import importlib.resources
 from PIL import Image
 from animearena.energy import Energy
@@ -122,6 +123,13 @@ class Character:
                 if ability._base_cost[Energy(energy_type)] > 0:
                     return True
         return False
+
+    def set_hp(self, hp: int):
+        self.hp = hp
+        
+    def change_energy_cont(self, energy_change: int):
+        logging.debug("%s's energy contribution of %d has been altered by %d", self.name, self.energy_contribution, energy_change)
+        self.energy_contribution += energy_change
 
 def get_character(name: str):
     return copy.copy(get_character_db()[name])

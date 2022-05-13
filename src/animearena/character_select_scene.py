@@ -650,7 +650,7 @@ class CharacterSelectScene(engine.Scene):
         
         self.full_render()
 
-    def start_battle(self, enemy_names, enemy_pouch, energy):
+    def start_battle(self, enemy_names, enemy_pouch, energy, seed):
         """Function called by Scene Manager to move from Character Select Scene to
            In-Game Scene after receiving an enemy start package from the server"""
         enemy_team = [Character(name) for name in enemy_names]
@@ -670,7 +670,7 @@ class CharacterSelectScene(engine.Scene):
             character.targeted = False
             character.acted = False
 
-        self.scene_manager.start_battle(self.selected_team, enemy_team, self.player, enemy, energy)
+        self.scene_manager.start_battle(self.selected_team, enemy_team, self.player, enemy, energy, seed)
 
 
     

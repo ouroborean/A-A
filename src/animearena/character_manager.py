@@ -5,13 +5,15 @@ import itertools
 from animearena import engine, character
 from animearena.effects import Effect, EffectType
 from animearena.ability import Ability, Target, one, two, three, DamageType
+from animearena.ability_type import AbilityType
 from animearena.energy import Energy
 from animearena.mission import Mission
 from animearena.mission_handler import MissionHandler, TriggerHandler
 import math
 from random import randint
 import logging
-from typing import Optional, Union
+from typing import Optional, Union, Tuple
+import collections.abc
 
 
 def play_sound(file_name: str):
@@ -30,7 +32,7 @@ AQUA = sdl2.SDL_Color(30, 190, 210)
 BLACK = sdl2.SDL_Color(0, 0, 0)
 WHITE = sdl2.SDL_Color(255, 255, 255)
 
-class CharacterManager():
+class CharacterManager(collections.abc.Container):
     # pylint: disable=too-many-public-methods
     # pylint: disable=too-many-branches
     # pylint: disable=no-self-use
@@ -69,6 +71,22 @@ class CharacterManager():
         self.current_targets = list()
         self.primary_target = None
 
+    def __contains__(self, __x: Tuple[EffectType, str]) -> bool:
+        for eff in self.source.current_effects:
+            if eff == __x:
+                return True
+        return False
+
+    def __str__(self) -> str:
+        list_of_effects = f"{self.source.name} ID: {self.id}"
+        for eff in self.source.current_effects:
+            list_of_effects += "\n" + f"{eff.name} ({eff.eff_type.name})"
+        return "Current effects:" + list_of_effects
+
+    def __eq__(self, __o: object) -> bool:
+        if isinstance(__o, CharacterManager):
+            return (self.source.name == __o.source.name and self.id == __o.id and self.char_id == __o.char_id)
+
     @property
     def player_team(self):
         return self.scene.player_display.team.character_managers
@@ -76,6 +94,10 @@ class CharacterManager():
     @property
     def enemy_team(self):
         return self.scene.enemy_display.team.character_managers
+
+    @property
+    def hp(self):
+        return self.source.hp
 
     def update_text(self):
 
@@ -202,13 +224,14 @@ class CharacterManager():
                 if character.has_effect(EffectType.UNIQUE, "Vector Reflection"):
                     if self.final_can_effect(character.check_bypass_effects()):
                         character.progress_mission(3, 1)
+                        character.used_ability = Ability("accelerator1")
                         character.deal_active_damage(20, self, DamageType.NORMAL)
                         self.add_effect(Effect(Ability("accelerator1"), EffectType.ALL_STUN, character, 3, lambda eff: "This character is stunned."))
                         if self.meets_stun_check():
                             character.check_on_stun(self)
 
                 if character.has_effect(EffectType.UNIQUE, "Hear Distress"):
-                    character.source.energy_contribution += 1
+                    character.source.change_energy_cont(1)
                     character.get_effect(EffectType.UNIQUE, "Hear Distress").user.progress_mission(1, 1)
                 if character.has_effect(
                         EffectType.UNIQUE,
@@ -218,7 +241,7 @@ class CharacterManager():
                                character, 1, lambda eff: ""))
                 if character.has_effect(EffectType.MARK, "Quirk - Permeation"):
                     character.get_effect(EffectType.MARK, "Quirk - Permeation").user.progress_mission(1, 1)
-
+                    
                     self.add_effect(
                         Effect(
                             Ability("mirio2"), EffectType.MARK, character, 2,
@@ -227,7 +250,7 @@ class CharacterManager():
                         ))
                 if character.has_effect(EffectType.MARK, "Protect Ally"):
                     character.get_effect(EffectType.MARK, "Protect Ally").user.progress_mission(2, 1)
-
+                    
                     self.add_effect(
                         Effect(
                             Ability("mirio2"), EffectType.MARK, character, 2,
@@ -239,11 +262,11 @@ class CharacterManager():
                     self.receive_eff_damage(
                         15,
                         character.get_effect(EffectType.DEST_DEF,
-                                             "Four-God Resisting Shield"))
+                                             "Four-God Resisting Shield"), DamageType.NORMAL)
         if self.has_effect(EffectType.UNIQUE, "Porcospino Nuvola"):
             self.receive_eff_damage(
                 10, self.get_effect(EffectType.UNIQUE,
-                                         "Porcospino Nuvola"))
+                                         "Porcospino Nuvola"), DamageType.NORMAL)
 
     def check_on_help(self):
         for target in self.current_targets:
@@ -259,7 +282,6 @@ class CharacterManager():
 
     def check_on_use(self):
         for target in self.current_targets:
-
             #region Receive Ability Mission Tracking
             if target.has_effect(EffectType.ALL_DR, "Eight Trigrams - 64 Palms") and self.used_ability.name != "Eight Trigrams - 64 Palms":
                 target.get_effect(EffectType.ALL_DR, "Eight Trigrams - 64 Palms").user.progress_mission(4, 1)
@@ -277,7 +299,7 @@ class CharacterManager():
                     self.receive_eff_damage(
                         20,
                         target.get_effect(EffectType.MARK,
-                                          "Shredding Wedding").user, DamageType.PIERCING)
+                                          "Shredding Wedding"), DamageType.PIERCING)
             if self.has_effect(EffectType.MARK,
                                "Shredding Wedding") and not target.has_effect(
                                    EffectType.MARK, "Shredding Wedding"):
@@ -285,7 +307,7 @@ class CharacterManager():
                     self.receive_eff_damage(
                         20,
                         self.get_effect(EffectType.MARK,
-                                        "Shredding Wedding").user, DamageType.PIERCING)
+                                        "Shredding Wedding"), DamageType.PIERCING)
         if self.has_effect(EffectType.CONT_UNIQUE, "Utsuhi Ame"):
             self.get_effect(EffectType.CONT_UNIQUE, "Utsuhi Ame").alter_mag(1)
             self.get_effect(
@@ -324,13 +346,13 @@ class CharacterManager():
     def check_on_stun(self, target: "CharacterManager"):
         #TODO stun checks
 
-        if target.has_effect(EffectType.MARK, "Counter-Balance"):
-            self.source.energy_contribution -= 1
-            self.add_effect(Effect("JiroMission4Tracker", EffectType.SYSTEM, target.get_effect(EffectType.MARK, "Counter-Balance").user, 2, lambda eff:"", system=True))
-            target.get_effect(EffectType.MARK, "Counter-Balance").user.progress_mission(1, 1)
+        if self.has_effect(EffectType.MARK, "Counter-Balance"):
+            self.source.change_energy_cont(-1)
+            self.add_effect(Effect("JiroMission4Tracker", EffectType.SYSTEM, self.get_effect(EffectType.MARK, "Counter-Balance").user, 2, lambda eff:"", system=True))
+            self.get_effect(EffectType.MARK, "Counter-Balance").user.progress_mission(1, 1)
 
         if target.is_stunned():
-            target.cancel_control_effects()
+            target.action_effect_cancel()
 
     def cancel_control_effects(self):
         for eff in self.source.current_effects:
@@ -354,14 +376,14 @@ class CharacterManager():
 
     def check_on_drain(self, target: "CharacterManager"):
 
-        if target.has_effect(EffectType.MARK, "Counter-Balance"):
+        if self.has_effect(EffectType.MARK, "Counter-Balance"):
             self.add_effect(
                 Effect(
                     Ability("jiro1"), EffectType.ALL_STUN,
-                    target.get_effect(EffectType.MARK, "Counter-Balance").user,
+                    self.get_effect(EffectType.MARK, "Counter-Balance").user,
                     3, lambda eff: "This character is stunned."))
-            self.add_effect(Effect("JiroMission4Tracker", EffectType.SYSTEM, target.get_effect(EffectType.MARK, "Counter-Balance").user, 2, lambda eff:"", system=True))
-            target.get_effect(EffectType.MARK, "Counter-Balance").user.progress_mission(1, 1)
+            self.add_effect(Effect("JiroMission4Tracker", EffectType.SYSTEM, self.get_effect(EffectType.MARK, "Counter-Balance").user, 2, lambda eff:"", system=True))
+            self.get_effect(EffectType.MARK, "Counter-Balance").user.progress_mission(1, 1)
         if target.has_effect(EffectType.UNIQUE, "Sage Mode"):
             if not self.is_aff_immune() and not self.is_ignoring():
                 target.deal_eff_damage(20, self, target.get_effect(EffectType.UNIQUE, "Sage Mode"), DamageType.AFFLICTION)
@@ -376,7 +398,9 @@ class CharacterManager():
         for eff in gen:
             total_drain += eff.mag
 
-        return total_drain
+        
+        
+        return total_drain * -1
 
     def check_unique_cont(self, eff: Effect, team_id: str):
         if eff.name == "Utsuhi Ame":
@@ -407,7 +431,7 @@ class CharacterManager():
                     eff.user.progress_mission(3, 1)
         if eff.name == "Vacuum Syringe":
             if self.final_can_effect("BYPASS"):
-                eff.user.deal_eff_damage(10, self, eff, DamageType.AFFLICTION)
+                eff.user.deal_eff_damage(eff.mag, self, eff, DamageType.AFFLICTION)
                 self.apply_stack_effect(
                     Effect(
                         Ability("toga3"),
@@ -468,7 +492,7 @@ class CharacterManager():
                 if self.has_effect(
                         EffectType.MARK, "Chakra Point Strike"
                 ) and base_damage > self.check_for_dmg_reduction():
-                    self.source.energy_contribution -= 1
+                    self.source.change_energy_cont(-1)
                     eff.user.check_on_drain(self)
                     eff.user.progress_mission(2, 1)
         if eff.name == "Relentless Assault":
@@ -480,47 +504,39 @@ class CharacterManager():
                     eff.user.deal_eff_damage(15, self, eff, DamageType.NORMAL)
         if eff.name == "Bridal Chest":
             if team_id != "enemy":
-                valid_targets: list["CharacterManager"] = []
-                for enemy in self.scene.enemy_display.team.character_managers:
-                    if enemy.hostile_target(eff.user, eff.user.check_bypass_effects()):
-                        valid_targets.append(enemy)
-                if valid_targets:
-                    damage = eff.mag
-                    if eff.user.has_effect(EffectType.STACK, "Galvanism"):
-                        damage = damage + (eff.user.get_effect(EffectType.STACK, "Galvanism").mag * 10)
-                    target = randint(0, len(valid_targets) - 1)
-                    self.scene.random_rolls.append(valid_targets[target].char_id)
-                    if valid_targets[target].final_can_effect(self.check_bypass_effects()
-                                            ) and not valid_targets[target].deflecting():
-                        self.deal_eff_damage(damage, valid_targets[target], eff, DamageType.NORMAL)
+                team = self.scene.eteam
             else:
+                team = self.scene.pteam
+            valid_targets: list["CharacterManager"] = []
+                
+            for target in team:
+                if target.hostile_target(eff.user, eff.user.check_bypass_effects()):
+                    valid_targets.append(target)
+            if valid_targets:
                 damage = eff.mag
-                self.deal_eff_damage(damage, self.scene.pteam[self.scene.random_rolls[0]], eff, DamageType.NORMAL)
-                self.scene.random_rolls = self.scene.random_rolls[1:]
+                if eff.user.has_effect(EffectType.STACK, "Galvanism"):
+                    damage = damage + (eff.user.get_effect(EffectType.STACK, "Galvanism").mag * 10)
+                target = self.scene.d20.randint(0, len(valid_targets) - 1)
+                if valid_targets[target].final_can_effect(self.check_bypass_effects()
+                                        ) and not valid_targets[target].deflecting():
+                    self.deal_eff_damage(damage, valid_targets[target], eff, DamageType.NORMAL)
         if eff.name == "Titania's Rampage":
-            if team_id != "enemy" and not self.scene.catching_up:
-                valid_targets: list["CharacterManager"] = []
-                if eff.user.id == "enemy":
-                    target_team = self.scene.pteam
-                else:
-                    target_team = self.scene.eteam
-                for enemy in target_team:
-                    if enemy.hostile_target(eff.user, eff.user.check_bypass_effects()):
-                        valid_targets.append(enemy)
-                if valid_targets:
-                    damage = 15 + (eff.mag * 5)
-                    target = randint(0, len(valid_targets) - 1)
-                    self.scene.random_rolls.append(valid_targets[target].char_id)
-                    if valid_targets[target].final_can_effect(self.check_bypass_effects()
-                                            ) and not valid_targets[target].deflecting():
-                        self.deal_eff_damage(damage, valid_targets[target], eff, DamageType.PIERCING)
+            
+            valid_targets: list["CharacterManager"] = []
+            if eff.user.id == "enemy":
+                target_team = self.scene.pteam
             else:
+                target_team = self.scene.eteam
+            for enemy in target_team:
+                if enemy.hostile_target(eff.user, eff.user.check_bypass_effects()):
+                    valid_targets.append(enemy)
+            if valid_targets:
                 damage = 15 + (eff.mag * 5)
-                if team_id == "enemy":
-                    self.deal_eff_damage(damage, self.scene.pteam[self.scene.random_rolls[0]], eff, DamageType.PIERCING)
-                else:
-                    self.deal_eff_damage(damage, self.scene.eteam[self.scene.random_rolls[0]], eff, DamageType.PIERCING)
-                self.scene.random_rolls = self.scene.random_rolls[1:]
+                target = self.scene.d20.randint(0, len(valid_targets) - 1)
+                
+                if valid_targets[target].final_can_effect(self.check_bypass_effects()
+                                        ) and not valid_targets[target].deflecting():
+                    self.deal_eff_damage(damage, valid_targets[target], eff, DamageType.PIERCING)
             eff.alter_mag(1)
         if eff.name == "Circle Blade":
             for enemy in self.scene.enemy_display.team.character_managers:
@@ -565,49 +581,41 @@ class CharacterManager():
             if self.helpful_target(eff.user, eff.user.check_bypass_effects()):
                 if eff.user.has_effect(EffectType.STACK, "Overcharge"):
                     base_defense += (5 * eff.user.get_effect(EffectType.STACK, "Overcharge").mag)
-                self.apply_dest_def_effect(Effect(eff.source, EffectType.DEST_DEF, eff.user, 280000, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag = base_defense))
+                self.apply_dest_def_effect(Effect(eff.source, EffectType.DEST_DEF, eff.user, 2, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag = base_defense))
         if eff.name == "Overcharge":
             self.apply_stack_effect(Effect(eff.source, EffectType.STACK, eff.user, 280000, lambda eff: "", mag = 1), eff.user)
             self.progress_mission(4, 1)
         if eff.name == "Level-6 Shift":
             if not eff.user.is_stunned():
-                if team_id != "enemy":
-                    ability = randint(1, 3)
-                    self.scene.random_rolls.append(ability)
-                else:
-                    ability = self.scene.random_rolls[0]
-                    self.scene.random_rolls = self.scene.random_rolls[1:]
+                
+                ability = self.scene.d20.randint(1, 3)
                 
                 if ability == 1:
                     if team_id != "enemy":
-                        valid_targets = [manager for manager in self.scene.pteam if manager.helpful_target(eff.user, eff.user.check_bypass_effects())]
-                        if valid_targets:
-                            chosen_target = valid_targets[randint(0, len(valid_targets) - 1)]
-                            eff.user.current_targets.append(chosen_target)
-                            eff.user.acted = True
-                            eff.user.used_ability = eff.user.source.main_abilities[0]
-                            eff.user.execute_ability()
+                        team = self.scene.pteam
                     else:
-                        eff.user.current_targets.append(self.scene.pteam[self.scene.random_rolls[0]])
+                        team = self.scene.eteam
+                    valid_targets = [manager for manager in team if manager.helpful_target(eff.user, eff.user.check_bypass_effects())]
+                    if valid_targets:
+                        chosen_target = valid_targets[randint(0, len(valid_targets) - 1)]
+                        eff.user.current_targets.append(chosen_target)
                         eff.user.acted = True
                         eff.user.used_ability = eff.user.source.main_abilities[0]
                         eff.user.execute_ability()
-                        self.scene.random_rolls = self.scene.random_rolls[1:]
+                    
                 elif ability == 2:
                     if team_id != "enemy":
-                        valid_targets = [manager for manager in self.scene.eteam if manager.hostile_target(eff.user, "BYPASS")]
-                        if valid_targets:
-                            chosen_target = valid_targets[randint(0, len(valid_targets) - 1)]
-                            eff.user.current_targets.append(chosen_target)
-                            eff.user.acted = True
-                            eff.user.used_ability = eff.user.source.main_abilities[1]
-                            eff.user.execute_ability()
+                        team = self.scene.pteam
                     else:
-                        eff.user.current_targets.append(self.scene.eteam[self.scene.random_rolls[0]])
+                        team = self.scene.eteam
+                    valid_targets = [manager for manager in team if manager.hostile_target(eff.user, "BYPASS")]
+                    if valid_targets:
+                        chosen_target = valid_targets[randint(0, len(valid_targets) - 1)]
+                        eff.user.current_targets.append(chosen_target)
                         eff.user.acted = True
                         eff.user.used_ability = eff.user.source.main_abilities[1]
                         eff.user.execute_ability()
-                        self.scene.random_rolls = self.scene.random_rolls[1:]
+                    
                 elif ability == 3:
                     chosen_target = eff.user
                     eff.user.current_targets.append(chosen_target)
@@ -636,10 +644,9 @@ class CharacterManager():
                             if not self.has_effect(EffectType.SYSTEM, "RukiaMission5Tracker"):
                                 self.add_effect(Effect("RukiaMission5Tracker", EffectType.SYSTEM, counter.user, 280000, lambda eff: "", system = True))
                             else:
-                                counter.user.progress_mission(5, 1)
-                                counter.user.mission5complete = True
+                                counter.user.progress_mission(5, 1, once=True)
                             if counter.user.final_can_effect():
-                                counter.user.receive_eff_damage(30, self.get_effect(EffectType.MARK, "Third Dance - Shirafune"))
+                                counter.user.receive_eff_damage(30, self.get_effect(EffectType.MARK, "Third Dance - Shirafune"), DamageType.NORMAL)
                                 counter.user.add_effect(
                                     Effect(
                                         Ability("rukia3"), EffectType.ALL_STUN,
@@ -700,7 +707,7 @@ class CharacterManager():
                                 "This character was countered by Hear Distress."
                             ))
                         eff.user.progress_mission(2, 1)
-                        self.source.energy_contribution -= 1
+                        self.source.change_energy_cont(-1)
                         eff.user.check_on_drain(self)
                         self.shirafune_check(eff)
                         return True
@@ -733,7 +740,7 @@ class CharacterManager():
                         
                             if self.final_can_effect(
                             ) and not self.deflecting():
-                                self.receive_eff_damage(15, eff)
+                                self.receive_eff_damage(15, eff, DamageType.NORMAL)
                             target.full_remove_effect("Draw Stance", eff.user)
                             self.shirafune_check(eff)
                             return True
@@ -801,10 +808,7 @@ class CharacterManager():
                             return True
                         if eff.name == "Casseur de Logistille":
                             src = Ability("astolfo1")
-                            if self.used_ability._base_cost[
-                                    Energy.
-                                    SPECIAL] > 0 or self.used_ability._base_cost[
-                                        Energy.MENTAL] > 0:
+                            if AbilityType.ENERGY in self.used_ability.types or AbilityType.MENTAL in self.used_ability.types:
                                 self.add_effect(
                                     Effect(
                                         src, EffectType.UNIQUE, eff.user, 2,
@@ -834,7 +838,6 @@ class CharacterManager():
                            if eff.eff_type == EffectType.REFLECT)
                     for eff in gen:
                         if eff.name == "Copy Ninja Kakashi":
-                            logging.debug("Kakashi is reflecting!")
                             self.scene.sharingan_reflecting = True
                             self.scene.sharingan_reflector = target.get_effect(EffectType.REFLECT, "Copy Ninja Kakashi").user
                             target.full_remove_effect("Copy Ninja Kakashi",
@@ -845,8 +848,6 @@ class CharacterManager():
                             ]
                             self.toggle_allegiance()
                             alt_targets.append(self)
-                            for target in alt_targets:
-                                logging.debug(f"Reflected ability targeting {target.source.name}")
                             self.current_targets = alt_targets
                             self.used_ability.execute(self, pteam, eteam)
                             return True
@@ -958,37 +959,13 @@ class CharacterManager():
                         invisible=True), eff.user)
                 eff.user.progress_mission(1, eff.mag)
                 target.full_remove_effect("Doll Trap", eff.user)
-        if target.has_effect(EffectType.ALL_DR, "Conductivity"):
-            target.get_effect(EffectType.ALL_DR,
-                              "Conductivity").user.receive_eff_damage(
-                                  10,
-                                  target.get_effect(EffectType.ALL_DR,
-                                                    "Conductivity"))
-
         if target.source.hp <= 0:
             if self.has_effect(EffectType.STUN_IMMUNE, "Beast Instinct"):
                 self.get_effect(EffectType.STUN_IMMUNE,
                                 "Beast Instinct").duration = 5
                 self.get_effect(EffectType.COUNTER_IMMUNE,
                                 "Beast Instinct").duration = 5
-            if self.used_ability != None and self.used_ability.name == "Yatsufusa":
-                if target in self.scene.player_display.team.character_managers:
-                    target.add_effect(
-                        Effect(
-                            self.used_ability, EffectType.MARK, self, 3,
-                            lambda eff:
-                            "At the beginning of her next turn, Kurome will animate this character."
-                        ))
-                else:
-                    self.apply_stack_effect(
-                        Effect(
-                            self.used_ability,
-                            EffectType.STACK,
-                            self,
-                            280000,
-                            lambda eff:
-                            f"Mass Animation will deal {eff.mag * 10} more damage.",
-                            mag=1), self)
+            
 
     def apply_stack_effect(self, effect: Effect, user: "CharacterManager"):
         gen = [
@@ -1031,7 +1008,7 @@ class CharacterManager():
                 #TODO add affliction boosts here
                 pass
             
-            if self.used_ability.all_costs[1] and target.has_effect(EffectType.UNIQUE, "Galvanism"):
+            if AbilityType.ENERGY in self.used_ability.types and target.has_effect(EffectType.UNIQUE, "Galvanism"):
                 target.receive_eff_healing(mod_damage, target.get_effect(EffectType.UNIQUE, "Galvanism"))
                 target.progress_mission(3, 1)
                 target.apply_stack_effect(Effect(target.get_effect(EffectType.UNIQUE, "Galvanism").source, EffectType.STACK, target, 2, lambda eff:f"Frankenstein will deal {eff.mag * 10} damage with her abilities.", mag=1), target)
@@ -1047,24 +1024,28 @@ class CharacterManager():
                                     "Three-God Empowering Shield"):
                         self.receive_eff_healing(10, self.get_effect(EffectType.UNIQUE,
                                     "Three-God Empowering Shield"))
+                    if self.has_effect(EffectType.UNIQUE, "King of Beasts Transformation - Lionel"):
+                        self.give_eff_healing(10, self, self.get_effect(EffectType.UNIQUE, "King of Beasts Transformation - Lionel"))
 
+                logging.debug("%s dealt %i damage to %s with %s!", self.source.name, mod_damage, target.source.name, self.used_ability.name)
                 target.receive_active_damage(mod_damage, self, damage_type)
 
                 if target.has_effect(EffectType.ALL_DR, "Flag of the Ruler"):
                     target.get_effect(EffectType.ALL_DR, "Flag of the Ruler").user.progress_mission(3, 1)
                 
                 if target.has_effect(EffectType.UNIQUE, "Thunder Palace"):
-                    self.receive_eff_damage(mod_damage, target.get_effect(EffectType.UNIQUE, "Thunder Palace"))
+                    self.receive_eff_damage(mod_damage, target.get_effect(EffectType.UNIQUE, "Thunder Palace"), DamageType.NORMAL)
                     target.full_remove_effect("Thunder Palace", target)
                 if target.has_effect(EffectType.UNIQUE, "Burning Axle"):
-                    user = target.get_effect(EffectType.UNIQUE, "Burning Axle").user
-                    target.full_remove_effect("Burning Axle", user)
+                    src = target.get_effect(EffectType.UNIQUE, "Burning Axle")
+                    target.receive_eff_damage(15, src, DamageType.NORMAL)
+                    target.full_remove_effect("Burning Axle", src.user)
                     target.add_effect(
-                        Effect(Ability("tsunayoshi3"), EffectType.ALL_STUN, user, 2,
+                        Effect(Ability("tsunayoshi3"), EffectType.ALL_STUN, src.user, 2,
                             lambda eff: "This character is stunned."))
                     if target.meets_stun_check():
-                        user.check_on_stun(target)
-                        user.progress_mission(3, 1)
+                        src.user.check_on_stun(target)
+                        src.user.progress_mission(3, 1)
         else:
             #Check for affliction negation missions
             #TODO add affliction damage received boosts
@@ -1082,6 +1063,14 @@ class CharacterManager():
 
         if self.has_effect(EffectType.UNIQUE, "Enraged Blow"):
             mod_damage = mod_damage * 2
+
+        if self.has_effect(EffectType.ALL_DR, "Conductivity"):
+            logging.debug("Pinging Lambo with electricity!")
+            self.get_effect(EffectType.ALL_DR,
+                              "Conductivity").user.receive_eff_damage(
+                                  10,
+                                  self.get_effect(EffectType.ALL_DR,
+                                                    "Conductivity"), DamageType.NORMAL)
 
         if mod_damage < 0:
             mod_damage = 0
@@ -1187,7 +1176,7 @@ class CharacterManager():
         #endregion
 
         if self.will_die(mod_damage):
-            if self.has_effect(EffectType.MARK, "Selfless Genius"):
+            if self.has_effect(EffectType.MARK, "Selfless Genius") and self.active_redeemable(dealer):
                 mod_damage = 0
                 self.add_effect(
                     Effect(
@@ -1199,12 +1188,12 @@ class CharacterManager():
                         lambda eff:
                         "This character will deal 10 more damage with non-affliction abilities.",
                         mag=10))
-                self.get_effect(EffectType.MARK,
-                                "Selfless Genius").user.progress_mission(4, 1)
-                self.get_effect(EffectType.MARK,
-                                "Selfless Genius").user.source.hp = 0
-                self.get_effect(EffectType.MARK,
-                                "Selfless Genius").user.source.dead = True
+                neji = self.get_effect(EffectType.MARK,
+                                "Selfless Genius").user
+                neji.progress_mission(4, 1)
+                neji.source.hp = 0
+                neji.source.dead = True
+                neji.action_effect_cancel()
                 temp_yatsufusa_storage = None
                 if self.get_effect(EffectType.MARK,
                                    "Selfless Genius").user.has_effect(
@@ -1235,17 +1224,20 @@ class CharacterManager():
     def deal_eff_damage(self, damage: int, target: "CharacterManager", source: Effect, damage_type: DamageType):
         if damage_type != DamageType.AFFLICTION or not target.is_aff_immune():
             if damage_type != DamageType.AFFLICTION:
-                damage = self.get_boosts(damage)
+                damage = self.get_boosts(damage, eff_boost=True)
             else:
                 #TODO Add affliction damage boosts here
                 pass
             
-            if source.source.all_costs[1] and target.has_effect(EffectType.UNIQUE, "Galvanism"):
+            if AbilityType.ENERGY in source.source.types and target.has_effect(EffectType.UNIQUE, "Galvanism"):
                 target.receive_eff_healing(damage, target.get_effect(EffectType.UNIQUE, "Galvanism"))
                 target.progress_mission(3, 1)
                 target.apply_stack_effect(Effect(target.get_effect(EffectType.UNIQUE, "Galvanism").source, EffectType.STACK, target, 2, lambda eff:f"Frankenstein will deal {eff.mag * 10} damage with her abilities.", mag=1), target)
                 damage = 0
             else:
+                
+                logging.debug("%s dealt %i damage to %s with %s!", self.source.name, damage, target.source.name, source.name)
+                
                 target.receive_eff_damage(damage, source, damage_type)
         else:
             #Check for affliction negation missions
@@ -1365,12 +1357,12 @@ class CharacterManager():
                         lambda eff:
                         "This character will deal 10 more damage with non-affliction abilities.",
                         mag=10))
-                self.get_effect(EffectType.MARK,
-                                "Selfless Genius").user.source.mission4progress += 1
-                self.get_effect(EffectType.MARK,
-                                "Selfless Genius").user.source.hp = 0
-                self.get_effect(EffectType.MARK,
-                                "Selfless Genius").user.source.dead = True
+                neji = self.get_effect(EffectType.MARK,
+                                "Selfless Genius").user
+                neji.progress_mission(4, 1)
+                neji.source.hp = 0
+                neji.source.dead = True
+                neji.action_effect_cancel()
                 temp_yatsufusa_storage = None
                 if self.get_effect(EffectType.MARK,
                                    "Selfless Genius").user.has_effect(
@@ -1394,7 +1386,7 @@ class CharacterManager():
         if not self.is_aff_immune():
             mod_damage = damage
         else:
-            mod_damage = 0    
+            mod_damage = 0
         self.source.hp -= mod_damage
         self.death_check(self)
 
@@ -1413,9 +1405,28 @@ class CharacterManager():
         if damage > 0:
             self.eff_damage_taken_check(damage, source)
 
+    
+
+    def toga_flush_effects(self):
+        DANGER_TYPES = (EffectType.ABILITY_SWAP, EffectType.PROF_SWAP, EffectType.ALL_BOOST, EffectType.COST_ADJUST, EffectType.TARGET_SWAP)
+        logging.debug("%d effects pre-flush", len(self.source.current_effects))
+        for eff in self.source.current_effects:
+            if eff.user == self:
+                if eff.unique:
+                    logging.debug("Flushing %s for reason: TAGGED UNIQUE", eff)
+                    self.scene.scene_remove_effect(eff.name, self)
+                elif eff.action:
+                    logging.debug("Flushing %s for reason: TAGGED ACTION", eff)
+                    self.scene.scene_remove_effect(eff.name, self)
+                elif eff.eff_type in DANGER_TYPES:
+                    logging.debug("Flushing %s for reason: TYPE IN DANGER TYPES", eff)
+                    self.remove_effect(eff)
+                
+
     def toga_transform(self, target_name: str):
         swap_hp = self.source.hp
         swap_effects = self.source.current_effects
+        logging.debug("%d effects in Toga's swap effects", len(swap_effects))
         self.source = self.scene.return_character(target_name)
         try:
             for i, sprite in enumerate(self.main_ability_sprites):
@@ -1461,7 +1472,7 @@ class CharacterManager():
             self.damage_taken_check(damage, dealer)
             dealer.check_on_damage_dealt(self, damage)
 
-    def get_boosts(self, damage: int) -> int:
+    def get_boosts(self, damage: int, eff_boost: bool = False) -> int:
         mod_damage = damage
         no_boost = False
         which = 0
@@ -1470,21 +1481,22 @@ class CharacterManager():
         for eff in gen:
             no_boost = True
             break
-        for i, ability in enumerate(self.source.current_abilities):
-            if self.used_ability == ability and not no_boost:
-                which = i + 1
-                if ability.name == "Knight's Sword" and self.has_effect(
-                        EffectType.STACK, "Magic Sword"):
-                    mod_damage += (
-                        20 *
-                        self.get_effect(EffectType.STACK, "Magic Sword").mag)
-                if ability.name == "Maximum Cannon" and self.has_effect(
-                        EffectType.STACK, "Maximum Cannon"):
-                    guts = self.get_effect(
-                        EffectType.STACK, "Maximum Cannon")
-                    if guts.mag >= 5:
-                        self.progress_mission(4, 1)
-                    mod_damage += (15 * guts.mag)
+        if not eff_boost:
+            for i, ability in enumerate(self.source.current_abilities):
+                if self.used_ability == ability and not no_boost:
+                    which = i + 1
+                    if ability.name == "Knight's Sword" and self.has_effect(
+                            EffectType.STACK, "Magic Sword"):
+                        mod_damage += (
+                            20 *
+                            self.get_effect(EffectType.STACK, "Magic Sword").mag)
+                    if ability.name == "Maximum Cannon" and self.has_effect(
+                            EffectType.STACK, "Maximum Cannon"):
+                        guts = self.get_effect(
+                            EffectType.STACK, "Maximum Cannon")
+                        if guts.mag >= 5:
+                            self.progress_mission(4, 1)
+                        mod_damage += (15 * guts.mag)
 
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.ALL_BOOST)
@@ -1494,12 +1506,14 @@ class CharacterManager():
                 continue
             if eff.mag < 0:
                 negative = True
+                logging.debug("%s has a negative boost of magnitude %d (%s)", self.source.name, eff.mag, eff.name)
             ability_target = math.trunc(eff.mag / 100)
 
             boost_value = eff.mag - (ability_target * 100)
             if negative:
                 ability_target = ability_target * -1
             if ability_target == which or ability_target == 0:
+                logging.debug("%s is receiving a boost of %i from %s's %s!", self.source.name, boost_value, eff.user.source.name, eff.name)
                 mod_damage = mod_damage + boost_value
 
         if self.used_ability != None and self.used_ability.name == "Trap of Argalia - Down With A Touch!":
@@ -1566,7 +1580,8 @@ class CharacterManager():
                     dr += eff.mag
             else:
                 dr += eff.mag
-
+        if dr:
+            logging.debug("%s's incoming damage is being %s by %i", self.source.name, ("boosted", "reduced")[eff.mag>0], abs(eff.mag))
         return dr
 
     def check_for_cooldown_mod(self, ability: Ability) -> int:
@@ -1682,21 +1697,26 @@ class CharacterManager():
                     manager.full_remove_effect("Mental Annihilation", self)
 
     def pass_through_dest_def(self, dmg: int) -> int:
-        gen = (eff for eff in self.source.current_effects
-               if eff.eff_type == EffectType.DEST_DEF)
-        for eff in gen:
-            current_def = eff.mag
-            self.check_for_absorb_missions(eff, dmg)
-            eff.alter_dest_def(-dmg)
-            if eff.mag <= 0:
-                if not self.has_effect(EffectType.SYSTEM, "SheelePunctureCounter"):
-                    self.add_effect(Effect("SheelePunctureCounter", EffectType.SYSTEM, self, 1, lambda eff:"", mag=1, system=True))
-                else:
-                    self.get_effect(EffectType.SYSTEM, "SheelePunctureCounter").alter_mag(1)
-            self.check_for_collapsing_dest_def(eff)
-            dmg = engine.sat_subtract(current_def, dmg)
-            if dmg == 0:
-                return dmg
+        gen = [eff for eff in self.source.current_effects
+               if eff.eff_type == EffectType.DEST_DEF]
+        if gen:
+            print(f"{len(gen)} dest def effects to ping")
+        gen.sort(key = lambda effect: effect.duration)
+        if gen:
+            for eff in gen:
+                print(f"pinging {eff.name}, with {eff.mag} dest def")
+                current_def = eff.mag
+                self.check_for_absorb_missions(eff, dmg)
+                eff.alter_dest_def(-dmg)
+                if eff.mag <= 0:
+                    if not self.has_effect(EffectType.SYSTEM, "SheelePunctureCounter"):
+                        self.add_effect(Effect("SheelePunctureCounter", EffectType.SYSTEM, self, 1, lambda eff:"", mag=1, system=True))
+                    else:
+                        self.get_effect(EffectType.SYSTEM, "SheelePunctureCounter").alter_mag(1)
+                self.check_for_collapsing_dest_def(eff)
+                dmg = engine.sat_subtract(current_def, dmg)
+                if dmg == 0:
+                    return dmg
         return dmg
 
     def check_for_absorb_missions(self, eff: Effect, damage: int):
@@ -1919,10 +1939,10 @@ class CharacterManager():
                                                 "In The Name Of Ruler!", self):
                     manager.full_remove_effect("In The Name Of Ruler!", self)
             self.full_remove_effect("In The Name Of Ruler!", self)
-        if self.source.name == "seiryu" and self.source.hp < 50:
+        if self.source.name == "seryu" and self.source.hp < 50:
             self.add_effect(
                 Effect(
-                    Ability("seiryualt1"),
+                    Ability("seryualt1"),
                     EffectType.ABILITY_SWAP,
                     self,
                     280000,
@@ -2081,20 +2101,29 @@ class CharacterManager():
             TriggerHandler.handle_killing_blow_trigger(targeter.user, self, targeter.name)
             MissionHandler.handle_killing_blow_mission(targeter.user, self, targeter.name)
             
+    def action_effect_cancel(self):
+        [self.scene.scene_remove_effect(eff.name, self) for eff in self.source.current_effects if eff.action and eff.user == self]
+        
+    def active_redeemable(self, targeter: "CharacterManager"):
+        return not (targeter.used_ability.name == "Body Modification - Self Destruct" or targeter.used_ability.name == "Insatiable Justice" or targeter.used_ability.name == "Partial Shiki Fuujin" or targeter.used_ability.name == "Blasted Tree")
+    
+    
 
     def death_check(self, targeter: "CharacterManager"):
         if self.source.hp <= 0:
             if self.has_effect(
                     EffectType.MARK,
-                    "Doping Rampage") and not self.scene.dying_to_doping:
+                    "Doping Rampage") and not self.scene.dying_to_doping and self.active_redeemable(targeter):
                 self.source.hp = 1
                 self.progress_mission(4, 1)
-            elif self.has_effect(EffectType.MARK, "Lucky Rabbit's Foot"):
+            elif self.has_effect(EffectType.MARK, "Lucky Rabbit's Foot") and self.active_redeemable(targeter):
                 self.source.hp = 35
                 self.get_effect(EffectType.MARK, "Lucky Rabbit's Foot").user.progress_mission(3, 1)
                 self.add_effect(Effect("SnowWhiteMission5Tracker", EffectType.SYSTEM, self, 280000, lambda eff:"", system=True))
             else:
-
+                
+                self.action_effect_cancel()
+                
                 if self.source.name == "esdeath":
                     if not self.has_effect(EffectType.SYSTEM, "EsdeathMission3Failure"):
                         self.add_effect(Effect("EsdeathMission3Failure", EffectType.SYSTEM, self, 280000, lambda eff:"", system=True))
@@ -2112,6 +2141,26 @@ class CharacterManager():
                                                    "Beast Instinct").user:
                         targeter.receive_eff_healing(20, self.get_effect(EffectType.MARK,
                                                    "Beast Instinct"))
+                
+                if targeter.used_ability != None and targeter.used_ability.name == "Yatsufusa":
+                    if self.id == targeter.id:
+                        self.add_effect(
+                            Effect(
+                                targeter.used_ability, EffectType.MARK, targeter, 3,
+                                lambda eff:
+                                "At the beginning of her next turn, Kurome will animate this character."
+                            ))
+                    else:
+                        targeter.apply_stack_effect(
+                            Effect(
+                                targeter.used_ability,
+                                EffectType.STACK,
+                                targeter,
+                                280000,
+                                lambda eff:
+                                f"Mass Animation will deal {eff.mag * 10} more damage.",
+                                mag=1), targeter)        
+                
                 self.source.hp = 0
                 self.source.dead = True
                 temp_yatsufusa_storage = None
@@ -2247,7 +2296,7 @@ class CharacterManager():
         mod_healing = healing  #TODO: Add healing reduction/boost checking
         #TODO: Check for healing negation
 
-        if self.source.name == "seiryu" and self.source.hp >= 50:
+        if self.source.name == "seryu" and self.source.hp >= 50:
             self.full_remove_effect("Body Modification - Self Destruct", self)
 
         #region Healing Mission Check
@@ -2272,7 +2321,7 @@ class CharacterManager():
             healer.progress_mission(1, mod_healing)
 
         #endregion
-
+        logging.debug("%s received %d healing from %s's %s", self.source.name, mod_healing, healer.source.name, healer.used_ability.name)
         self.source.hp += mod_healing
         if self.source.hp > 200:
             self.source.hp = 200
@@ -2285,7 +2334,7 @@ class CharacterManager():
         mod_healing = healing  #TODO: Add healing reduction/boost checking
         #TODO: Check for healing negation
 
-        if self.source.name == "seiryu" and self.source.hp >= 50:
+        if self.source.name == "seryu" and self.source.hp >= 50:
             self.full_remove_effect("Body Modification - Self Destruct", self)
 
         #region Healing Mission Check
@@ -2297,6 +2346,7 @@ class CharacterManager():
             source.user.progress_mission(1, mod_healing)
         #endregion
 
+        logging.debug("%s received %d healing from %s's %s", self.source.name, mod_healing, source.user.source.name, source.name)
         self.source.hp += mod_healing
         if self.source.hp > 200:
             self.source.hp = 200
@@ -2322,7 +2372,7 @@ class CharacterManager():
 
     def drain_energy(self, drain: int, targeter: "CharacterManager"):
         #TODO check for immunities
-        self.source.energy_contribution -= drain
+        self.source.change_energy_cont(-drain)
 
         #region Drain Mission Check
 
@@ -2337,24 +2387,25 @@ class CharacterManager():
     def special_targeting_exemptions(self,
                                      targeter: "CharacterManager") -> bool:
         target = self
+        exempt = False
         if targeter.has_effect(EffectType.MARK,
-                               "Frozen Castle") and not target.has_effect(
-                                   EffectType.UNIQUE, "Frozen Castle"):
-            return True
+                               "Frozen Castle") and not (target.has_effect(
+                                   EffectType.UNIQUE, "Frozen Castle") or target.has_effect(EffectType.MARK, "Frozen Castle")):
+            exempt = True
         if not targeter.has_effect(EffectType.MARK,
                                    "Frozen Castle") and target.has_effect(
                                        EffectType.UNIQUE, "Frozen Castle"):
-            return True
+            exempt = True
         if not targeter.has_effect(EffectType.UNIQUE,
-                                   "Frozen Castle") and target.has_effect(
-                                       EffectType.MARK, "Frozen Castle"):
-            return True
+                                   "Frozen Castle") and (target.has_effect(
+                                       EffectType.MARK, "Frozen Castle") and not targeter.has_effect(EffectType.MARK, "Frozen Castle")):
+            exempt = True
         if targeter.has_effect(
                 EffectType.UNIQUE,
                 "Streets of the Lost") and self != targeter.get_effect(
                     EffectType.UNIQUE, "Streets of the Lost").user:
-            return True
-        return False
+            exempt = True
+        return exempt
 
     def hostile_target(self,
                        targeter: "CharacterManager",
@@ -2374,7 +2425,7 @@ class CharacterManager():
             return not (self.check_invuln() or self.source.dead
                         or self.is_ignoring())
         elif def_type == "REGBYPASS":
-            if self.check_bypass_effects():
+            if self.check_bypass_effects() == "BYPASS":
                 return not (self.source.dead)
             else:
                 return not (self.source.dead or self.check_invuln())
@@ -2424,7 +2475,7 @@ class CharacterManager():
                        targeter: "CharacterManager",
                        def_type="NORMAL") -> bool:
         if def_type == "NORMAL":
-            return not (self.check_isolated() or self.source.dead
+            return not ((self.check_isolated() and self != targeter) or self.source.dead
                         or self.special_targeting_exemptions(targeter))
         elif def_type == "BYPASS":
             return not (self.source.dead
@@ -2438,10 +2489,12 @@ class CharacterManager():
 
     def remove_effect(self, effect: Effect):
         new_current_effects: list[Effect] = []
+        
         for eff in self.source.current_effects:
             if not (eff == effect):
                 new_current_effects.append(eff)
         self.source.current_effects = new_current_effects
+        
 
     def full_remove_effect(self, eff_name: str, user: "CharacterManager"):
         new_current_effects: list[Effect] = []
@@ -2740,8 +2793,9 @@ class CharacterManager():
                if eff.eff_type == EffectType.ABILITY_SWAP)
         for eff in gen:
             swap_from = eff.mag // 10
+            
             swap_to = eff.mag - (swap_from * 10)
-    
+            
             if self.scene.player and not ffs_shokuhou and hasattr(self, "alt_ability_sprites"):
                     self.current_ability_sprites[swap_from -
                                             1] = self.alt_ability_sprites[swap_to

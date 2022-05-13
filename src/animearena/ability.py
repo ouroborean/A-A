@@ -7,6 +7,8 @@ import enum
 import copy
 import importlib.resources
 from animearena.effects import EffectType, Effect
+from animearena.ability_type import AbilityType
+import logging
 
 def get_path(file_name: str) -> Path:
     with importlib.resources.path('animearena.resources', file_name) as path:
@@ -42,7 +44,6 @@ class DamageType(enum.IntEnum):
     PIERCING = 1
     AFFLICTION = 2
 
-
 class Ability():
 
     image: Image
@@ -57,7 +58,7 @@ class Ability():
     _base_cooldown: int = 0
     cooldown: int = 0
     cooldown_remaining: int = 0
-    types: list[str]
+    types: list[AbilityType]
     target: Callable
     execute: Callable
 
@@ -119,6 +120,10 @@ class Ability():
         else:
             self.target = details_package[4]
             self.execute = details_package[5]
+        if len(details_package) == 7:
+            self.types = details_package[6]
+        else:
+            self.types = []
 
 
     # pylint: enable=too-many-arguments
@@ -145,31 +150,41 @@ class Ability():
                 character: "CharacterManager") -> bool:
         if self.total_cost > scene.player_display.team.energy_pool[
                 Energy.RANDOM]:
+            logging.debug("%s can't be paid for (RANDOM)", self.name)
             return False
         else:
             for idx, cost in enumerate(self.all_costs):
                 if cost > 0 and scene.player_display.team.energy_pool[Energy(
                         idx)] < cost:
+                    logging.debug("%s can't be paid for (SPECIFIC)", self.name)
                     return False
         if character.is_stunned():
+            logging.debug("%s is generically stunned!", self.name)
             return False
         if self.target(character, scene.player_display.team.character_managers,
                        scene.enemy_display.team.character_managers, True) == 0:
+            logging.debug("%s has no targets!", self.name)
             return False
         if scene.waiting_for_turn:
+            logging.debug("%s is waiting for user priority!", self.name)
             return False
         if self.cooldown_remaining > 0:
+            logging.debug("%s is on cooldown!", self.name)
             return False
         if character.source.dead:
+            logging.debug("%s's user is dead!'", self.name)
             return False
         if scene.window_up:
+            logging.debug("%s's use is prohibited by a window!'", self.name)
             return False
         if character.has_effect(EffectType.PROF_SWAP, "Level-6 Shift"):
             return False
         if character.has_specific_stun():
             for stun_type in character.get_specific_stun_types():
                 if self._base_cost[Energy(stun_type - 1)] > 0:
+                    logging.debug("%s is specifically stunned!", self.name)
                     return False
+                
         return True
 
     def modify_ability_cost(self, energy_type: Energy, mod: int):
@@ -240,6 +255,7 @@ def default_target(target_type,
                                     protection[0], protection[1])):
                     if not fake_targeting:
                         enemy.set_targeted()
+                    logging.debug("%s is a potential target for %s's ability!", enemy.source.name, user.source.name)
                     total_targets += 1
         if target_type == "HELPFUL" or target_type == "ALL":
             for ally in playerTeam:
@@ -254,6 +270,7 @@ def default_target(target_type,
                                     protection[0], protection[1])):
                     if not fake_targeting:
                         ally.set_targeted()
+                    logging.debug("%s is a potential target for %s's ability!", ally.source.name, user.source.name)
                     total_targets += 1
         if target_type == "SELFLESS":
             for ally in playerTeam:
@@ -699,7 +716,7 @@ def target_insatiable_justice(user: "CharacterManager",
               fake_targeting: bool = False) -> int:
     total_targets = 0
     for enemy in enemyTeam:
-        if enemy.hostile_target(user, "BYPASS") and enemy.source.hp < 50:
+        if enemy.hostile_target(user, "BYPASS") and enemy.source.hp < 60:
             if not fake_targeting:
                 enemy.set_targeted()
             total_targets += 1
@@ -742,9 +759,10 @@ def target_loyal_guard(user: "CharacterManager",
     total_targets = 0
     for ally in playerTeam:
         if ally != user and not ally.source.dead:
+            logging.debug("Shokuhou can be guarded by %s!", ally.source.name)
             if not fake_targeting:
                 user.set_targeted()
-            total_targets += 1
+            total_targets = 1
     return total_targets
 
 def target_ruler(user: "CharacterManager",
@@ -958,7 +976,7 @@ def exe_shatter(user: "CharacterManager", playerTeam: list["CharacterManager"], 
                             ability.cooldown_remaining += 2
                 if target.has_effect(EffectType.MARK, "Overwhelming Power"):
                     user.progress_mission(1, 1)
-                    user.add_effect(Effect(Ability("aizen1"), EffectType.COST_ADJUST, user, 2, lambda eff: "Aizen's ability costs have been reduced by one random energy.", mag=-51))
+                    user.add_effect(Effect(Ability("aizen1"), EffectType.COST_ADJUST, user, 3, lambda eff: "Aizen's ability costs have been reduced by one random energy.", mag=-51))
 
         user.check_on_use()
         user.check_on_harm()
@@ -1070,7 +1088,7 @@ def exe_luna(user: "CharacterManager", playerTeam: list["CharacterManager"], ene
             if target.id == user.id:
                 hostile_effects = [eff for eff in target.source.current_effects if eff.user.is_enemy() and not (eff.system or eff.eff_type == EffectType.SYSTEM)]
                 if hostile_effects:
-                    num = randint(0, len(hostile_effects) - 1)
+                    num = user.scene.d20.randint(0, len(hostile_effects) - 1)
                     print(f"Removing effect at index {num}")
                     target.full_remove_effect(hostile_effects[num].name, hostile_effects[num].user)
                     user.progress_mission(3, 1)
@@ -1101,11 +1119,14 @@ def exe_scatter(user: "CharacterManager", playerTeam: list["CharacterManager"], 
         if user.has_effect(EffectType.TARGET_SWAP, "Bankai - Senbonzakura Kageyoshi"):
             user.progress_mission(3, 1)
         for target in user.current_targets:
-            if target.id == user.id and target.helpful_target(user, user.check_bypass_effects()):
-                target.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 2, lambda eff: f"This character has {eff.mag} destructible defense.", mag = 25))
+            if target.id == user.id:
+                if target.helpful_target(user, user.check_bypass_effects()):
+                    target.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 2, lambda eff: f"This character has {eff.mag} destructible defense.", mag = 25))
                 helped = True
-            elif target.id != user.id and target.final_can_effect(user.check_bypass_effects()):
-                user.deal_active_damage(base_power, target, DamageType.NORMAL)
+            elif target.id != user.id:
+                if target.final_can_effect(user.check_bypass_effects()):
+                    user.deal_active_damage(base_power, target, DamageType.PIERCING)
+                harmed = True
         user.check_on_use()
         if helped:
             user.check_on_help()
@@ -1287,7 +1308,10 @@ def exe_chelsea_smoke(user: "CharacterManager", playerTeam: list["CharacterManag
             helped = True
         if target.id != user.id:
             if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
-                if [eff for eff in target.source.current_effects if eff.eff_type == EffectType.COUNTER_RECEIVE and eff.user.id == target.id]:
+                has_counter = list([eff for eff in target.source.current_effects if eff.eff_type == EffectType.COUNTER_RECEIVE and eff.user.id == target.id])
+                logging.debug("Emergency Smoke detected %d allied counter effects on %s", len(has_counter), target.source.name)
+                logging.debug("%s", target)
+                if has_counter:
                     user.progress_mission(4, 1)
                     user.deal_active_damage(15, target, DamageType.AFFLICTION)
             harmed = True
@@ -1446,7 +1470,7 @@ def exe_cranberry_block(user: "CharacterManager", playerTeam: list["CharacterMan
 def exe_merciless_finish(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
-            if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting:
+            if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                 user.deal_active_damage(15, target, DamageType.AFFLICTION)
                 target.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 3, lambda eff: "This character will take 15 affliction damage.", mag=15))
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 4, lambda eff: "This character is stunned."))
@@ -1527,22 +1551,17 @@ def exe_adamantine_armor(user: "CharacterManager", playerTeam: list["CharacterMa
 
 def exe_titanias_rampage(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(user.used_ability, EffectType.CONT_UNIQUE, user, 280000, lambda eff: f"Erza will deal {(eff.mag * 5) + 15} piercing damage to a random enemy.", mag = 1))
-    if user.id != "enemy" and not user.scene.catching_up:
-        valid_targets: list["CharacterManager"] = []
-        for enemy in enemyTeam:
-            if enemy.final_can_effect(user.check_bypass_effects()) and not enemy.deflecting():
-                valid_targets.append(enemy)
-        if valid_targets:
-            target = randint(0, len(valid_targets) - 1)
-            user.scene.random_rolls.append(valid_targets[target].char_id)
-            user.deal_active_damage(15, valid_targets[target], DamageType.PIERCING)
-        user.check_on_use()
-        if valid_targets:
-            user.check_on_harm()
-    else:
-        user.deal_active_damage(15, enemyTeam[user.scene.random_rolls[0]], DamageType.PIERCING)
-        user.scene.random_rolls = user.scene.random_rolls[1:]
-        user.check_on_use()
+    
+    valid_targets: list["CharacterManager"] = []
+    for enemy in enemyTeam:
+        if enemy.final_can_effect(user.check_bypass_effects()) and not enemy.deflecting():
+            valid_targets.append(enemy)
+    if valid_targets:
+        target = user.scene.d20.randint(0, len(valid_targets) - 1)
+        user.deal_active_damage(15, valid_targets[target], DamageType.PIERCING)
+        logging.debug("Rampage dealing 15 damage to %s", valid_targets[target].source.name)
+    user.check_on_use()
+    if valid_targets:
         user.check_on_harm()
 
 
@@ -1560,7 +1579,7 @@ def exe_nakagamis_starlight(user: "CharacterManager", playerTeam: list["Characte
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_active_damage(35, target, DamageType.NORMAL)
-                target.source.energy_contribution -= 1
+                target.source.change_energy_cont(-1)
                 user.check_on_drain(target)
                 user.progress_mission(3, 1)
         user.check_on_use()
@@ -1585,7 +1604,7 @@ def exe_frozen_castle(user: "CharacterManager", playerTeam: list["CharacterManag
         if target.final_can_effect(user.check_bypass_effects()):
             target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 6, lambda eff: "This character cannot target Esdeath's allies."))
     user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 5, lambda eff: "Esdeath is using Frozen Castle. This effect will end if she dies."))
-    user.add_effect(Effect(user.used_ability, EffectType.TARGET_SWAP, user, 5, lambda eff: "Weiss Schnabel will target all enemies.", mag=41))
+    user.add_effect(Effect(user.used_ability, EffectType.TARGET_SWAP, user, 5, lambda eff: "Weiss Schnabel will target all enemies.", mag=31))
     user.check_on_use()
     user.check_on_harm()
 
@@ -1656,7 +1675,7 @@ def exe_blasted_tree(user: "CharacterManager", playerTeam: list["CharacterManage
     for target in user.current_targets:
         if target.final_can_effect(user.check_bypass_effects()):
             base_damage = user.source.hp
-            if target.source.hp >= 50:
+            if target.source.hp > 100:
                 user.add_effect(Effect("FrankensteinMission5Tracker", EffectType.SYSTEM, user, 1, lambda eff:"", system=True))
             if user.has_effect(EffectType.STACK, "Galvanism"):
                     base_damage = base_damage + (user.get_effect(EffectType.STACK, "Galvanism").mag * 10)
@@ -1666,14 +1685,7 @@ def exe_blasted_tree(user: "CharacterManager", playerTeam: list["CharacterManage
     user.check_on_harm()
 
     user.source.hp = 0
-    user.source.dead = True
-    temp_yatsufusa_storage = None
-    if user.has_effect(EffectType.MARK, "Yatsufusa"):
-        temp_yatsufusa_storage = user.get_effect(EffectType.MARK, "Yatsufusa")
-        temp_yatsufusa_storage.user.progress_mission(1, 1)
-    user.source.current_effects.clear()
-    if temp_yatsufusa_storage:
-        user.source.current_effects.append(temp_yatsufusa_storage)
+    user.death_check(user)
 
         
 
@@ -1763,7 +1775,7 @@ def exe_iron_shadow_dragon_roar(user: "CharacterManager", playerTeam: list["Char
     if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.final_can_effect("BYPASS"):
-                user.deal_active_damage(20, target, DamageType.NORMAL)
+                user.deal_active_damage(15, target, DamageType.NORMAL)
         user.check_on_use()
         user.check_on_harm()
 
@@ -1780,7 +1792,7 @@ def exe_blacksteel_gajeel(user: "CharacterManager", playerTeam: list["CharacterM
         user.full_remove_effect("Iron Shadow Dragon", user)
         user.full_remove_effect("gajeel3", user)
     user.progress_mission(4, 1)
-    user.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 280000, lambda eff: "Gajeel has 15 points of damage reduction."))
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 280000, lambda eff: "Gajeel has 15 points of damage reduction.", mag = 15))
     user.check_on_use()
 
 
@@ -1800,7 +1812,7 @@ def exe_gate_of_babylon(user: "CharacterManager", playerTeam: list["CharacterMan
                     if user.has_effect(EffectType.STACK, "Gate of Babylon"):
                         base_damage += (user.get_effect(EffectType.STACK, "Gate of Babylon").mag * 15)
                     user.deal_active_damage(base_damage, target, DamageType.NORMAL)
-                    harmed = True
+                harmed = True
         user.check_on_use()
         if harmed:
             if user.has_effect(EffectType.STACK, "Gate of Babylon"):
@@ -2002,14 +2014,15 @@ def exe_unlimited(user: "CharacterManager", playerTeam: list["CharacterManager"]
         user.progress_mission(5, 1)
         for target in user.current_targets:
             if target.id == user.id:
-                target.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 280000, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag=5))
-                target.add_effect(Effect(user.used_ability, EffectType.CONT_DEST_DEF, user, 280000, lambda eff: f"This character will gain 5 points of destructible defense.", mag=5))
+                if target.helpful_target(user):
+                    target.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 280000, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag=5))
+                    target.add_effect(Effect(user.used_ability, EffectType.CONT_DEST_DEF, user, 280000, lambda eff: f"This character will gain 5 points of destructible defense.", mag=5))
                 helped = True
             elif target.id != user.id:
                 if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                     user.deal_active_damage(5, target, DamageType.NORMAL)
                     target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 280000, lambda eff: f"This character will take 5 damage.", mag=5))
-                    harmed = True
+                harmed = True
         user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: f"Gray is using Ice, Make Unlimited."))
         user.check_on_use()
         if helped:
@@ -2021,17 +2034,18 @@ def exe_unlimited(user: "CharacterManager", playerTeam: list["CharacterManager"]
 
 def consume_guts(gunha :"CharacterManager", max: int) -> int:
     output = 0
-    if gunha.get_effect(EffectType.STACK, "Guts").mag >= max:
-        gunha.get_effect(EffectType.STACK, "Guts").alter_mag(max * -1)
-        if gunha.get_effect(EffectType.STACK, "Guts").mag < 3:
-            gunha.source.main_abilities[2].target_type = Target.SINGLE
-        if gunha.get_effect(EffectType.STACK, "Guts").mag == 0:
+    if gunha.has_effect(EffectType.STACK, "Guts"):
+        if gunha.get_effect(EffectType.STACK, "Guts").mag >= max:
+            gunha.get_effect(EffectType.STACK, "Guts").alter_mag(max * -1)
+            if gunha.get_effect(EffectType.STACK, "Guts").mag < 3:
+                gunha.source.main_abilities[2].target_type = Target.SINGLE
+            if gunha.get_effect(EffectType.STACK, "Guts").mag == 0:
+                gunha.remove_effect(gunha.get_effect(EffectType.STACK, "Guts"))
+            output = max
+        else:
+            output = gunha.get_effect(EffectType.STACK, "Guts").mag
             gunha.remove_effect(gunha.get_effect(EffectType.STACK, "Guts"))
-        output = max
-    else:
-        output = gunha.get_effect(EffectType.STACK, "Guts").mag
-        gunha.remove_effect(gunha.get_effect(EffectType.STACK, "Guts"))
-        gunha.source.main_abilities[2].target_type = Target.SINGLE
+            gunha.source.main_abilities[2].target_type = Target.SINGLE
 
     if output >= 3:
         gunha.progress_mission(1, 1)
@@ -2193,7 +2207,7 @@ def exe_tensa_zangetsu(user: "CharacterManager", playerTeam: list["CharacterMana
     user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 4, lambda eff: "Ichigo is invulnerable."))
     user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 3, lambda eff: "Getsuga Tenshou deals piercing damage and ignores invulnerabilty."))
     user.add_effect(Effect(user.used_ability, EffectType.TARGET_SWAP, user, 3, lambda eff: "Zangetsu Strike will target all enemies.", mag=31))
-    user.source.energy_contribution += 1
+    user.source.change_energy_cont(1)
     user.check_on_use()
 
 def exe_zangetsu_slash(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
@@ -2230,7 +2244,7 @@ def exe_butou_renjin(user: "CharacterManager", playerTeam: list["CharacterManage
                     user.add_effect(Effect("IchimaruMission4Tracker", EffectType.SYSTEM, user, 3, lambda eff:"", mag = 1, system = True))
                 else:
                     user.get_effect(EffectType.SYSTEM, "IchimaruMission4Tracker").duration = 2
-                target.add_effect(Effect(user.used_ability, EffectType.CONT_UNIQUE, user, 3, lambda eff: "This character will take 15 damage."))
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_UNIQUE, user, 3, lambda eff: "This character will take 15 damage.", mag=15))
         user.check_on_use()
         user.check_on_harm()
 
@@ -2381,7 +2395,7 @@ def exe_flag_of_the_ruler(user: "CharacterManager", playerTeam: list["CharacterM
     if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
             if target.helpful_target(user, user.check_bypass_effects()):
-                target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 2, lambda eff:f"This character has 10 points of damage reduction."))
+                target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 2, lambda eff:f"This character has 10 points of damage reduction.", mag = 10))
                 target.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 280000, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag = 10))
         user.check_on_use()
         user.check_on_help()            
@@ -2661,7 +2675,7 @@ def exe_judgement_throw(user: "CharacterManager", playerTeam: list["CharacterMan
             if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                 user.deal_active_damage(base_damage, target, DamageType.NORMAL)
                 if user.has_effect(EffectType.MARK, "Needle Pin"):
-                    target.source.energy_contribution -= 1
+                    target.source.change_energy_cont(-1)
                     user.progress_mission(3, 1)
                     user.check_on_drain(target)
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_BOOST, user, 2, lambda eff: f"This character will deal {-eff.mag} less damage.", mag = -weaken))
@@ -2748,11 +2762,11 @@ def exe_summon_gyudon(user: "CharacterManager", playerTeam: list["CharacterManag
                 if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                     user.deal_active_damage(5, target, DamageType.NORMAL)
                     target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 280000, lambda eff: "This character will take 5 damage.", mag=5))
-                    harmed = True
+                harmed = True
             elif target.id == user.id:
                 if target.helpful_target(user, user.check_bypass_effects()):
                     target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 280000, lambda eff: "This character has 10 points of damage reduction.", mag=10))
-                    helped = True
+                helped = True
         user.check_on_use()
         user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "Lambo cannot use Summon Gyudon."))
         if helped:
@@ -2814,11 +2828,13 @@ def exe_fairy_law(user: "CharacterManager", playerTeam: list["CharacterManager"]
     harmed = False
     if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
-            if target.id == user.id and target.helpful_target(user, user.check_bypass_effects()):
-                user.give_healing(20, target)
+            if target.id == user.id:
+                if target.helpful_target(user, user.check_bypass_effects()):
+                    user.give_healing(20, target)
                 helped = True
-            elif target.id != user.id and target.final_can_effect(user.check_bypass_effects()):
-                user.deal_active_damage(20, target, DamageType.NORMAL)
+            elif target.id != user.id:
+                if target.final_can_effect(user.check_bypass_effects()):
+                    user.deal_active_damage(20, target, DamageType.NORMAL)
                 harmed = True
         user.check_on_use()
         if helped:
@@ -2848,8 +2864,9 @@ def exe_laxus_block(user: "CharacterManager", playerTeam: list["CharacterManager
 #region Leone Execution
 def exe_lionel(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "Leone can use her abilities."))
-    user.add_effect(Effect(user.used_ability, EffectType.CONT_HEAL, user, 280000, lambda eff:"Leone will heal 10 health."))
+    user.add_effect(Effect(user.used_ability, EffectType.CONT_HEAL, user, 280000, lambda eff:"Leone will heal 10 health.", mag=10))
     user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 280000, lambda eff: "Leone will heal 10 health when she damages an enemy or uses Instinctual Dodge."))
+    user.give_healing(10, user)
     user.check_on_use()
 
 def exe_beast_instinct(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
@@ -2859,7 +2876,7 @@ def exe_beast_instinct(user: "CharacterManager", playerTeam: list["CharacterMana
             if target != user:
                 if target.final_can_effect(user.check_bypass_effects()):
                     target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 5, lambda eff: "Lion Fist will ignore invulnerability and deal 20 more damage to this target."))
-                    harmed = True
+                harmed = True
             else:
                 user.add_effect(Effect(user.used_ability, EffectType.STUN_IMMUNE, user, 5, lambda eff: "Leone will ignore stun effects."))
                 user.add_effect(Effect(user.used_ability, EffectType.COUNTER_IMMUNE, user, 5, lambda eff: "Leone will ignore counter effects."))
@@ -2879,8 +2896,7 @@ def exe_lion_fist(user: "CharacterManager", playerTeam: list["CharacterManager"]
                 def_type = user.check_bypass_effects()
                 base_damage = 35
             if target.final_can_effect(def_type):
-                user.deal_active_damage(55, target, DamageType.NORMAL)
-                user.give_healing(10, user)
+                user.deal_active_damage(base_damage, target, DamageType.NORMAL)
         user.check_on_use()
         user.check_on_harm()
                 
@@ -3014,16 +3030,18 @@ def exe_aquarius(user: "CharacterManager", playerTeam: list["CharacterManager"],
     help_duration = 2
     if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
-            if target.id == user.id and target.helpful_target(user, user.check_bypass_effects()):
+            if target.id == user.id:
+                if target.helpful_target(user, user.check_bypass_effects()):
+                    if user.has_effect(EffectType.MARK, "Gemini"):
+                        help_duration = 4
+                    target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, help_duration, lambda eff: "This character has 10 points of damage reduction.", mag=10))
                 helped = True
-                if user.has_effect(EffectType.MARK, "Gemini"):
-                    help_duration = 4
-                target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, help_duration, lambda eff: "This character has 10 points of damage reduction.", mag=10))
-            if target.id != user.id and target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+            elif target.id != user.id:
+                if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
+                    user.deal_active_damage(15, target, DamageType.NORMAL)
+                    if user.has_effect(EffectType.MARK, "Gemini"):
+                        target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 3, lambda eff: "This character will take 10 damage.", mag=15))
                 harmed = True
-                user.deal_active_damage(15, target, DamageType.NORMAL)
-                if user.has_effect(EffectType.MARK, "Gemini"):
-                    target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 3, lambda eff: "This character will take 10 damage.", mag=15))
         user.check_on_use()
         if not user.has_effect(EffectType.CONSECUTIVE_TRACKER, "LucyMission4Tracker"):
             user.add_effect(Effect("LucyMission4Tracker", EffectType.CONSECUTIVE_TRACKER, user, 280000, lambda eff:"", mag = 1, system=True))
@@ -3175,14 +3193,7 @@ def exe_partial_shiki_fuujin(user: "CharacterManager", playerTeam: list["Charact
         user.check_on_use()
         user.check_on_harm()
         user.source.hp = 0
-        user.source.dead = True
-        temp_yatsufusa_storage = None
-        if user.has_effect(EffectType.MARK, "Yatsufusa"):
-            temp_yatsufusa_storage = user.get_effect(EffectType.MARK, "Yatsufusa")
-            temp_yatsufusa_storage.user.progress_mission(1, 1)
-        user.source.current_effects.clear()
-        if temp_yatsufusa_storage:
-            user.source.current_effects.append(temp_yatsufusa_storage)
+        user.death_check(user)
 
 def exe_minato_parry(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Minato is invulnerable."))
@@ -3241,7 +3252,7 @@ def exe_blood_suppression_removal(user: "CharacterManager", playerTeam: list["Ch
     user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 5, lambda eff: "Mirai's abilities cause their target to receive 10 affliction damage for 2 turns."))
     user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, 5, lambda eff: "Blood Suppression Removal has been replaced by Blood Bullet.", mag = 11))
     user.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 5, lambda eff: "Mirai will take 10 affliction damage.", mag=10))
-    user.receive_eff_damage(10, user.get_effect(EffectType.MARK, "Blood Suppression Removal"), DamageType.AFFLICTION)
+    user.receive_system_aff_damage(10, user.get_effect(EffectType.MARK, "Blood Suppression Removal"), DamageType.AFFLICTION)
     user.check_on_use()
 
 def exe_blood_sword_combat(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
@@ -3712,43 +3723,43 @@ def exe_i_reject(user: "CharacterManager", playerTeam: list["CharacterManager"],
                 if target.id != user.id:
                     if target.final_can_effect(user.check_bypass_effects()):
                         user.deal_active_damage(25, target, DamageType.NORMAL)
-                        harmed = True
+                    harmed = True
                 if target.id == user.id:
                     if target.helpful_target(user, user.check_bypass_effects()):
                         user.give_healing(25, target)
                         target.add_effect(Effect(Ability("shunshunrikka1"), EffectType.ALL_INVULN, user, 2, lambda eff: "This character is invulnerable."))
-                        helped = True
+                    helped = True
             elif one() and two():
                 if target.helpful_target(user, user.check_bypass_effects()):
                     target.add_effect(Effect(Ability("shunshunrikka4"), EffectType.UNIQUE, user, 280000, lambda eff: "If this character deals new damage to an enemy, they will heal 10 health."))
                     target.add_effect(Effect(Ability("shunshunrikka4"), EffectType.ALL_BOOST, user, 280000, lambda eff: "This character will deal 5 more damage.", mag = 5))
-                    helped = True
+                helped = True
             elif two() and three():
                 if target.helpful_target(user, user.check_bypass_effects()):
                     target.add_effect(Effect(Ability("shunshunrikka2"), EffectType.DEST_DEF, user, 280000, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag = 30))
                     target.add_effect(Effect(Ability("shunshunrikka2"), EffectType.CONT_HEAL, user, 280000, lambda eff: f"This character will heal 10 health.", mag=10))
                     user.give_healing(10, target)
                     target.add_effect(Effect(Ability("shunshunrikka2"), EffectType.UNIQUE, user, 280000, lambda eff: "This effect will end on all characters if this destructible defense is destroyed."))
-                    helped = True
+                helped = True
             elif one() and three():
                 if target.helpful_target(user, user.check_bypass_effects()):
                     target.add_effect(Effect(Ability("shunshunrikka3"), EffectType.DEST_DEF, user, 280000, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag = 35))
                     target.add_effect(Effect(Ability("shunshunrikka3"), EffectType.UNIQUE, user, 280000, lambda eff: "While the destructible defense holds, this character will deal 15 damage to any enemy that uses a new harmful ability on them."))
-                    helped = True
+                helped = True
             elif three():
                 if target.helpful_target(user, user.check_bypass_effects()):
                     target.add_effect(Effect(Ability("shunshunrikka5"), EffectType.DEST_DEF, user, 2, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag = 30))
-                    helped = True
+                helped = True
             elif two():
                 if target.helpful_target(user, user.check_bypass_effects()):
                     target.add_effect(Effect(Ability("shunshunrikka6"), EffectType.CONT_HEAL, user, 3, lambda eff: f"This character will heal 10 health.", mag=20))
                     user.give_healing(20, target)
-                    helped = True
+                helped = True
             elif one():
                 if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                     user.deal_active_damage(15, target, DamageType.NORMAL)
-                    harmed = True
                     target.add_effect(Effect(Ability("shunshunrikka7"), EffectType.ALL_DR, user, 280000, lambda eff: f"This character will take 5 more damage from non-affliction abilities.", mag=-5))
+                harmed = True
         user.check_on_use()
         if helped:
             user.check_on_help()
@@ -3887,12 +3898,12 @@ def exe_minael_yunael(user: "CharacterManager", playerTeam: list["CharacterManag
             if target.id != user.id:
                 if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                     user.deal_active_damage(15, target, DamageType.NORMAL)
-                    harmed = True
+                harmed = True
             else:
                 if user.has_effect(EffectType.DEST_DEF, "Minion - Minael and Yunael"):
-                    user.get_effect(EffectType.DEST_DEF, "Minion - Minael and Yunael").alter_dest_def(15)
+                    user.get_effect(EffectType.DEST_DEF, "Minion - Minael and Yunael").alter_dest_def(10)
                 else:
-                    user.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 280000, lambda eff: "This character has {eff.mag} points of destructible defense.", mag=15))
+                    user.add_effect(Effect(user.used_ability, EffectType.DEST_DEF, user, 280000, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag=10))
         user.check_on_use()
         if harmed:
             user.check_on_harm()
@@ -4072,30 +4083,15 @@ def exe_self_destruct(user: "CharacterManager", playerTeam: list["CharacterManag
     user.check_on_use()
     user.check_on_harm()
     user.source.hp = 0
-    user.source.dead = True
-    temp_yatsufusa_storage = None
-    if user.has_effect(EffectType.MARK, "Yatsufusa"):
-        temp_yatsufusa_storage = user.get_effect(EffectType.MARK, "Yatsufusa")
-        temp_yatsufusa_storage.user.progress_mission(1, 1)
-    user.source.current_effects.clear()
-    if temp_yatsufusa_storage:
-        user.source.current_effects.append(temp_yatsufusa_storage)
+    user.death_check(user)
     
 
 def exe_insatiable_justice(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if not user.check_countered(playerTeam, enemyTeam):
         for target in user.current_targets:
-            if target.final_can_effect(user.check_bypass_effects()) and target.source.hp < 30:
+            if target.final_can_effect(user.check_bypass_effects()) and target.source.hp < 60:
                 target.source.hp = 0
-                target.source.dead = True
-                target.source.current_effects.clear()
-                temp_yatsufusa_storage = None
-                if target.has_effect(EffectType.MARK, "Yatsufusa"):
-                    temp_yatsufusa_storage = target.get_effect(EffectType.MARK, "Yatsufusa")
-                    temp_yatsufusa_storage.user.progress_mission(1, 1)
-                target.source.current_effects.clear()
-                if temp_yatsufusa_storage:
-                    target.source.current_effects.append(temp_yatsufusa_storage)
+                target.death_check(user)
         user.check_on_use()
         user.check_on_harm()
 #endregion
@@ -4129,7 +4125,7 @@ def exe_blinding_light(user: "CharacterManager", playerTeam: list["CharacterMana
             if target.final_can_effect(user.check_bypass_effects()):
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 4, lambda eff: "This character is stunned."))
                 target.add_effect(Effect(user.used_ability, EffectType.DEF_NEGATE, user, 4, lambda eff: "This character cannot reduce damage or become invulnerable."))
-                target.add_effect(Effect(user.used_ability, EffectType.MARK, user, lambda eff: "This character will take 10 more damage from Extase - Bisector of Creation."))
+                target.add_effect(Effect(user.used_ability, EffectType.MARK, user, 4, lambda eff: "This character will take 10 more damage from Extase - Bisector of Creation."))
                 if target.meets_stun_check():
                     user.check_on_stun(target)
         user.check_on_use()
@@ -4478,11 +4474,11 @@ def exe_hear_distress(user: "CharacterManager", playerTeam: list["CharacterManag
             if target.helpful_target(user, "BYPASS"):
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 2, lambda eff: "This character has 25 points of damage reduction.", mag=25, invisible=True))
                 target.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 2, lambda eff: "This character will gain one random energy if they are affected by a new harmful ability.", invisible=True))
-                helped = True
+            helped = True
         elif target.id != user.id:
             if target.final_can_effect("BYPASS"):
-                harmed = True
                 target.add_effect(Effect(user.used_ability, EffectType.COUNTER_USE, user, 2, lambda eff: "The first harmful ability used by this character will be countered, and they will lose one random energy.", invisible=True))
+            harmed = True
     user.check_on_use()
     if harmed:
         user.check_on_harm()
@@ -4559,7 +4555,7 @@ def exe_arrest_assault(user: "CharacterManager", playerTeam: list["CharacterMana
 def exe_gather_power(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff: f"Rubble Barrage will deal {eff.mag * 5} more damage, Arrest Assault grants {eff.mag * 5} more damage reduction, and Gather Power has {eff.mag} less cooldown.", mag = 1), user)
     user.progress_mission(1, 1)
-    user.source.energy_contribution += 1
+    user.source.change_energy_cont(1)
     user.used_ability._base_cooldown -= 1
     if user.used_ability._base_cooldown < 0:
         user.used_ability._base_cooldown = 0
@@ -4703,7 +4699,7 @@ def exe_vacuum_syringe(user: "CharacterManager", playerTeam: list["CharacterMana
         for target in user.current_targets:
             if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                 user.deal_active_damage(10, target, DamageType.AFFLICTION)
-                target.add_effect(Effect(user.used_ability, EffectType.CONT_AFF_DMG, user, 5, lambda eff: "This character will take 10 affliction damage.", mag=10))
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_UNIQUE, user, 5, lambda eff: "This character will take 10 affliction damage.", mag=10))
                 target.apply_stack_effect(Effect(Ability("toga3"), EffectType.STACK, user, 280000, lambda eff: f"Toga has drawn blood from this character {eff.mag} time(s).", mag = 1), user)
                 user.progress_mission(2, 1)
         user.check_on_use()
@@ -4714,7 +4710,7 @@ def exe_transform(user: "CharacterManager", playerTeam: list["CharacterManager"]
         blood_stacks = target.get_effect(EffectType.STACK, "Quirk - Transform").mag
         name = target.source.name
         user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, (1 + (2 * blood_stacks)), lambda eff: "Toga has transformed."))
-        user.add_effect(Effect("TogaTransformTarget", EffectType.SYSTEM, user, (1 + (2 * blood_stacks)), lambda eff: name, system=True))
+        # user.add_effect(Effect("TogaTransformTarget", EffectType.SYSTEM, user, (1 + (2 * blood_stacks)), lambda eff: name, system=True))
         mission_complete = True
         
         if not user.has_effect(EffectType.SYSTEM, name):
@@ -4813,13 +4809,13 @@ def exe_zero_gravity(user: "CharacterManager", playerTeam: list["CharacterManage
             if target.id == user.id:
                 if target.helpful_target(user, user.check_bypass_effects()):
                     target.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, 5, lambda eff: "This character will ignore invulnerability."))
-                    target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 6, lambda eff: "This character has 10 points of damage reduction."))
-                    helped = True
+                    target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 6, lambda eff: "This character has 10 points of damage reduction.", mag = 10))
+                helped = True
             if target.id != user.id: 
                 if target.final_can_effect(user.check_bypass_effects()):
                     target.add_effect(Effect(user.used_ability, EffectType.ALL_DR, user, 5, lambda eff: "This character will take 10 more non-affliction damage.", mag = -10))
                     target.add_effect(Effect(user.used_ability, EffectType.DEF_NEGATE, user, 5, lambda eff: "This character cannot reduce damage or become invulnerable."))
-                    harmed = True
+                harmed = True
         user.check_on_use()
         if helped:
             user.check_on_help()
@@ -4835,9 +4831,9 @@ def exe_meteor_storm(user: "CharacterManager", playerTeam: list["CharacterManage
                     target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, 2, lambda eff: "This character is stunned."))
                     if target.meets_stun_check():
                         user.check_on_stun(target)
-                for ally in playerTeam:
-                    if ally.has_effect(EffectType.UNIQUE, "Quirk - Zero Gravity") and ally.helpful_target(user, user.check_bypass_effects()):
-                        ally.add_effect(Effect(user.used_ability, EffectType.ALL_BOOST, user, 3, lambda eff: "This character will deal 5 more non-affliction damage.", mag=5))
+        for ally in playerTeam:
+            if ally.has_effect(EffectType.UNIQUE, "Quirk - Zero Gravity") and ally.helpful_target(user, user.check_bypass_effects()):
+                ally.add_effect(Effect(user.used_ability, EffectType.ALL_BOOST, user, 3, lambda eff: "This character will deal 5 more non-affliction damage.", mag=5))
         user.check_on_use()
         user.check_on_harm()
 
@@ -4847,7 +4843,7 @@ def exe_comet_home_run(user: "CharacterManager", playerTeam: list["CharacterMana
             if target.final_can_effect(user.check_bypass_effects()):
                 user.deal_active_damage(20, target, DamageType.NORMAL)
                 if target.has_effect(EffectType.DEF_NEGATE, "Quirk - Zero Gravity"):
-                    target.source.energy_contribution -= 1
+                    target.source.change_energy_cont(-1)
 
                     user.progress_mission(3, 1)
                     user.check_on_drain(target)
@@ -4994,53 +4990,53 @@ ability_info_db = {
         "Rasengan",
         "Naruto deals 25 damage to target enemy and stuns them for one turn.",
         [0, 1, 0, 0, 1, 1], Target.SINGLE,
-        default_target("HOSTILE"), exe_rasengan
+        default_target("HOSTILE"), exe_rasengan, [AbilityType.INSTANT, AbilityType.ENERGY, AbilityType.STUN]
     ],
     "naruto2": [
         "Shadow Clones",
         "For three turns, Naruto will ignore counter and reflect abilities. During this time, he gains 10 points of damage reduction and Rasengan is replaced by Odama Rasengan.",
         [0, 0, 0, 0, 1, 3], Target.SINGLE,
-        default_target("SELF"), exe_shadow_clones
+        default_target("SELF"), exe_shadow_clones, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "naruto3": [
         "Sage Mode",
         "For two turns, Naruto will ignore stun effects. During this time, any enemy that drains energy from him will take 20 affliction damage and Rasengan is replaced by Senpou - Rasenrengan. If activated while Shadow Clones is active, Naruto will become invulnerable for one turn, and Odama Rasengan will be replaced by Rasenshuriken.",
         [0, 0, 1, 0, 0, 2], Target.SINGLE,
-        default_target("SELF"), exe_sage_mode
+        default_target("SELF"), exe_sage_mode, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "naruto4": [
         "Substitution", "Naruto becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_substitution
+        default_target("SELF"), exe_substitution, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "narutoalt1": [
         "Odama Rasengan",
         "Naruto deals 35 damage to one enemy and 25 damage to the others. The primary target will be stunned for one turn.",
         [0, 1, 0, 0, 1, 1], Target.MULTI_ENEMY,
-        default_target("HOSTILE"), exe_odama_rasengan
+        default_target("HOSTILE"), exe_odama_rasengan, [AbilityType.INSTANT, AbilityType.ENERGY, AbilityType.STUN]
     ],
     "narutoalt2": [
         "Senpou - Rasenrengan",
         "Naruto deals 50 damage to one enemy and stuns them for 2 turns.",
         [0, 1, 1, 0, 0, 1], Target.SINGLE,
-        default_target("HOSTILE"), exe_rasenrengan
+        default_target("HOSTILE"), exe_rasenrengan, [AbilityType.INSTANT, AbilityType.ENERGY, AbilityType.STUN]
     ],
     "narutoalt3": [
         "Rasenshuriken",
         "Naruto deals 35 damage to all enemies and stuns them for one turn.", [0, 1, 1, 0, 1, 0], Target.MULTI_ENEMY,
-        default_target("HOSTILE"), exe_rasenshuriken
+        default_target("HOSTILE"), exe_rasenshuriken, [AbilityType.INSTANT, AbilityType.ENERGY, AbilityType.STUN]
     ],
-    "accelerator1": ["Vector Scatter", "Accelerator deals 20 damage to target enemy and stuns them for one turn.", [0, 0, 1, 0, 0, 1], Target.SINGLE, default_target("HOSTILE"), exe_vector_scatter],
-    "accelerator2": ["Plasma Bomb", "Accelerator deals 15 damage to all enemies for 3 turns. During this time, only stun effects can be applied to Accelerator.", [0, 0, 2, 0, 1, 5], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_plasma_bomb],
-    "accelerator3": ["Vector Reflection", "For one turn, Accelerator will ignore all harmful effects. Any enemy that targets him with a new harmful ability will be targeted by Vector Scatter. This ability is invisible.", [0, 0, 1, 0, 0, 2], Target.SINGLE, default_target("SELF"), exe_vector_reflection],
-    "accelerator4": ["Vector Immunity", "Accelerator becomes invulnerable for one turn.", [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_vector_immunity],
+    "accelerator1": ["Vector Scatter", "Accelerator deals 20 damage to target enemy and stuns them for one turn.", [0, 0, 1, 0, 0, 1], Target.SINGLE, default_target("HOSTILE"), exe_vector_scatter, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.STUN]],
+    "accelerator2": ["Plasma Bomb", "Accelerator deals 15 damage to all enemies for 3 turns. During this time, only stun effects can be applied to Accelerator.", [0, 0, 2, 0, 1, 5], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_plasma_bomb, [AbilityType.INSTANT, AbilityType.ENERGY]],
+    "accelerator3": ["Vector Reflection", "For one turn, Accelerator will ignore all harmful effects. Any enemy that targets him with a new harmful ability will be targeted by Vector Scatter. This ability is invisible.", [0, 0, 1, 0, 0, 2], Target.SINGLE, default_target("SELF"), exe_vector_reflection, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]],
+    "accelerator4": ["Vector Immunity", "Accelerator becomes invulnerable for one turn.", [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_vector_immunity, [AbilityType.INSTANT, AbilityType.STRATEGIC]],
     "aizen1": [
         "Shatter, Kyoka Suigetsu",
         "Target enemy has their ability costs increased by one random and are marked by Kyoka Suigetsu for 1 turn. If the enemy is marked with Black Coffin, "
         +
         "all their currently active cooldowns are increased by 2. If the enemy is marked by Overwhelming Power, Aizen's abilities will cost one less random energy on the following turn.",
         [0, 0, 1, 0, 1, 1], Target.SINGLE,
-        default_target("HOSTILE"), exe_shatter
+        default_target("HOSTILE"), exe_shatter, [AbilityType.INSTANT, AbilityType.MENTAL]
     ],
     "aizen2": [
         "Overwhelming Power",
@@ -5048,116 +5044,116 @@ ability_info_db = {
         +
         " that enemy will be unable to reduce damage or become invulnerable for 2 turns. If that enemy is marked with Shatter, Kyoka Suigetsu, Overwhelming Power deals 20 bonus damage to them.",
         [1, 0, 0, 0, 1, 1], Target.SINGLE,
-        default_target("HOSTILE"), exe_overwhelming_power
+        default_target("HOSTILE"), exe_overwhelming_power, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "aizen3": [
         "Black Coffin",
         "Target enemy is stunned and marked with Black Coffin for 1 turn. If the enemy is marked with Overwhelming Power, they will also take 20 damage. If the"
         +
         " enemy is marked with Shatter, Kyoka Suigetsu, then Black Coffin also affects their allies.",
-        [0, 1, 0, 0, 1, 1], Target.SINGLE, default_target("HOSTILE"), exe_black_coffin
+        [0, 1, 0, 0, 1, 1], Target.SINGLE, default_target("HOSTILE"), exe_black_coffin, [AbilityType.INSTANT, AbilityType.ENERGY, AbilityType.STUN]
     ],
     "aizen4": [
         "Effortless Guard", "Aizen becomes invulnerable for 1 turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_effortless_guard
+        default_target("SELF"), exe_effortless_guard, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "akame1": [
         "Red-Eyed Killer",
         "Akame marks an enemy for 1 turn. During this time, she can use One-Cut Killing on the target.",
         [0, 0, 1, 0, 0, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_red_eyed_killer
+        default_target("HOSTILE"), exe_red_eyed_killer, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.STRATEGIC]
     ],
     "akame2": [
         "One Cut Killing",
         "Akame deals 100 affliction damage to one enemy for two turns. Can only be used on a target marked with Red-Eyed Killer.",
-        [0, 0, 0, 2, 1, 1], Target.SINGLE, target_one_cut_killing, exe_one_cut_killing
+        [0, 0, 0, 2, 1, 1], Target.SINGLE, target_one_cut_killing, exe_one_cut_killing, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.AFFLICTION]
     ],
     "akame3": [
         "Little War Horn",
         "For two turns, Akame can use One Cut Killing on any target, regardless of their effects.",
         [0, 0, 0, 0, 2, 5], Target.SINGLE,
-        default_target("SELF"), exe_little_war_horn
+        default_target("SELF"), exe_little_war_horn, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "akame4": [
         "Rapid Deflection", "Akame becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_rapid_deflection
+        default_target("SELF"), exe_rapid_deflection, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "astolfo1": [
         "Casseur de Logistille",
-        "Astolfo targets himself or another ally for one turn. During this time, if they are targeted by a hostile Special or Mental ability, that ability"
+        "Astolfo targets himself or another ally for one turn. During this time, if they are targeted by a hostile Energy or Mental ability, that ability"
         +
         " will be countered and the user will be stunned and isolated for 1 turn. This ability is invisible until triggered.",
         [0, 0, 0, 1, 0, 3], Target.SINGLE,
-        default_target("HELPFUL"), exe_casseur
+        default_target("HELPFUL"), exe_casseur, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "astolfo2": [
         "Trap of Argalia - Down With A Touch!",
         "Astolfo deals 20 piercing damage to target enemy. For one turn, they cannot have their damage boosted above its default value. If the target's damage is currently boosted, Trap of Argalia will permanently "
         + "deal 5 additional damage.", [1, 0, 0, 0, 0, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_trap
+        default_target("HOSTILE"), exe_trap, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "astolfo3": [
         "La Black Luna",
         "Astolfo removes one hostile effect from every member of his team, and for 2 turns, no enemy can have their damage boosted above its default value. For every hostile effect removed, Trap of Argalia will permanently"
         + " deal 5 additional damage.", [0, 1, 0, 0, 1, 2], Target.ALL_TARGET,
-        default_target("ALL"), exe_luna
+        default_target("ALL"), exe_luna, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "astolfo4": [
         "Akhilleus Kosmos", "Astolfo becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_kosmos
+        default_target("SELF"), exe_kosmos, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
-    "byakuya1": ["Scatter, Senbonzakura", "Byakuya deals 25 damage to target enemy or gives target ally 25 points of destructible defense for one turn. During Bankai - Senbonzakura Kageyoshi, this ability will target all enemies or allies.",
-                 [0,0,0,1,1,0], Target.SINGLE, default_target("ALL"), exe_scatter
+    "byakuya1": ["Scatter, Senbonzakura", "Byakuya deals 25 piercing damage to target enemy or gives target ally 25 points of destructible defense for one turn. During Bankai - Senbonzakura Kageyoshi, this ability will target all enemies or allies.",
+                 [0,0,0,1,1,0], Target.SINGLE, default_target("ALL"), exe_scatter, [AbilityType.ENERGY, AbilityType.INSTANT]
     ],
     "byakuya2": ["Bakudou #61 - Six-Rod Light Restraint", "Byakuya stuns target enemy for one turn. After being used, this ability is replaced by Hadou #2 - Byakurai", [0, 1, 0, 0, 0, 2], Target.SINGLE, default_target("HOSTILE"), exe_sixrod],
     "byakuya3": ["Bankai - Senbonzakura Kageyoshi", "For the next 2 turns, Scatter, Senbonzakura will affect all enemies or allies when it is used and this ability will be replaced by White Imperial Sword.", 
-                [0, 0, 0, 1, 1, 3], Target.SINGLE, default_target("SELF"), exe_senbonzakura_kageyoshi],
-    "byakuya4": ["Bakudou #81 - Danku", "Byakuya becomes invulnerable for one turn.", [0,0,0,0,1,4], Target.SINGLE, default_target("SELF"), exe_danku],
+                [0, 0, 0, 1, 1, 3], Target.SINGLE, default_target("SELF"), exe_senbonzakura_kageyoshi, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]],
+    "byakuya4": ["Bakudou #81 - Danku", "Byakuya becomes invulnerable for one turn.", [0,0,0,0,1,4], Target.SINGLE, default_target("SELF"), exe_danku, [AbilityType.INSTANT, AbilityType.STRATEGIC]],
     "byakuyaalt1": ["Hadou #2 - Byakurai", "Byakuya deals 25 piercing damage to one enemy.", [0,1,0,0,0,0], Target.SINGLE, default_target("HOSTILE"), exe_byakurai],
     "byakuyaalt2": ["White Imperial Sword", "Byakuya deals 30 piercing damage to one enemy. This damage is increased by 5 for every 10 health Byakuya is missing.", [0,1,0,1,0,1], Target.SINGLE, default_target("HOSTILE"), exe_imperial_sword],
     "cmary1": [
         "Quickdraw - Pistol",
         "Calamity Mary deals 15 damage to target enemy. This ability will become Quickdraw - Rifle after being used.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_pistol
+        default_target("HOSTILE"), exe_pistol, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "cmary2": [
         "Hidden Mine",
         "Traps one enemy for two turns. During this time, if that enemy used a new ability, they will take 20 piercing damage and this effect will end.",
         [0, 0, 0, 1, 0, 3], Target.SINGLE,
-        default_target("HOSTILE"), exe_mine
+        default_target("HOSTILE"), exe_mine, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "cmary3": [
         "Grenade Toss",
         "Calamity Mary deals 20 damage to all enemy targets. This ability deals 20 more damage to enemies affected by Hidden Mine.",
         [0, 0, 0, 1, 1, 2], Target.MULTI_ENEMY,
-        default_target("HOSTILE"), exe_grenade_toss
+        default_target("HOSTILE"), exe_grenade_toss, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "cmary4": [
         "Rifle Guard", "Calamity Mary becomes invulnerable for 1 turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_rifle_guard
+        default_target("SELF"), exe_rifle_guard, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "cmaryalt1": [
         "Quickdraw - Rifle",
         "Calamity Mary deals 15 damage to target enemy for 2 turns. This ability will become Quickdraw - Sniper after it ends.",
         [0, 0, 0, 1, 1, 1], Target.SINGLE,
-        default_target("HOSTILE", lockout=(EffectType.CONT_USE, "Quickdraw - Rifle")), exe_rifle
+        default_target("HOSTILE", lockout=(EffectType.CONT_USE, "Quickdraw - Rifle")), exe_rifle, [AbilityType.ACTION, AbilityType.PHYSICAL]
     ],
     "cmaryalt2": [
         "Quickdraw - Sniper",
         "Calamity Mary deals 55 piercing damage to one enemy and becomes invulnerable for one turn.",
         [0, 0, 0, 2, 1, 3], Target.SINGLE,
-        default_target("HOSTILE"), exe_sniper
+        default_target("HOSTILE"), exe_sniper, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "chachamaru1": [
         "Target Lock",
         "Chachamaru marks a single target for Orbital Satellite Cannon.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HOSTILE", protection=(EffectType.MARK, "Target Lock")), exe_target_lock
+        default_target("HOSTILE", protection=(EffectType.MARK, "Target Lock")), exe_target_lock, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "chachamaru2": [
         "Orbital Satellite Cannon",
@@ -5172,72 +5168,72 @@ ability_info_db = {
         "Active Combat Mode",
         "Chachamaru gains 15 points of destructible defense each turn and deals 10 damage to one enemy for 3 turns. During this time, she cannot use"
         + " Orbital Satellite Cannon.", [0, 0, 0, 0, 2, 3], Target.SINGLE,
-        default_target("HOSTILE"), exe_active_combat_mode
+        default_target("HOSTILE"), exe_active_combat_mode, [AbilityType.ACTION, AbilityType.PHYSICAL]
     ],
     "chachamaru4": [
         "Take Flight", "Chachamaru becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_take_flight
+        default_target("SELF"), exe_take_flight, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "chelsea1": ["Mortal Wound", "Target enemy takes 15 affliction damage each turn until they die. During this time, they deal 5 less non-affliction damage. This ability deals triple damage if used on an enemy affected by Those Who Fight In The Shadows, and cannot be used on an enemy already affected by it.",
-        [0, 0, 1, 0, 1, 0], Target.SINGLE, default_target("HOSTILE"), exe_mortal_wound],
+        [0, 0, 1, 0, 1, 0], Target.SINGLE, default_target("HOSTILE", protection=(EffectType.CONT_AFF_DMG, "Mortal Wound")), exe_mortal_wound, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.AFFLICTION]],
     "chelsea2": ["Those Who Fight In The Shadows", "For one turn, the first enemy to use a helpful ability on target enemy will be countered and stunned for two turns. During this time, Mortal Wound will deal triple damage to them. This effect is invisible until triggered.",
-        [0, 0, 1, 0, 0, 3], Target.SINGLE, default_target("HOSTILE"), exe_fight_in_shadows],
-    "chelsea3": ["Emergency Smoke", "All allies gain 10 points of destructible defense for one turn, and any enemy with a helpful counter effect active on them will take 15 affliction damage. This ability cannot be countered.", [0, 0, 0, 0, 1, 1], Target.ALL_TARGET, default_target("ALL"), exe_chelsea_smoke],
-    "chelsea4": ["Gaia Foundation Evasion", "Chelsea becomes invulnerable for one turn.", [0,0,0,0,1,4], Target.SINGLE, default_target("SELF"), exe_gaia_evasion],
+        [0, 0, 1, 0, 0, 3], Target.SINGLE, default_target("HOSTILE"), exe_fight_in_shadows, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]],
+    "chelsea3": ["Emergency Smoke", "All allies gain 10 points of destructible defense for one turn, and any enemy with a helpful counter effect active on them will take 15 affliction damage. This ability cannot be countered.", [0, 0, 0, 0, 1, 1], Target.ALL_TARGET, default_target("ALL"), exe_chelsea_smoke, [AbilityType.INSTANT, AbilityType.STRATEGIC]],
+    "chelsea4": ["Gaia Foundation Evasion", "Chelsea becomes invulnerable for one turn.", [0,0,0,0,1,4], Target.SINGLE, default_target("SELF"), exe_gaia_evasion, [AbilityType.INSTANT, AbilityType.STRATEGIC]],
     "chrome1": [
         "You Are Needed",
         "Chrome accepts Mukuro's offer to bond their souls, enabling the user of her abilities. If Chrome ends a turn below 80 health, she transforms into Rokudou Mukuro.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("SELF", protection=(EffectType.MARK, "You Are Needed")), exe_you_are_needed
+        default_target("SELF", protection=(EffectType.MARK, "You Are Needed")), exe_you_are_needed, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "chrome2": [
         "Illusory Breakdown",
-        "Illusory Breakdown: Chrome targets one enemy and gains 20 points of destructible defense for one turn. If she still has any of this destructible defense on her next turn, "
+        "Chrome targets one enemy and gains 20 points of destructible defense for one turn. If she still has any of this destructible defense on her next turn, "
         +
         "she will deal 25 damage to the targeted enemy and stun them for one turn.",
         [0, 0, 1, 0, 1, 1], Target.SINGLE,
-        default_target("HOSTILE", prep_req="You Are Needed"), exe_illusory_breakdown
+        default_target("HOSTILE", prep_req="You Are Needed"), exe_illusory_breakdown, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.UNIQUE, AbilityType.STUN]
     ],
     "chrome3": [
         "Mental Immolation",
-        "Mental Immolation: Chrome targets one enemy and gains 15 points of destructible defense. If she still has any of this destructible defense on her next turn, "
+        "Chrome targets one enemy and gains 15 points of destructible defense. If she still has any of this destructible defense on her next turn, "
         +
         "she will deal 20 damage to the targeted enemy and remove one random energy from them.",
         [0, 0, 1, 0, 0, 1], Target.SINGLE,
-        default_target("HOSTILE", prep_req="You Are Needed"), exe_mental_immolation
+        default_target("HOSTILE", prep_req="You Are Needed"), exe_mental_immolation, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.UNIQUE]
     ],
     "chrome4": [
         "Mental Substitution",
-        "Mental Substitution: Chrome becomes invulnerable for one turn.",
+        "Chrome becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_mental_substitution
+        default_target("SELF", prep_req="You Are Needed"), exe_mental_substitution, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "chromealt1": [
         "Trident Combat",
-        "Trident Combat: Mukuro deals 25 damage to one enemy.",
+        "Mukuro deals 25 damage to one enemy.",
         [1, 0, 0, 0, 0, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_trident_combat
+        default_target("HOSTILE"), exe_trident_combat, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "chromealt2": [
         "Illusory World Destruction",
-        "Illusory World Destruction: Mukuro gains 30 points of destructible defense. If he still has any of this destructible defense on his next turn, "
+        "Mukuro gains 30 points of destructible defense. If he still has any of this destructible defense on his next turn, "
         + "he will deal 25 damage to all enemies and stun them for one turn.",
         [0, 0, 1, 0, 2, 2], Target.SINGLE,
-        default_target("SELF"), exe_illusory_world_destruction
+        default_target("SELF"), exe_illusory_world_destruction, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.UNIQUE, AbilityType.STUN]
     ],
     "chromealt3": [
         "Mental Annihilation",
-        "Mental Annihilation: Mukuro targets one enemy and gains 30 points of destructible defense. If he still has any of this destructible defense on his next turn, "
+        "Mukuro targets one enemy and gains 30 points of destructible defense. If he still has any of this destructible defense on his next turn, "
         +
         "he will deal 35 piercing damage to the targeted enemy. This damage ignores invulnerability.",
         [0, 0, 1, 0, 1, 1], Target.SINGLE,
-        default_target("HOSTILE"), exe_mental_annihilation
+        default_target("HOSTILE"), exe_mental_annihilation, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.UNIQUE]
     ],
     "chromealt4": [
         "Trident Deflection", "Mukuro becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_trident_deflection
+        default_target("SELF"), exe_trident_deflection, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "chu1": [
         "Relentless Assault",
@@ -5245,7 +5241,7 @@ ability_info_db = {
         +
         " than 15 points of damage reduction, this damage is considered piercing.",
         [1, 0, 0, 0, 1, 3], Target.SINGLE,
-        default_target("HOSTILE"), exe_relentless_assault
+        default_target("HOSTILE"), exe_relentless_assault, [AbilityType.ACTION, AbilityType.PHYSICAL]
     ],
     "chu2": [
         "Flashing Deflection",
@@ -5253,72 +5249,72 @@ ability_info_db = {
         +
         " deals less than 15 points of damage, he will fully ignore that move instead.",
         [1, 0, 0, 0, 0, 2], Target.SINGLE,
-        default_target("SELF"), exe_flashing_deflection
+        default_target("SELF"), exe_flashing_deflection, [AbilityType.ACTION, AbilityType.PHYSICAL, AbilityType.STRATEGIC]
     ],
     "chu3": [
         "Gae Bolg",
         "Chu removes all destructible defense from target enemy, then deals 40 piercing damage"
         + " to them. This ability ignores invulnerability.",
         [2, 0, 0, 0, 1, 1], Target.SINGLE,
-        default_target("HOSTILE", def_type="BYPASS"), exe_gae_bolg
+        default_target("HOSTILE", def_type="BYPASS"), exe_gae_bolg, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "chu4": [
         "Chu Block", "Chu becomes invulnerable for 1 turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_chu_block
+        default_target("SELF"), exe_chu_block, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "cranberry1": [
         "Illusory Disorientation",
         "For 1 turns, one enemy has their ability costs increased by 1 random and this ability is replaced by Merciless Finish.",
         [0, 1, 0, 0, 0, 1], Target.SINGLE,
-        default_target("HOSTILE"), exe_illusory_disorientation
+        default_target("HOSTILE"), exe_illusory_disorientation, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.STRATEGIC]
     ],
     "cranberry2": [
         "Fortissimo",
         "Cranberry deals 25 damage to all enemies, ignoring invulnerability. This ability cannot be ignored and invulnerable or ignoring enemies take double damage from it.",
         [0, 2, 0, 0, 0, 2], Target.MULTI_ENEMY,
-        default_target("HOSTILE", def_type="BYPASS"), exe_fortissimo
+        default_target("HOSTILE", def_type="BYPASS"), exe_fortissimo, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "cranberry3": [
         "Mental Radar",
         "For 2 turns, Cranberry's team will ignore counter effects.",
         [0, 0, 1, 0, 1, 4], Target.MULTI_ALLY,
-        default_target("HELPFUL"), exe_mental_radar
+        default_target("HELPFUL"), exe_mental_radar, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.STRATEGIC]
     ],
     "cranberry4": [
         "Cranberry Block", "Cranberry becomes invulnerable for 1 turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_cranberry_block
+        default_target("SELF"), exe_cranberry_block, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "cranberryalt1": [
         "Merciless Finish",
         "Cranberry stuns target enemy for 2 turns, and deals 15 affliction damage to them each turn. Only usable on a target currently affected by Illusory Disorientation.",
         [1, 0, 0, 0, 0, 2], Target.SINGLE,
-        default_target("HOSTILE", mark_req="Illusory Disorientation"), exe_merciless_finish
+        default_target("HOSTILE"), exe_merciless_finish, [AbilityType.ACTION, AbilityType.PHYSICAL, AbilityType.AFFLICTION, AbilityType.STUN]
     ],
     "erza1": [
         "Clear Heart Clothing",
         "Until Erza requips another armor set, she cannot be stunned and Clear Heart Clothing is replaced by Titania's Rampage.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("SELF"), exe_clear_heart_clothing
+        default_target("SELF"), exe_clear_heart_clothing, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "erza2": [
         "Heaven's Wheel Armor",
         "Until Erza requips another armor set, she will ignore all affliction damage and Heaven's Wheel Armor is replaced by Circle Blade.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("SELF"), exe_heavens_wheel_armor
+        default_target("SELF"), exe_heavens_wheel_armor, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "erza3": [
         "Nakagami's Armor",
         "For the next two turns, Erza gains 1 additional random energy per turn and Nakagami's Armor is replaced by Nakagami's Starlight.",
         [0, 1, 0, 0, 0, 0], Target.SINGLE,
-        default_target("SELF"), exe_nakagamis_armor
+        default_target("SELF"), exe_nakagamis_armor, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "erza4": [
         "Adamantine Armor",
         "Until Erza requips another armor set, she gains 15 damage reduction and Adamantine Armor is replaced by Adamantine Barrier.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("SELF"), exe_adamantine_armor
+        default_target("SELF"), exe_adamantine_armor, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "erzaalt1": [
         "Titania's Rampage",
@@ -5326,72 +5322,72 @@ ability_info_db = {
         +
         " remains active, it deals 5 more damage. This ability cannot be countered.",
         [1, 0, 0, 0, 1, 0], Target.SINGLE,
-        target_titanias_rampage, exe_titanias_rampage
+        target_titanias_rampage, exe_titanias_rampage, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "erzaalt2": [
         "Circle Blade",
         "Erza deals 20 damage to one enemy. On the following turn, all enemies take 15 damage, ignoring invulnerability.",
         [0, 0, 0, 1, 1, 1], Target.SINGLE,
-        default_target("HOSTILE"), exe_circle_blade
+        default_target("HOSTILE"), exe_circle_blade, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.UNIQUE]
     ],
     "erzaalt3": [
         "Nakagami's Starlight",
         "Erza deals 35 damage to one enemy and removes 1 random energy from them.",
         [0, 1, 0, 1, 0, 1], Target.SINGLE,
-        default_target("HOSTILE"), exe_nakagamis_starlight
+        default_target("HOSTILE"), exe_nakagamis_starlight, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "erzaalt4": [
         "Adamantine Barrier",
         "Both of Erza's allies become invulnerable for one turn.",
         [0, 0, 0, 1, 0, 3], Target.MULTI_ALLY,
-        default_target("SELFLESS"), exe_adamantine_barrier
+        default_target("SELFLESS"), exe_adamantine_barrier, [AbilityType.INSTANT, AbilityType.ENERGY, AbilityType.STRATEGIC]
     ],
     "esdeath1": [
         "Demon's Extract",
         "Esdeath calls forth the power of her Teigu, enabling the user of her abilities for 5 turns. During this time, this ability changes to Mahapadma, "
         + "and Esdeath cannot be countered.", [0, 1, 0, 0, 0,
                                                4], Target.SINGLE,
-        default_target("SELF"), exe_demons_extract
+        default_target("SELF"), exe_demons_extract, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "esdeath2": [
         "Frozen Castle",
-        "For the next two turns, no enemy can target any of Esdeath's allies. Esdeath's allies cannot target enemies affected by Frozen Castle. During this time, "
+        "For the next two turns, no enemy can target any of Esdeath's allies. Esdeath's allies cannot target Esdeath or enemies affected by Frozen Castle. During this time, "
         + "Weiss Schnabel will affect all enemies.", [0, 2, 0, 0, 0,
                                                       7], Target.MULTI_ENEMY,
-        default_target("HOSTILE"), exe_frozen_castle
+        default_target("HOSTILE", prep_req="Demon's Extract"), exe_frozen_castle, [AbilityType.ACTION, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "esdeath3": [
         "Weiss Schnabel",
         "Deals 10 damage to target enemy for 3 turns. While active, Weiss Schnabel costs one fewer special energy and deals 15 piercing damage to target enemy.",
         [0, 1, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HOSTILE", prep_req="Demon's Extract"), exe_weiss_schnabel
+        default_target("HOSTILE", prep_req="Demon's Extract"), exe_weiss_schnabel, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "esdeath4": [
         "Esdeath Guard",
         "Esdeath becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_esdeath_guard
+        default_target("SELF"), exe_esdeath_guard, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "esdeathalt1": [
         "Mahapadma",
         "Esdeath stuns every living character except for her for 2 turns. At the end of those turns, Esdeath is stunned for 2 turns.",
         [0, 2, 0, 0, 1, 8], Target.ALL_TARGET,
-        default_target("ALL"), exe_mahapadma
+        default_target("ALL"), exe_mahapadma, [AbilityType.INSTANT, AbilityType.STUN, AbilityType.STRATEGIC]
     ],
-    "frankenstein1": ["Bridal Smash", "Frankenstein deals 20 damage to target enemy.", [1, 0, 0, 0, 0, 0], Target.SINGLE, default_target("HOSTILE"), exe_bridal_smash],
+    "frankenstein1": ["Bridal Smash", "Frankenstein deals 20 damage to target enemy.", [1, 0, 0, 0, 0, 0], Target.SINGLE, default_target("HOSTILE"), exe_bridal_smash, [AbilityType.INSTANT, AbilityType.PHYSICAL]],
     "frankenstein2": ["Bridal Chest", "Frankenstein deals 20 damage to all enemies. During the following two turns, she will deal 20 damage to a random enemy.", [1, 1, 0, 0, 0, 3],
-                      Target.MULTI_ENEMY, default_target("HOSTILE"), exe_bridal_chest],
+                      Target.MULTI_ENEMY, default_target("HOSTILE"), exe_bridal_chest, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.UNIQUE]],
     "frankenstein3": ["Blasted Tree", "Frankenstein self-destructs, dealing her remaining health in piercing damage to target enemy. This ability cannot be countered or reflected, cannot be used while Frankenstein is at full health, and will kill her upon use.",
-                      [0, 1, 0, 0, 2, 0], Target.SINGLE, default_target("HOSTILE"), exe_blasted_tree],
+                      [0, 1, 0, 0, 2, 0], Target.SINGLE, default_target("HOSTILE"), exe_blasted_tree, [AbilityType.INSTANT, AbilityType.ENERGY]],
     "frankenstein4": ["Galvanism", "For 2 turns, Frankenstein ignores Special damage and instead heals for that amount. Whenever Frankenstein is healed this way, she deals 10 additional damage with all her abilities on the following turn. This effect is invisible.",
-                      [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_galvanism],
+                      [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_galvanism, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]],
     "frenda2": [
         "Close Combat Bombs",
         "Frenda hurls a handful of bombs at an enemy, permanently marking them with a stack of Close Combat Bombs. If Detonate is used, "
         +
         "the marked enemy will take 15 damage per stack of Close Combat Bombs.",
         [0, 0, 0, 0, 0, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_close_combat_bombs
+        default_target("HOSTILE"), exe_close_combat_bombs, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "frenda1": [
         "Doll Trap",
@@ -5399,140 +5395,140 @@ ability_info_db = {
         +
         " the damaging enemy. If Detonate is used, characters marked with Doll Trap receive 20 damage per stack of Doll Trap on them. Doll Trap is invisible until transferred.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HELPFUL"), exe_doll_trap
+        default_target("HELPFUL"), exe_doll_trap, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "frenda3": [
         "Detonate",
         "Frenda consumes all her stacks of Close Combat Bombs and Doll Trap from all characters. This ability ignores invulnerability.",
-        [0, 0, 0, 0, 2, 0], Target.ALL_TARGET, target_detonate, exe_detonate
+        [0, 0, 0, 0, 2, 0], Target.ALL_TARGET, target_detonate, exe_detonate, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "frenda4": [
         "Frenda Dodge", "Frenda becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_frenda_dodge
+        default_target("SELF"), exe_frenda_dodge, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "gajeel1": [
         "Iron Dragon's Roar", "Gajeel deals 35 piercing damage to one enemy.",
         [1, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_iron_dragon_roar
+        default_target("HOSTILE"), exe_iron_dragon_roar, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "gajeel2": [
         "Iron Dragon's Club", "Gajeel deals 20 piercing damage to one enemy.",
         [1, 0, 0, 0, 0, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_iron_dragon_club
+        default_target("HOSTILE"), exe_iron_dragon_club, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "gajeel3": [
         "Iron Shadow Dragon",
         "If Gajeel is targeted with a new harmful ability, he will ignore all further hostile effects that turn. This changes Gajeel's abilities to their special versions.",
         [0, 1, 0, 0, 0, 0], Target.SINGLE,
-        default_target("SELF"), exe_iron_shadow_dragon
+        default_target("SELF"), exe_iron_shadow_dragon, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "gajeel4": [
         "Gajeel Block", "Gajeel becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_gajeel_block
+        default_target("SELF"), exe_gajeel_block, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "gajeelalt1": [
         "Iron Shadow Dragon's Roar",
         "Gajeel deals 15 damage to all enemies, ignoring invulnerability.",
         [0, 1, 0, 0, 0, 0], Target.MULTI_ENEMY,
-        default_target("HOSTILE", def_type="BYPASS"), exe_iron_shadow_dragon_roar
+        default_target("HOSTILE", def_type="BYPASS"), exe_iron_shadow_dragon_roar, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "gajeelalt2": [
         "Iron Shadow Dragon's Club",
         "Gajeel deals 20 damage to one enemy, ignoring invulnerability.",
         [0, 1, 0, 0, 0, 0], Target.SINGLE,
-        default_target("HOSTILE", def_type="BYPASS"), exe_iron_shadow_dragon_club
+        default_target("HOSTILE", def_type="BYPASS"), exe_iron_shadow_dragon_club, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "gajeelalt3": [
         "Blacksteel Gajeel",
         "Gajeel permanently gains 15 damage reduction. This changes Gajeel's abilities back to their physical versions.",
         [1, 0, 0, 0, 0, 0], Target.SINGLE,
-        default_target("SELF"), exe_blacksteel_gajeel
+        default_target("SELF"), exe_blacksteel_gajeel, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "gilgamesh1": ["Gate of Babylon", "If used on Gilgamesh, adds one stack of Gate of Babylon. If used on an enemy, deals 10 damage to that enemy plus 15 additional damage for every stack of Gate of Babylon on Gilgamesh. Removes all stacks of Gate of Babylon on use.",
-                    [0, 0, 0, 0, 0, 0], Target.SINGLE, target_gate_of_babylon, exe_gate_of_babylon],
+                    [0, 0, 0, 0, 0, 0], Target.SINGLE, target_gate_of_babylon, exe_gate_of_babylon, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.UNIQUE]],
     "gilgamesh2": ["Enkidu, Chains of Heaven", "If target enemy uses a harmful ability on the following turn, that ability is countered and the countered enemy is stunned for one turn. During this time, any active abilities or effects caused by that character do not deal damage or healing.",
-                    [0,0,0,1,0,3], Target.SINGLE, default_target("HOSTILE"), exe_enkidu],
+                    [0,0,0,1,0,3], Target.SINGLE, default_target("HOSTILE"), exe_enkidu, [AbilityType.INSTANT, AbilityType.STRATEGIC]],
     "gilgamesh3": ["Enuma Elish", "Deals 40 damage to one enemy and stuns their Weapon abilities for one turn.",
-                    [0, 0, 0, 2, 0, 3], Target.SINGLE, default_target("HOSTILE"), exe_enuma_elish],
+                    [0, 0, 0, 2, 0, 3], Target.SINGLE, default_target("HOSTILE"), exe_enuma_elish, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.STUN]],
     "gilgamesh4": ["Gate of Babylon - Interception", "Gilgamesh becomes invulnerable for one turn.",
-                    [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_intercept],
+                    [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_intercept, [AbilityType.INSTANT, AbilityType.STRATEGIC]],
     "gokudera1": [
         "Sistema C.A.I.",
         "Advances the C.A.I. Stage by 1. All effects are cumulative except for Stage 4."
         +
         " Stage 1: Deals 10 damage to all enemies.\nStage 2: Stuns target enemy for one turn.\nStage 3: Deals 10 damage to one enemy and heals Gokudera for 15 health.\nStage 4: Deals 25 damage to all enemies and stuns them for 1 turn. Gokudera's team heals for 20 health. Resets the C.A.I. stage to 1.",
-        [0, 0, 0, 1, 1, 0], Target.ALL_TARGET, target_sistema_CAI, exe_sistema_cai
+        [0, 0, 0, 1, 1, 0], Target.ALL_TARGET, target_sistema_CAI, exe_sistema_cai, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.STUN]
     ],
     "gokudera2": [
         "Vongola Skull Rings", "Moves the C.A.I. stage forward by one.",
         [0, 0, 0, 0, 0, 1], Target.SINGLE,
-        default_target("SELF"), exe_vongola_ring
+        default_target("SELF"), exe_vongola_ring, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "gokudera3": [
         "Vongola Box Weapon - Vongola Bow",
         "Gokudera gains 30 points of destructible defense for 2 turns. During this time, the C.A.I. stage will not advance.",
         [0, 1, 0, 1, 0, 5], Target.SINGLE,
-        default_target("SELF"), exe_vongola_bow
+        default_target("SELF"), exe_vongola_bow, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "gokudera4": [
         "Gokudera Block", "Gokudera becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_gokudera_block
+        default_target("SELF"), exe_gokudera_block, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "hibari1": [
         "Bite You To Death", "Hibari deals 20 damage to target enemy.",
         [0, 0, 0, 0, 0, 1], Target.SINGLE,
-        default_target("HOSTILE"), exe_bite_you_to_death
+        default_target("HOSTILE"), exe_bite_you_to_death, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "hibari2": [
         "Alaudi's Handcuffs",
-        "Hibari stuns one enemy for 2 turns. During this time, they take 10 damage per turn and Hibari cannot use Porcospino Nuvola.",
+        "Hibari stuns one enemy for 2 turns. During this time, they take 15 damage per turn and Hibari cannot use Porcospino Nuvola.",
         [0, 0, 0, 1, 1, 5], Target.SINGLE,
         default_target("HOSTILE",
-                       lockout=(EffectType.MARK, "Porcospino Nuvola")), exe_handcuffs
+                       lockout=(EffectType.MARK, "Porcospino Nuvola")), exe_handcuffs, [AbilityType.ACTION, AbilityType.PHYSICAL, AbilityType.STUN]
     ],
     "hibari3": [
         "Porcospino Nuvola",
         "For 2 turns, any enemy that uses a new harmful ability will take 10 damage. During this time, Hibari cannot use Alaudi's Handcuffs.",
         [0, 0, 0, 1, 0, 3], Target.MULTI_ENEMY,
         default_target("HOSTILE",
-                       lockout=(EffectType.MARK, "Alaudi's Handcuffs")), exe_porcospino
+                       lockout=(EffectType.MARK, "Alaudi's Handcuffs")), exe_porcospino, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "hibari4": [
         "Tonfa Block", "Hibari becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_tonfa_block
+        default_target("SELF"), exe_tonfa_block, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "gray1": [
         "Ice, Make...",
         "Gray prepares to use his ice magic. On the following turn, all of his abilities are enabled and Ice, Make... becomes Ice, Make Unlimited.",
         [0, 0, 0, 0, 0, 0], Target.SINGLE,
-        default_target("SELF"), exe_ice_make
+        default_target("SELF"), exe_ice_make, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "gray2": [
         "Ice, Make Freeze Lancer",
         "Gray deals 15 damage to all enemies for 2 turns.", [0, 1, 0, 0, 1, 2],
         Target.MULTI_ENEMY,
-        default_target("HOSTILE", prep_req="Ice, Make..."), exe_freeze_lancer
+        default_target("HOSTILE", prep_req="Ice, Make..."), exe_freeze_lancer, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "gray3": [
         "Ice, Make Hammer",
         "Gray deals 20 damage to one enemy and stuns them for 1 turn.",
         [0, 1, 0, 0, 1, 1], Target.SINGLE,
-        default_target("HOSTILE", prep_req="Ice, Make..."), exe_hammer
+        default_target("HOSTILE", prep_req="Ice, Make..."), exe_hammer, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.STUN]
     ],
     "gray4": [
         "Ice, Make Shield", "Gray becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 2], Target.SINGLE,
-        default_target("SELF", prep_req="Ice, Make..."), exe_shield
+        default_target("SELF", prep_req="Ice, Make..."), exe_shield, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "grayalt1": [
         "Ice, Make Unlimited",
         "Gray deals 5 damage to all enemies and grants all allies 5 destructible defense every turn.",
         [0, 1, 0, 0, 2, 0], Target.ALL_TARGET,
-        default_target("ALL", prep_req="Ice, Make...", lockout=(EffectType.MARK, "Ice, Make Unlimited")), exe_unlimited
+        default_target("ALL", prep_req="Ice, Make...", lockout=(EffectType.MARK, "Ice, Make Unlimited")), exe_unlimited, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.UNIQUE]
     ],
     "sogiita1": [
         "Super Awesome Punch",
@@ -5540,7 +5536,7 @@ ability_info_db = {
         +
         "If Gunha consumes at least 2 stacks, Super Awesome Punch deals 10 additional damage. If Gunha consumes 5 stacks, Super Awesome Punch will "
         + "stun its target for 1 turn.", [1, 0, 1, 0, 0, 2], Target.SINGLE,
-        default_target("HOSTILE", prep_req="Guts"), exe_super_awesome_punch
+        default_target("HOSTILE", prep_req="Guts"), exe_super_awesome_punch, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.STUN]
     ],
     "sogiita2": [
         "Overwhelming Suppression",
@@ -5549,7 +5545,7 @@ ability_info_db = {
         "If Gunha consumes at least 2 stacks, then the damage reduction is increased by 5. If Gunha consumes 3 stacks, then all affected enemies cannot reduce"
         + " damage or become invulnerable for 2 turns.", [0, 0, 1, 0, 0, 0
                                                          ], Target.MULTI_ENEMY,
-        default_target("HOSTILE", prep_req="Guts"), exe_overwhelming_suppression
+        default_target("HOSTILE", prep_req="Guts"), exe_overwhelming_suppression, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.STRATEGIC]
     ],
     "sogiita3": [
         "Hyper Eccentric Ultra Great Giga Extreme Hyper Again Awesome Punch",
@@ -5558,7 +5554,7 @@ ability_info_db = {
         "3 stacks of Guts from Gunha. If Gunha consumes at least 2 stacks, this ability deals 5 extra damage and becomes piercing. If Gunha consumes 3 stacks, this ability"
         +
         " will target all enemies.",
-        [1, 0, 0, 0, 0, 0], Target.SINGLE, default_target("HOSTILE", prep_req="Guts"), exe_hyper_eccentric_punch
+        [1, 0, 0, 0, 0, 0], Target.SINGLE, default_target("HOSTILE", prep_req="Guts"), exe_hyper_eccentric_punch, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "sogiita4": [
         "Guts",
@@ -5566,29 +5562,29 @@ ability_info_db = {
         +
         "Guts again to grant himself 3 stacks of Guts and heal for 35 health.",
         [0, 0, 0, 0, 1, 2], Target.SINGLE,
-        default_target("SELF"), exe_guts
+        default_target("SELF"), exe_guts, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "hinata1": [
         "Gentle Step - Twin Lion Fists",
         "Hinata deals 20 damage to one enemy, then deals 20 damage to the same enemy. The second instance of damage will occur even if this ability is "
         + "countered or reflected.", [1, 1, 0, 0, 0, 2], Target.SINGLE,
-        default_target("HOSTILE"), exe_twin_lion_fist
+        default_target("HOSTILE"), exe_twin_lion_fist, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "hinata2": [
         "Eight Trigrams - 64 Palms",
         "Hinata gives her entire team 10 points of damage reduction for 1 turn. If used on consecutive turns, this ability will also deal 15 damage to the enemy team.",
-        [1, 0, 0, 0, 0, 0], Target.ALL_TARGET, target_eight_trigrams, exe_hinata_trigrams
+        [1, 0, 0, 0, 0, 0], Target.ALL_TARGET, target_eight_trigrams, exe_hinata_trigrams, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "hinata3": [
         "Byakugan",
         "For 3 turns, Hinata removes one energy from one of her targets whenever she deals damage.",
         [0, 1, 0, 0, 0, 3], Target.SINGLE, 
-        default_target("SELF"), exe_hinata_byakugan
+        default_target("SELF"), exe_hinata_byakugan, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "hinata4": [
         "Gentle Fist Block", "Hinata becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_gentle_fist_block
+        default_target("SELF"), exe_gentle_fist_block, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "ichigo1": [
         "Getsuga Tenshou",
@@ -5604,7 +5600,7 @@ ability_info_db = {
         " The turn after this ability " +
         "is used, Getsuga Tenshou and Zangetsu Strike are improved.",
         [1, 0, 0, 1, 0, 6], Target.SINGLE,
-        default_target("SELF"), exe_tensa_zangetsu
+        default_target("SELF"), exe_tensa_zangetsu, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "ichigo3": [
         "Zangetsu Strike",
@@ -5614,85 +5610,85 @@ ability_info_db = {
         +
         "Tensa Zangetsu, it will target all enemies and permanently increase Zangetsu Strike's "
         + "damage by 5 per enemy struck.", [1, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_zangetsu_slash
+        default_target("HOSTILE"), exe_zangetsu_slash, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.UNIQUE]
     ],
     "ichigo4": [
         "Zangetsu Block", "Ichigo becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_zangetsu_block
+        default_target("SELF"), exe_zangetsu_block, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "ichimaru1": [
         "Butou Renjin",
         "Ichimaru deals 15 damage to one enemy for two turns, adding a stack of Kamishini no Yari to the target each turn when it damages them.",
         [0, 0, 0, 1, 1, 1], Target.SINGLE,
-        default_target("HOSTILE"), exe_butou_renjin
+        default_target("HOSTILE"), exe_butou_renjin, [AbilityType.ACTION, AbilityType.PHYSICAL]
     ],
     "ichimaru2": [
         "13 Kilometer Swing",
         "Ichimaru deals 25 damage to all enemies and adds a stack of Kamishini no Yari to each enemy damaged.",
         [0, 0, 0, 1, 2, 1], Target.MULTI_ENEMY,
-        default_target("HOSTILE"), exe_13_kilometer_swing
+        default_target("HOSTILE"), exe_13_kilometer_swing, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "ichimaru3": [
         "Kill, Kamishini no Yari",
         "Ichimaru consumes all stacks of Kamishini no Yari, dealing 10 affliction damage to each enemy for the rest of the game for each stack of consumed from them. This effect ignores invulnerability.",
         [0, 0, 0, 2, 0, 2], Target.MULTI_ENEMY,
-        target_kill_shinso, exe_kamishini_no_yari
+        target_kill_shinso, exe_kamishini_no_yari, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.AFFLICTION]
     ],
     "ichimaru4": [
         "Shinso Parry", "Ichimaru becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_shinso_parry
+        default_target("SELF"), exe_shinso_parry, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "jack1": [
         "Maria the Ripper",
         "Jack deals 15 damage and 10 affliction damage to one enemy. Can only target enemies affected by Fog of London or Streets of the Lost.",
-        [1, 0, 0, 0, 0, 0], Target.SINGLE, default_target("HOSTILE", prep_req = "Fog of London"), exe_maria_the_ripper
+        [1, 0, 0, 0, 0, 0], Target.SINGLE, default_target("HOSTILE", prep_req = "Fog of London"), exe_maria_the_ripper, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.AFFLICTION]
     ],
     "jack2": [
         "Fog of London",
         "Jack deals 5 affliction damage to all enemies for 3 turns. During this time, Fog of London is replaced by Streets of the Lost. This ability cannot be countered.",
         [0, 0, 1, 0, 0, 0], Target.MULTI_ENEMY,
-        default_target("HOSTILE"), exe_fog_of_london
+        default_target("HOSTILE"), exe_fog_of_london, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.AFFLICTION]
     ],
     "jack3": [
         "We Are Jack",
         "Jack deals 30 affliction damage to an enemy affected by Streets of the Lost.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HOSTILE", mark_req="Streets of the Lost"), exe_we_are_jack
+        default_target("HOSTILE", mark_req="Streets of the Lost"), exe_we_are_jack, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.AFFLICTION]
     ],
     "jack4": [
         "Smokescreen Defense", "Jack becomes invulnerable for a turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_smokescreen_defense
+        default_target("SELF"), exe_smokescreen_defense, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "jackalt1": [
         "Streets of the Lost",
         "For 3 turns, target enemy is isolated and can only target Jack. During this time, We Are Jack is usable.",
         [0, 0, 1, 0, 1, 5], Target.SINGLE,
-        default_target("HOSTILE"), exe_streets_of_the_lost
+        default_target("HOSTILE"), exe_streets_of_the_lost, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "jeanne1": ["Flag of the Ruler", "For one turn, Jeanne's allies gain 10 points of damage reduction and 10 points of destructible defense.",
-                [0, 0, 0, 1, 0, 1], Target.MULTI_ALLY, default_target("SELFLESS"), exe_flag_of_the_ruler],
+                [0, 0, 0, 1, 0, 1], Target.MULTI_ALLY, default_target("SELFLESS"), exe_flag_of_the_ruler, [AbilityType.INSTANT, AbilityType.STRATEGIC]],
     "jeanne2": ["Luminosite Eternelle", "Jeanne makes her entire team invulnerable for two turns.",
-                [0, 0, 0, 2, 1, 6], Target.MULTI_ALLY, default_target("HELPFUL"), exe_luminosite],
+                [0, 0, 0, 2, 1, 6], Target.MULTI_ALLY, default_target("HELPFUL"), exe_luminosite, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]],
     "jeanne3": ["La Pucelle - Draw", "Jeanne draws her sword, preparing to give her life. On the following turn, this ability is replaced with Crimson Holy Maiden.",
-                [0, 0, 0, 1, 0, 0], Target.SINGLE, default_target("SELF"), exe_la_pucelle],
-    "jeanne4": ["Jeanne Dodge", "Jeanne becomes invulnerable for one turn.", [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_jeanne_dodge],
+                [0, 0, 0, 1, 0, 0], Target.SINGLE, default_target("SELF"), exe_la_pucelle, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]],
+    "jeanne4": ["Jeanne Dodge", "Jeanne becomes invulnerable for one turn.", [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_jeanne_dodge, [AbilityType.INSTANT, AbilityType.STRATEGIC]],
     "jeannealt1": ["Crimson Holy Maiden", "Jeanne stuns herself and becomes permanently invulnerable. Each turn, she suffers 35 affliction damage and deals 15 affliction damage to all enemies.",
-                    [0, 0, 0, 2, 0, 0], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_crimson_holy_maiden],
+                    [0, 0, 0, 2, 0, 0], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_crimson_holy_maiden, [AbilityType.ACTION, AbilityType.AFFLICTION, AbilityType.UNIQUE]],
     "itachi1": [
         "Amaterasu",
         "Itachi deals 10 affliction damage to one enemy for the rest of the game. This effect does not stack.",
         [0, 1, 0, 0, 0, 2], Target.SINGLE,
         default_target("HOSTILE",
-                       protection=(EffectType.CONT_AFF_DMG, "Amaterasu")), exe_amaterasu
+                       protection=(EffectType.CONT_AFF_DMG, "Amaterasu")), exe_amaterasu, [AbilityType.INSTANT, AbilityType.AFFLICTION]
     ],
     "itachi2": [
         "Tsukuyomi",
         "Itachi stuns one target for 3 turns. This effect will end early if an ally uses a skill on them.",
         [0, 0, 2, 0, 0, 4], Target.SINGLE,
-        default_target("HOSTILE"), exe_tsukuyomi
+        default_target("HOSTILE"), exe_tsukuyomi, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.STUN]
     ],
     "itachi3": [
         "Susano'o",
@@ -5700,97 +5696,97 @@ ability_info_db = {
         +
         " Yata Mirror. If Itachi falls below 50 health or he loses all his destructible defense, Susano'o will end.",
         [0, 2, 0, 0, 0, 6], Target.SINGLE,
-        default_target("SELF"), exe_susanoo
+        default_target("SELF"), exe_susanoo, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "itachi4": [
         "Crow Genjutsu", "Itachi becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_crow_genjutsu
+        default_target("SELF"), exe_crow_genjutsu, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "itachialt1": [
         "Totsuka Blade",
         "Itachi deals 35 damage to one enemy and stuns them for one turn.",
         [0, 1, 0, 0, 1, 1], Target.SINGLE,
-        default_target("HOSTILE"), exe_totsuka_blade
+        default_target("HOSTILE"), exe_totsuka_blade, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.STUN]
     ],
     "itachialt2": [
         "Yata Mirror",
         "Itachi's Susano'o regains 20 destructible defense and Itachi loses 5 health.",
         [0, 0, 0, 0, 1, 1], Target.SINGLE,
-        default_target("SELF"), exe_yata_mirror
+        default_target("SELF"), exe_yata_mirror, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "jiro1": [
         "Counter-Balance",
         "For one turn, any enemy that stuns Jiro or her allies will lose one energy, and any enemy that drains energy from Jiro or her allies will be stunned for one turn. This effect is invisible.",
         [0, 1, 0, 0, 0, 2], Target.MULTI_ALLY,
-        default_target("HELPFUL"), exe_counter_balance
+        default_target("HELPFUL"), exe_counter_balance, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "jiro2": [
         "Heartbeat Distortion",
         "Jiro deals 5 damage to the enemy team for 4 turns. During this time, Heartbeat Distortion cannot be used and Heartbeat Surround will cost one less random energy and deal 20 damage to a single enemy. This ability"
         +
         " ignores invulnerability against enemies affected by Heartbeat Surround.",
-        [0, 1, 0, 0, 1, 0], Target.MULTI_ENEMY, target_heartbeat_distortion, exe_heartbeat_distortion
+        [0, 1, 0, 0, 1, 0], Target.MULTI_ENEMY, target_heartbeat_distortion, exe_heartbeat_distortion, [AbilityType.ACTION, AbilityType.ENERGY, AbilityType.UNIQUE]
     ],
     "jiro3": [
         "Heartbeat Surround",
         "Jiro deals 10 damage to one enemy for 4 turns. During this time, Heartbeat Surround cannot be used and Heartbeat Distortion will cost one less random energy and deal 15 damage to all enemies. This ability ignores invulnerability "
         + "against enemies affected by Heartbeat Distortion.",
-        [0, 1, 0, 0, 1, 0], Target.SINGLE, target_heartbeat_surround, exe_heartbeat_surround
+        [0, 1, 0, 0, 1, 0], Target.SINGLE, target_heartbeat_surround, exe_heartbeat_surround, [AbilityType.ACTION, AbilityType.ENERGY, AbilityType.UNIQUE]
     ],
     "jiro4": [
         "Early Detection", "Jiro becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_early_detection
+        default_target("SELF"), exe_early_detection, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "kakashi1": [
         "Copy Ninja Kakashi",
         "For one turn, Kakashi will reflect the first hostile ability that targets him. This ability is invisible until triggered.",
         [0, 0, 1, 0, 0, 3], Target.SINGLE,
-        default_target("SELF"), exe_copy_ninja
+        default_target("SELF"), exe_copy_ninja, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "kakashi2": [
         "Summon - Nin-dogs",
         "Target enemy takes 20 damage and is stunned for one turn. During this time, they take double damage from Raikiri.",
         [0, 1, 0, 0, 1, 2], Target.SINGLE,
-        default_target("HOSTILE"), exe_nindogs
+        default_target("HOSTILE"), exe_nindogs, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.STUN]
     ],
     "kakashi3": [
         "Raikiri", "Kakashi deals 40 piercing damage to target enemy.",
         [0, 2, 0, 0, 0, 1], Target.SINGLE,
-        default_target("HOSTILE"), exe_raikiri
+        default_target("HOSTILE"), exe_raikiri, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "kakashi4": [
         "Kamui",
         "Kakashi targets one enemy or himself, ignoring invulnerability. If used on himself, Kakashi will ignore all harmful effects for one turn. If used on an enemy, this ability will deal"
         +
         " 20 piercing damage to them. If they are invulnerable, they will become isolated for one turn.",
-        [0, 1, 0, 0, 0, 4], Target.SINGLE, target_kamui, exe_kamui
+        [0, 1, 0, 0, 0, 4], Target.SINGLE, target_kamui, exe_kamui, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.UNIQUE]
     ],
     "killua1":[
         "Lightning Palm",
         "Killua deals 20 damage to one enemy. If an ally deals damage to them during this turn, that ally will become immune to stun effects for one turn.",
-        [1,0,0,0,0,0], Target.SINGLE, default_target("HOSTILE"), exe_lightning_palm
+        [1,0,0,0,0,0], Target.SINGLE, default_target("HOSTILE"), exe_lightning_palm, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "killua2":[
         "Narukami",
         "Killua deals 20 damage to one enemy. If an ally deals damage to them during this turn, that ally will ignore counter effects for one turn.",
-        [0,1,0,0,0,0], Target.SINGLE, default_target("HOSTILE"), exe_narukami
+        [0,1,0,0,0,0], Target.SINGLE, default_target("HOSTILE"), exe_narukami, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "killua3":[
         "Godspeed",
         "For three turns, Killua will ignore affliction damage. During this time Godspeed is replaced by Whirlwind Rush, and Lightning Palm and Narukami will deal 5 additional damage and apply their triggered effects immediately to Killua's entire team.",
-        [1,1,0,0,0,6], Target.SINGLE, default_target("SELF"), exe_godspeed
+        [1,1,0,0,0,6], Target.SINGLE, default_target("SELF"), exe_godspeed, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "killua4":[
         "Godspeed Withdrawal",
         "Killua becomes invulnerable for one turn.",
-        [0,0,0,0,1,4], Target.SINGLE, default_target("SELF"), exe_godspeed_withdrawal
+        [0,0,0,0,1,4], Target.SINGLE, default_target("SELF"), exe_godspeed_withdrawal, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "killuaalt1":[
         "Whirlwind Rush",
         "Killua deals 35 damage to one enemy and stuns them for one turn. If an ally deals damage to them during this turn, that ally will become invulnerable for one turn.",
-        [1,1,0,0,0,3], Target.SINGLE, default_target("HOSTILE"), exe_whirlwind_rush
+        [1,1,0,0,0,3], Target.SINGLE, default_target("HOSTILE"), exe_whirlwind_rush, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.STUN]
     ],
     "kuroko2": [
         "Teleporting Strike",
@@ -5798,14 +5794,14 @@ ability_info_db = {
         +
         "Needle Pin, this ability will have no cooldown. If used on the turn after Judgement Throw, this ability will deal 15 extra damage.",
         [0, 0, 1, 0, 0, 2], Target.SINGLE,
-        default_target("HOSTILE"), exe_teleporting_strike
+        default_target("HOSTILE"), exe_teleporting_strike, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "kuroko3": [
         "Needle Pin",
         "One enemy becomes unable to reduce damage or become invulnerable for two turns. If used on the turn after Teleporting Strike, "
         +
         "this ability ignores invulnerability and deals 15 piercing damage to its target. If used on the turn after Judgement Throw, this ability will stun its target for one turn.",
-        [0, 0, 0, 1, 0, 1], Target.SINGLE, target_needle_pin, exe_needle_pin
+        [0, 0, 0, 1, 0, 1], Target.SINGLE, target_needle_pin, exe_needle_pin, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.STUN]
     ],
     "kuroko1": [
         "Judgement Throw",
@@ -5813,27 +5809,27 @@ ability_info_db = {
         +
         " after Teleporting Strike, this ability will have double effect. If used on the turn after Needle Pin, this ability will remove one energy from its target.",
         [1, 0, 0, 0, 0, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_judgement_throw
+        default_target("HOSTILE"), exe_judgement_throw, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "kuroko4": [
         "Kuroko Dodge", "Kuroko is invulnerable for 1 turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_kuroko_dodge
+        default_target("SELF"), exe_kuroko_dodge, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "kurome1":[
-        "Mass Animation", "Kurome deals 20 damage to all enemies.", [0,0,0,0,2,1], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_mass_animation],
+        "Mass Animation", "Kurome deals 20 damage to all enemies.", [0,0,0,0,2,1], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_mass_animation, [AbilityType.INSTANT, AbilityType.PHYSICAL]],
     "kurome2":[
         "Yatsufusa", "Kurome deals 15 piercing damage to one enemy or one ally other than herself. If this ability kills an enemy, Mass Animation will permanently deal 10 more damage. If this ability kills an ally, " +
         "at the start of Kurome's next turn, that ally will be resurrected with 40 health. After being resurrected, that ally cannot reduce damage or become invulnerable and their abilities will cost one additional random energy.",
-        [0,0,0,1,0,0], Target.SINGLE, target_yatsufusa, exe_yatsufusa
+        [0,0,0,1,0,0], Target.SINGLE, target_yatsufusa, exe_yatsufusa, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.UNIQUE]
     ],
     "kurome3":
     [
-        "Doping Rampage", "Yatsufusa will deal 20 bonus piercing damage permanently. During this time, Kurome will take 30 affliction damage at the end of each of her turns, and can only be killed by this damage.",
-        [0,0,0,0,2,0], Target.SINGLE, default_target("SELF", lockout="Doping Rampage"), exe_doping_rampage],
+        "Doping Rampage", "Yatsufusa will deal 20 bonus piercing damage permanently. During this time, Kurome will take 30 affliction damage at the end of each of her turns, and can only be killed by this damage. This effect does not damage her on the turn in which she uses it.",
+        [0,0,0,0,2,0], Target.SINGLE, default_target("SELF", lockout="Doping Rampage"), exe_doping_rampage, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]],
     "kurome4":
     [
-        "Impossible Dodge", "Kurome is invulnerable for 1 turn.", [0,0,0,0,1,4], Target.SINGLE, default_target("SELF"), exe_impossible_dodge
+        "Impossible Dodge", "Kurome is invulnerable for 1 turn.", [0,0,0,0,1,4], Target.SINGLE, default_target("SELF"), exe_impossible_dodge, [AbilityType.INSTANT, AbilityType.STRATEGIC]
         ],
     "lambo1": 
     [
@@ -5842,67 +5838,67 @@ ability_info_db = {
         +
         " will be replaced by Thunder, Set, Charge! for the next three turns. If used again, Thunder, Set, Charge! will be replaced by Elettrico Cornata for the next two turns. If used again, Lambo will return to his normal state.",
         [0, 0, 0, 1, 0, 0], Target.SINGLE,
-        default_target("SELF"), exe_ten_year_bazooka
+        default_target("SELF"), exe_ten_year_bazooka, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "lambo2": [
         "Conductivity",
         "For two turns, Lambo's allies receive 20 points of damage reduction. If they receive damaging abilities during this time, "
         + "Lambo will take 10 damage.", [0, 0, 0, 0, 1, 2], Target.MULTI_ALLY,
-        default_target("HELPFUL"), exe_conductivity
+        default_target("HELPFUL"), exe_conductivity, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "lambo3": [
         "Summon Gyudon",
         "Lambo's team gains 10 points of damage reduction permanently. During this time, the enemy team receives 5 points of damage each turn. This skill will end if "
         + "Ten-Year Bazooka is used.", [0, 0, 0, 1, 2, 4], Target.ALL_TARGET,
-        target_summon_gyudon, exe_summon_gyudon
+        target_summon_gyudon, exe_summon_gyudon, [AbilityType.ACTION, AbilityType.PHYSICAL, AbilityType.UNIQUE]
     ],
     "lambo4": [
         "Lampow's Shield", "Lambo becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_lampows_shield
+        default_target("SELF"), exe_lampows_shield, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "lamboalt1": [
         "Thunder, Set, Charge!", "Lambo deals 25 damage to one enemy.",
         [0, 1, 0, 0, 0, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_thunder_set_charge
+        default_target("HOSTILE"), exe_thunder_set_charge, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "lamboalt2": [
         "Elettrico Cornata", "Lambo deals 35 damage to all enemies.",
         [0, 1, 0, 0, 1, 0], Target.MULTI_ENEMY,
-        default_target("HOSTILE"), exe_elettrico_cornata
+        default_target("HOSTILE"), exe_elettrico_cornata, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "pucelle1": [
         "Knight's Sword", "La Pucelle deals 20 damage to one enemy.",
         [1, 0, 0, 0, 0, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_knights_sword
+        default_target("HOSTILE"), exe_knights_sword, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "pucelle2": [
         "Magic Sword",
         "La Pucelle commands her sword to grow, permanently increasing its damage by 20, its cost by 1 random, and its cooldown by 1.",
         [0, 0, 0, 1, 0, 0], Target.SINGLE,
-        default_target("SELF"), exe_magic_sword
+        default_target("SELF"), exe_magic_sword, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "pucelle3": [
         "Ideal Strike",
         "La Pucelle deals 40 piercing damage to one enemy. This ability ignores invulnerability, cannot be countered, and can only be used if La Pucelle is below 50 health.",
-        [1, 0, 0, 0, 1, 3], Target.SINGLE, target_ideal_strike, exe_ideal_strike
+        [1, 0, 0, 0, 1, 3], Target.SINGLE, target_ideal_strike, exe_ideal_strike, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "pucelle4": [
         "Knight's Guard", "La Pucelle becomes invulnerable for 1 turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_knights_guard
+        default_target("SELF"), exe_knights_guard, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "laxus1": [
         "Fairy Law",
         "Laxus deals 20 damage to all enemies and restores 20 health to all allies.",
         [0, 0, 0, 0, 3, 5], Target.ALL_TARGET,
-        default_target("ALL"), exe_fairy_law
+        default_target("ALL"), exe_fairy_law, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "laxus2": [
         "Lightning Dragon's Roar",
         "Laxus deals 40 damage to one enemy and stuns them for one turn. When the stun wears off, the target receives 10 more damage for 1 turn.",
         [0, 2, 0, 0, 0, 3], Target.SINGLE,
-        default_target("HOSTILE"), exe_lightning_dragons_roar
+        default_target("HOSTILE"), exe_lightning_dragons_roar, [AbilityType.INSTANT, AbilityType.ENERGY, AbilityType.STUN]
     ],
     "laxus3": [
         "Thunder Palace",
@@ -5910,12 +5906,12 @@ ability_info_db = {
         +
         " dealing damage equal to the original damage of the move that damaged him to the user.",
         [0, 1, 0, 0, 2, 4], Target.SINGLE,
-        default_target("SELF"), exe_thunder_palace
+        default_target("SELF"), exe_thunder_palace, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "laxus4": [
         "Laxus Block", "Laxus becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_laxus_block
+        default_target("SELF"), exe_laxus_block, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "leone1": [
         "King of Beasts Transformation - Lionel",
@@ -5923,14 +5919,14 @@ ability_info_db = {
         +
         " This healing is increased by 10 at the end of a turn in which she did damage to an enemy.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("SELF"), exe_lionel
+        default_target("SELF"), exe_lionel, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "leone2": [
         "Beast Instinct",
         "Leone targets herself or an enemy for 3 turns. If used on an enemy, Lion Fist will ignore invulnerability and deal 20 additional damage to them. If"
         +
         " used on Leone, she will ignore counters and stuns for the duration.",
-        [0, 0, 0, 0, 1, 4], Target.SINGLE, target_beast_instinct, exe_beast_instinct
+        [0, 0, 0, 0, 1, 4], Target.SINGLE, target_beast_instinct, exe_beast_instinct, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "leone3": [
         "Lion Fist",
@@ -5938,37 +5934,37 @@ ability_info_db = {
         +
         "If this ability kills an enemy that is affected by Beast Instinct, Leone will heal for 20 health.",
         [1, 0, 0, 0, 1, 0], Target.SINGLE,
-        target_lion_fist, exe_lion_fist, 
+        target_lion_fist, exe_lion_fist, [AbilityType.INSTANT, AbilityType.PHYSICAL] 
     ],
     "leone4": [
         "Instinctual Dodge",
         "Leone becomes invulnerable for one turn. Using this ability counts as a damaging ability for triggering King of Beasts Transformation - Lionel's healing.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF", prep_req="King of Beasts Transformation - Lionel"), exe_instinctual_dodge
+        default_target("SELF", prep_req="King of Beasts Transformation - Lionel"), exe_instinctual_dodge, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "levy1": [
         "Solid Script - Fire",
         "Levy marks all enemies for one turn. During this time, if they use a new ability, they will take 10 affliction damage. When this ability"
         + " ends, all affected enemies take 10 affliction damage.",
         [0, 0, 1, 0, 0, 1], Target.MULTI_ENEMY,
-        default_target("HOSTILE"), exe_solidscript_fire
+        default_target("HOSTILE"), exe_solidscript_fire, [AbilityType.INSTANT, AbilityType.ENERGY, AbilityType.AFFLICTION]
     ],
     "levy2": [
         "Solid Script - Silent",
         "For two turns, all characters become isolated. This ability cannot be countered or ignored and ignores invulnerability.",
         [0, 0, 1, 0, 2, 3], Target.ALL_TARGET,
-        default_target("ALL", def_type="BYPASS"), exe_solidscript_silent
+        default_target("ALL", def_type="BYPASS"), exe_solidscript_silent, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "levy3": [
         "Solid Script - Mask",
         "For two turns, target ally will ignore all stuns and affliction damage.",
         [0, 0, 1, 0, 0, 3], Target.SINGLE,
-        default_target("HELPFUL"), exe_solidscript_mask
+        default_target("HELPFUL"), exe_solidscript_mask, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "levy4": [
         "Solid Script - Guard", "Levy becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_solidscript_guard
+        default_target("SELF"), exe_solidscript_guard, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "raba1": [
         "Cross-Tail Strike",
@@ -5976,7 +5972,7 @@ ability_info_db = {
         +
         "If this ability targets a marked enemy and all living enemies are marked, this ability will deal 20 piercing damage to all marked enemies, ignoring invulnerability. This effect consumes all active marks.",
         [0, 0, 0, 1, 0, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_crosstail_strike
+        default_target("HOSTILE"), exe_crosstail_strike, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "raba2": [
         "Wire Shield",
@@ -5984,70 +5980,70 @@ ability_info_db = {
         +
         "If this ability targets an ally marked with Wire Shield and all living allies are marked, all marked allies become invulnerable for one turn. This effect consumes all active marks.",
         [0, 0, 0, 1, 0, 0], Target.SINGLE,
-        default_target("HELPFUL"), exe_wire_shield
+        default_target("HELPFUL"), exe_wire_shield, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "raba3": [
         "Heartseeker Thrust",
         "Lubbock deals 30 piercing damage to one target. If Lubbock is marked by Wire Shield, the damaged enemy will receive 15 affliction damage on the following turn. If the target is marked by Cross-Tail Strike, "
         + "the target will become stunned for one turn.", [0, 0, 0, 1, 1,
                                                            1], Target.SINGLE,
-        default_target("HOSTILE"), exe_heartseeker_thrust
+        default_target("HOSTILE"), exe_heartseeker_thrust, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.STUN]
     ],
     "raba4": [
         "Defensive Netting", "Lubbock becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_defensive_netting
+        default_target("SELF"), exe_defensive_netting, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "lucy1": [
         "Aquarius",
         "Lucy deals 15 damage to all enemies and grants her team 10 points of damage reduction.",
         [0, 0, 0, 1, 1, 1], Target.ALL_TARGET,
-        default_target("ALL"), exe_aquarius
+        default_target("ALL"), exe_aquarius, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "lucy2": [
         "Gemini",
         "For the next three turns, Lucy's abilities will stay active for one extra turn. During this time, this ability is replaced by Urano Metria.",
         [0, 0, 0, 1, 0, 0], Target.SINGLE,
-        default_target("SELF"), exe_gemini
+        default_target("SELF"), exe_gemini, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "lucy3": [
         "Capricorn", "Lucy deals 20 damage to one enemy.", [0, 0, 0, 1, 0, 0],
         Target.SINGLE,
-        default_target("HOSTILE"), exe_capricorn
+        default_target("HOSTILE"), exe_capricorn, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "lucy4": [
         "Leo", "Lucy becomes invulnerable for one turn.", [0, 0, 0, 0, 1, 4],
         Target.SINGLE,
-        default_target("SELF"), exe_leo
+        default_target("SELF"), exe_leo, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "lucyalt1": [
         "Urano Metria", "Lucy deals 20 damage to all enemies.",
         [0, 0, 1, 1, 0, 4], Target.MULTI_ENEMY,
-        default_target("HOSTILE"), exe_urano_metria
+        default_target("HOSTILE"), exe_urano_metria, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "midoriya1": [
         "SMASH!",
         "Midoriya deals 45 damage to one enemy and 20 affliction damage to himself.", [1, 0, 0, 0, 2, 1], Target.SINGLE,
-        default_target("HOSTILE"), exe_smash
+        default_target("HOSTILE"), exe_smash, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "midoriya2": [
         "Air Force Gloves",
         "Midoriya deals 15 damage to one enemy and"
         + " increases the cooldown of any move they use by one for one turn.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_air_force_gloves
+        default_target("HOSTILE"), exe_air_force_gloves, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "midoriya3": [
         "One For All - Shoot Style",
         "Midoriya deals 20 damage to all enemies. For 1 turn,"
         + " Midoriya will counter the first ability used on him. This effect is invisible.",
         [1, 0, 0, 0, 1, 3], Target.MULTI_ENEMY,
-        default_target("HOSTILE"), exe_shoot_style
+        default_target("HOSTILE"), exe_shoot_style, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.UNIQUE]
     ],
     "midoriya4": [
         "Enhanced Leap", "Midoriya becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_enhanced_leap
+        default_target("SELF"), exe_enhanced_leap, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "minato1": [
         "Flying Raijin",
@@ -6055,130 +6051,130 @@ ability_info_db = {
         +
         "one turn and the cooldown on Flying Raijin is reduced to 0. This effect consumes Marked Kunai's mark.",
         [0, 1, 0, 0, 0, 1], Target.SINGLE,
-        default_target("HOSTILE"), exe_flying_raijin
+        default_target("HOSTILE"), exe_flying_raijin, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "minato2": [
         "Marked Kunai",
         "Minato deals 10 piercing damage to one enemy and permanently marks them.",
         [0, 0, 0, 1, 0, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_marked_kunai
+        default_target("HOSTILE"), exe_marked_kunai, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "minato3": [
         "Partial Shiki Fuujin",
         "Minato permanently increases the cooldowns and random cost of target enemy by one. After using this skill, Minato dies.",
         [0, 0, 0, 0, 3, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_partial_shiki_fuujin
+        default_target("HOSTILE"), exe_partial_shiki_fuujin, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "minato4": [
         "Minato Parry", "Minato becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_minato_parry
+        default_target("SELF"), exe_minato_parry, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "mine1": [
         "Roman Artillery - Pumpkin",
-        "Mine deals 25 damage to one enemy. If Mine is below 120 health, this ability deals 10 more damage. If Mine is below 60 health, this ability"
-        + "costs one less weapon energy.", [0, 0, 0, 1, 1, 0], Target.SINGLE, target_pumpkin, exe_roman_artillery_pumpkin
+        "Mine deals 25 damage to one enemy. If Mine is below 120 health, this ability deals 10 more damage. If Mine is below 60 health, this ability "
+        + "costs one less weapon energy.", [0, 0, 0, 1, 1, 0], Target.SINGLE, target_pumpkin, exe_roman_artillery_pumpkin, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "mine2": [
         "Cut-Down Shot",
         "Deals 25 damage to all enemies. If Mine is below 100 health, this ability will stun all targets hit for 1 turn. If Mine is below 50 health, this ability deals double damage and the damage it deals "
-        + "is piercing.", [0, 0, 0, 1, 2, 3], Target.MULTI_ENEMY, target_cutdown_shot, exe_cutdown_shot
+        + "is piercing.", [0, 0, 0, 1, 2, 3], Target.MULTI_ENEMY, target_cutdown_shot, exe_cutdown_shot, [AbilityType.INSTANT, AbilityType.ENERGY, AbilityType.STUN]
     ],
     "mine3": [
         "Pumpkin Scouter",
         "For the next two turns, all of Mine's abilities will ignore invulnerability and deal 5 additional damage.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_pumpkin_scouter
+        default_target("SELF"), exe_pumpkin_scouter, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "mine4": [
         "Close-Range Deflection", "Mine becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_closerange_deflection
+        default_target("SELF"), exe_closerange_deflection, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "mirai1": [
         "Blood Suppression Removal",
         "For 3 turns, Mirai's abilities will cause their target to receive 10 affliction damage for 2 turns. During this time, this ability is replaced with Blood Bullet and Mirai receives 10 affliction damage per turn.",
         [0, 0, 0, 0, 1, 3], Target.SINGLE,
-        default_target("SELF"), exe_blood_suppression_removal
+        default_target("SELF"), exe_blood_suppression_removal, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.AFFLICTION, AbilityType.UNIQUE]
     ],
     "mirai2": [
         "Blood Sword Combat", "Mirai deals 30 damage to target enemy.",
         [1, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_blood_sword_combat
+        default_target("HOSTILE"), exe_blood_sword_combat, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "mirai3": [
         "Blood Shield",
         "Mirai gains 20 points of destructible defense and 20 points of damage reduction for one turn.",
         [0, 1, 0, 0, 1, 3], Target.SINGLE,
-        default_target("SELF"), exe_blood_shield
+        default_target("SELF"), exe_blood_shield, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "mirai4": [
         "Mirai Deflect", "Mirai becomes invulnerable for 1 turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_mirai_deflect
+        default_target("SELF"), exe_mirai_deflect, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "miraialt1": [
         "Blood Bullet",
         "Mirai deals 10 affliction damage to target enemy for 2 turns.",
         [0, 1, 0, 0, 0, 2], Target.SINGLE,
-        default_target("HOSTILE"), exe_blood_bullet
+        default_target("HOSTILE"), exe_blood_bullet, [AbilityType.INSTANT, AbilityType.AFFLICTION]
     ],
     "mirio1": [
         "Quirk - Permeation",
         "For one turn, Mirio will ignore all new harmful effects. Any enemy that attempts to apply a new harmful effect during this time will be marked for Phantom Menace "
         + "for one turn.", [0, 0, 0, 0, 0, 2], Target.SINGLE,
-        default_target("SELF"), exe_permeation
+        default_target("SELF"), exe_permeation, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "mirio2": [
         "Phantom Menace",
         "Mirio deals 20 piercing damage to one enemy. This ability ignores invulnerability, and deals 15 piercing damage to any enemy marked by Phantom Menace.",
-        [1, 0, 0, 0, 0, 0], Target.SINGLE, default_target("HOSTILE", def_type="BYPASS"), exe_phantom_menace
+        [1, 0, 0, 0, 0, 0], Target.SINGLE, default_target("HOSTILE", def_type="BYPASS"), exe_phantom_menace, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "mirio3": [
         "Protect Ally",
         "For one turn, target ally will ignore all new harmful effects. Any enemy that attempts to apply a new harmful effect during this time will be marked for Phantom Menace "
         + "for one turn.", [0, 0, 0, 0, 1, 3], Target.SINGLE,
-        default_target("SELFLESS"), exe_protect_ally
+        default_target("SELFLESS"), exe_protect_ally, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "mirio4": [
         "Mirio Dodge", "Mirio becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_mirio_dodge
+        default_target("SELF"), exe_mirio_dodge, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "misaka2": [
         "Railgun",
         "Misaka deals 20 damage to one enemy. This ability ignores invulnerability and cannot be countered or reflected. After being used, this ability will be replaced by Ultra Railgun.",
         [0, 0, 1, 0, 0, 0], Target.SINGLE,
-        default_target("HOSTILE", def_type="BYPASS"), exe_railgun
+        default_target("HOSTILE", def_type="BYPASS"), exe_railgun, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "misaka1": [
         "Iron Sand",
         "Misaka grants one ally 20 points of destructible defense for one turn. After being used, this ability will be replaced by Iron Colossus.",
         [0, 1, 0, 0, 0, 0], Target.SINGLE,
-        default_target("HELPFUL"), exe_iron_sand
+        default_target("HELPFUL"), exe_iron_sand, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "misaka3": [
         "Overcharge",
         "Misaka permanently gains one stack of Overcharge. For each stack she has, Railgun deals 5 additional damage and Iron Sand grants 5 additional destructible defense.", [0, 0, 0, 0, 1, 1], Target.SINGLE,
-        default_target("SELF"), exe_overcharge
+        default_target("SELF"), exe_overcharge, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "misaka4": [
         "Electric Deflection", "Misaka becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_electric_deflection
+        default_target("SELF"), exe_electric_deflection, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "misakaalt1":[
         "Iron Colossus", "Misaka permanently gains 10 destructible defense per turn. For the rest of the game, Iron Sand and Railgun affect all valid targets. Using this ability will reset all her abilities to their original forms and prevent her from switching for the rest of the game.",
         [0, 1, 1, 0, 0, 0],
-        Target.SINGLE, default_target("SELF"), exe_iron_colossus
+        Target.SINGLE, default_target("SELF"), exe_iron_colossus, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "misakaalt2":[
         "Ultra Railgun", "Misaka deals 50 damage to target enemy. This ability ignores invulnerability and cannot be countered or reflected. For the rest of the game, Misaka's abilities cost one additional random energy and have their effects doubled. Using this ability will reset all her abilities to their original forms and prevent her from switching for the rest of the game.",
-        [0, 1, 1, 0, 0, 0], Target.SINGLE, default_target("HOSTILE"), exe_ultra_railgun
+        [0, 1, 1, 0, 0, 0], Target.SINGLE, default_target("HOSTILE"), exe_ultra_railgun, [AbilityType.INSTANT, AbilityType.ENERGY, AbilityType.UNIQUE]
     ],
     "misakaalt3":[
         "Level-6 Shift", "For the rest of the game, Misaka will be uncontrollable and will use one of her abilities on a random valid target each round. During this time, she will deal 10 less damage, apply 10 less destructible defense, but all her effects will last for 3 turns. Using this ability will reset all her abilities to their original forms and prevent her from switching for the rest of the game.",
-        [0, 1, 1, 0, 0, 0], Target.SINGLE, default_target("SELF"), exe_levelsix_shift
+        [0, 1, 1, 0, 0, 0], Target.SINGLE, default_target("SELF"), exe_levelsix_shift, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "mugen1": [
         "Unpredictable Strike",
@@ -6214,56 +6210,56 @@ ability_info_db = {
         "Bunny Assault",
         "Naru deals 15 damage to one enemy for 3 turns. If she finishes using this ability without being stunned, Perfect Paper - Rampage Suit gains 20 destructible defense. This ability can only be used while Perfect Paper - Rampage Suit has destructible defense.",
         [1, 0, 0, 0, 1, 2], Target.SINGLE,
-        default_target("HOSTILE", prep_req="Perfect Paper - Rampage Suit"), exe_bunny_assault
+        default_target("HOSTILE", prep_req="Perfect Paper - Rampage Suit"), exe_bunny_assault, [AbilityType.ACTION, AbilityType.PHYSICAL]
     ],
     "naruha2": [
         "Perfect Paper - Rampage Suit",
         "Naru permanently gains 100 points of destructible defense. After being used, Naru can use Bunny Assault and this ability is replaced by Enraged Blow.",
         [0, 0, 0, 0, 2, 0], Target.SINGLE,
-        default_target("SELF", lockout=(EffectType.UNIQUE, "Perfect Paper - Rampage Suit")), exe_rampage_suit
+        default_target("SELF", lockout=(EffectType.UNIQUE, "Perfect Paper - Rampage Suit")), exe_rampage_suit, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "naruha3": [
         "Perfect Paper - Piercing Umbrella",
         "Naru deals 15 damage to target enemy. If Naru has destructible defense remaining on Perfect Paper - Rampage Suit, this ability will deal 10 bonus damage.",
         [1, 0, 0, 0, 0, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_piercing_umbrella
+        default_target("HOSTILE"), exe_piercing_umbrella, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "naruha4": [
         "Rabbit Guard",
         "Perfect Paper - Rampage Suit gains 25 points of destructible defense. This ability can only be used while Perfect Paper - Rampage Suit has destructible defense.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF", prep_req="Perfect Paper - Rampage Suit"), exe_rabbit_guard
+        default_target("SELF", prep_req="Perfect Paper - Rampage Suit"), exe_rabbit_guard, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "naruhaalt1": [
         "Enraged Blow",
         "Naru deals 40 damage to one enemy and stuns them for a turn. During the following turn, Naru takes double damage. This ability can only be used while Perfect Paper - Rampage Suit has destructible defense.",
         [1, 0, 0, 0, 2, 2], Target.SINGLE,
-        default_target("HOSTILE", prep_req="Perfect Paper - Rampage Suit"), exe_enraged_blow
+        default_target("HOSTILE", prep_req="Perfect Paper - Rampage Suit"), exe_enraged_blow, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.STUN]
     ],
     "natsu1": [
         "Fire Dragon's Roar",
         "Natsu deals 25 damage to one enemy. The following turn, they take 10 affliction damage.",
         [0, 1, 0, 0, 1, 1], Target.SINGLE,
-        default_target("HOSTILE"), exe_fire_dragons_roar
+        default_target("HOSTILE"), exe_fire_dragons_roar, [AbilityType.INSTANT, AbilityType.ENERGY, AbilityType.AFFLICTION]
     ],
     "natsu2": [
         "Fire Dragon's Iron Fist",
         "Natsu deals 15 damage to one enemy. If they are currently affected by one of Natsu's affliction damage-over-time"
         + " effects, they take 10 affliction damage.", [0, 1, 0, 0, 0,
                                                         0], Target.SINGLE,
-        default_target("HOSTILE"), exe_fire_dragons_iron_fist
+        default_target("HOSTILE"), exe_fire_dragons_iron_fist, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.AFFLICTION]
     ],
     "natsu3": [
         "Fire Dragon's Sword Horn",
         "Natsu deals 40 damage to one enemy. For the rest of the game, that enemy"
         + " takes 5 affliction damage per turn.", [1, 1, 0, 0, 1,
                                                    3], Target.SINGLE,
-        default_target("HOSTILE"), exe_fire_dragons_sword_horn
+        default_target("HOSTILE"), exe_fire_dragons_sword_horn, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.AFFLICTION]
     ],
     "natsu4": [
         "Natsu Dodge", "Natsu becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_natsu_dodge
+        default_target("SELF"), exe_natsu_dodge, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "neji1": [
         "Eight Trigrams - 128 Palms",
@@ -6271,385 +6267,385 @@ ability_info_db = {
         +
         "Chakra Point Strike, which removes one random energy from the target if they take damage from Eight Trigrams - 128 Palms this turn.",
         [1, 0, 0, 0, 1, 8], Target.SINGLE,
-        default_target("HOSTILE"), exe_neji_trigrams
+        default_target("HOSTILE"), exe_neji_trigrams, [AbilityType.ACTION, AbilityType.PHYSICAL]
     ],
     "neji2": [
         "Eight Trigrams - Mountain Crusher",
         "Neji deals 25 damage to target enemy, ignoring invulnerability. If used on an invulnerable target, this ability will deal 15 additional damage.",
         [0, 1, 0, 0, 1, 1], Target.SINGLE,
-        default_target("HOSTILE", def_type="BYPASS"), exe_neji_mountain_crusher
+        default_target("HOSTILE", def_type="BYPASS"), exe_neji_mountain_crusher, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "neji3": [
         "Selfless Genius",
         "If a target ally would die this turn, they instead take no damage and deal 10 additional damage on the following turn. If this ability is triggered, Neji dies. This skill is invisible until "
         + "triggered and the death cannot be prevented.", [0, 0, 0, 0, 2,
                                                            3], Target.SINGLE,
-        default_target("SELFLESS"), exe_selfless_genius
+        default_target("SELFLESS"), exe_selfless_genius, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "neji4": [
         "Eight Trigrams - Revolving Heaven",
         "Neji becomes invulnerable for one turn.", [0, 0, 0, 0, 1,
                                                     4], Target.SINGLE,
-        default_target("SELF"), exe_revolving_heaven
+        default_target("SELF"), exe_revolving_heaven, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "nejialt1": [
         "Chakra Point Strike",
         "If target enemy takes damage from Eight Trigrams - 128 Palms this turn, they will lose 1 random energy.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HOSTILE", mark_req="Eight Trigrams - 128 Palms"), exe_chakra_point_strike
+        default_target("HOSTILE", mark_req="Eight Trigrams - 128 Palms"), exe_chakra_point_strike, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.DRAIN]
     ],
     "nemu1": [
         "Nemurin Nap",
         "Nemurin heads for the dream world, enabling the use of her other abilities. " + 
         "Every turn that she does not take new damage or use an ability, her sleep grows one stage deeper. While dozing, Nemu can use her abilities. While fully asleep, Nemurin Beam and Dream Manipulation cost one less random energy. While deeply asleep, Nemurin Beam and Dream Manipulation become area-of-effect. When Nemurin takes new, non-absorbed damage, she loses one stage of sleep depth.",
         [0, 0, 0, 0, 1, 2], Target.SINGLE,
-        default_target("SELF", lockout=(EffectType.MARK, "Nemurin Nap")), exe_nemurin_nap
+        default_target("SELF", lockout=(EffectType.MARK, "Nemurin Nap")), exe_nemurin_nap, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "nemu2": [
         "Nemurin Beam",
         "Nemurin deals 25 damage to target enemy and reduces the damage they deal by 10 for one turn.",
         [0, 1, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HOSTILE", prep_req = "Nemurin Nap"), exe_nemurin_beam
+        default_target("HOSTILE", prep_req = "Nemurin Nap"), exe_nemurin_beam, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "nemu3": [
         "Dream Manipulation",
         "For 3 turns, target ally deals 10 additional damage and heals 10 health per turn. Cannot be used on Nemurin.",
         [0, 0, 1, 0, 1, 2], Target.SINGLE,
-        default_target("SELFLESS", prep_req = "Nemurin Nap"), exe_dream_manipulation
+        default_target("SELFLESS", prep_req = "Nemurin Nap"), exe_dream_manipulation, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.STRATEGIC]
     ],
     "nemu4": [
         "Dreamland Sovereignty", "Nemurin becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF", prep_req = "Nemurin Nap"), exe_dream_sovereignty
+        default_target("SELF", prep_req = "Nemurin Nap"), exe_dream_sovereignty, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "orihime1": [
         "Tsubaki!",
         "Orihime prepares the Shun Shun Rikka with an offensive effect.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("SELF", lockout=(EffectType.MARK, "Tsubaki!")), exe_tsubaki
+        default_target("SELF", lockout=(EffectType.MARK, "Tsubaki!")), exe_tsubaki, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "orihime2": [
         "Ayame! Shun'o!",
         "Orihime prepares the Shun Shun Rikka with a healing effect.",
         [0, 1, 0, 0, 0, 0], Target.SINGLE,
-        default_target("SELF", lockout=(EffectType.MARK, "Ayame! Shun'o!")), exe_ayame_shuno
+        default_target("SELF", lockout=(EffectType.MARK, "Ayame! Shun'o!")), exe_ayame_shuno, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "orihime3": [
         "Lily! Hinagiku! Baigon!",
         "Orihime prepares the Shun Shun Rikka with a defensive effect.",
         [0, 1, 0, 0, 0, 0], Target.SINGLE,
         default_target("SELF",
-                       lockout=(EffectType.MARK, "Lily! Hinagiku! Baigon!")), exe_lily_hinagiku_baigon
+                       lockout=(EffectType.MARK, "Lily! Hinagiku! Baigon!")), exe_lily_hinagiku_baigon, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "orihime4": [
         "I Reject!",
         "Orihime activates her Shun Shun Rikka, with a composite effect depending on the flowers she has activated. This will end any active Shun Shun Rikka effect originating from a name she is currently calling out.",
-        [0, 0, 0, 0, 0, 0], Target.SINGLE, target_shun_shun_rikka, exe_i_reject
+        [0, 0, 0, 0, 0, 0], Target.SINGLE, target_shun_shun_rikka, exe_i_reject, [AbilityType.INSTANT, AbilityType.ENERGY, AbilityType.STRATEGIC]
     ],
     "shunshunrikka1": [
         "Dance of the Heavenly Six",
         "",
-        [0, 0, 0, 0, 0, 0], Target.SINGLE
+        [0, 0, 0, 0, 0, 0], Target.SINGLE, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "shunshunrikka2": [
         "Five-God Inviolate Shield",
         "",
-        [0, 0, 0, 0, 0, 0], Target.SINGLE
+        [0, 0, 0, 0, 0, 0], Target.SINGLE, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "shunshunrikka3": [
         "Four-God Resisting Shield",
         "",
-        [0, 0, 0, 0, 0, 0], Target.SINGLE
+        [0, 0, 0, 0, 0, 0], Target.SINGLE, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "shunshunrikka4": [
         "Three-God Empowering Shield",
         "",
-        [0, 0, 0, 0, 0, 0], Target.SINGLE
+        [0, 0, 0, 0, 0, 0], Target.SINGLE, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "shunshunrikka5": [
         "Three-God Linking Shield",
         "",
-        [0, 0, 0, 0, 0, 0], Target.SINGLE
+        [0, 0, 0, 0, 0, 0], Target.SINGLE, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "shunshunrikka6": [
         "Two-God Returning Shield",
         "",
-        [0, 0, 0, 0, 0, 0], Target.SINGLE
+        [0, 0, 0, 0, 0, 0], Target.SINGLE, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "shunshunrikka7": [
         "Lone-God Slicing Shield",
         "",
-        [0, 0, 0, 0, 0, 0], Target.SINGLE
+        [0, 0, 0, 0, 0, 0], Target.SINGLE, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "ripple1": [
         "Perfect Accuracy",
         "Targets one enemy with Ripple's perfect accuracy. For the rest of the game, Shuriken Throw will target that enemy in addition to any other targets, ignoring invulnerability and dealing 5 additional damage.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
         default_target("HOSTILE",
-                       protection=(EffectType.MARK, "Perfect Accuracy")), exe_perfect_accuracy
+                       protection=(EffectType.MARK, "Perfect Accuracy")), exe_perfect_accuracy, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "ripple2": [
         "Shuriken Throw", "Ripple deals 15 piercing damage to target enemy.",
-        [0, 0, 0, 1, 0, 0], Target.SINGLE, default_target("HOSTILE"), exe_shuriken_throw
+        [0, 0, 0, 1, 0, 0], Target.SINGLE, default_target("HOSTILE"), exe_shuriken_throw, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "ripple3": [
         "Night of Countless Stars",
         "Ripple deals 5 piercing damage to all enemies for three turns. During this time, Shuriken Throw deals 10 additional damage.",
         [0, 0, 0, 1, 1, 4], Target.MULTI_ENEMY,
-        default_target("HOSTILE"), exe_countless_stars
+        default_target("HOSTILE"), exe_countless_stars, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "ripple4": [
         "Ripple Block", "Ripple becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_ripple_block
+        default_target("SELF"), exe_ripple_block, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "rukia1": [
         "First Dance - Tsukishiro",
         "Rukia deals 25 damage to one enemy, ignoring invulnerability. If that enemy is invulnerable, they are stunned for one turn.",
         [0, 0, 0, 1, 1, 1], Target.SINGLE,
-        default_target("HOSTILE", def_type="BYPASS"), exe_first_dance
+        default_target("HOSTILE", def_type="BYPASS"), exe_first_dance, [AbilityType.INSTANT, AbilityType.ENERGY, AbilityType.STUN]
     ],
     "rukia2": [
         "Second Dance - Hakuren",
         "Rukia deals 15 damage to one enemy and 10 damage to all others.",
         [0, 1, 0, 0, 0, 1], Target.MULTI_ENEMY,
-        default_target("HOSTILE"), exe_second_dance
+        default_target("HOSTILE"), exe_second_dance, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "rukia3": [
         "Third Dance - Shirafune",
         "The next time Rukia is countered, the countering enemy receives 30 damage and is stunned for one turn. This effect is invisible until triggered.",
         [0, 0, 1, 0, 0, 3], Target.SINGLE,
-        default_target("SELF"), exe_third_dance
+        default_target("SELF"), exe_third_dance, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "rukia4": [
         "Rukia Parry", "Rukia becomes invulnerable for a turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_rukia_parry
+        default_target("SELF"), exe_rukia_parry, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "ruler1": [
         "In The Name Of Ruler!",
         "Ruler stuns one enemy and herself for 3 turns. This skill cannot be used while active and will end if Ruler receives new damage.",
         [0, 0, 1, 0, 0, 2], Target.SINGLE,
         default_target("HOSTILE",
-                       lockout=(EffectType.MARK, "In The Name Of Ruler!")), exe_in_the_name_of_ruler
+                       lockout=(EffectType.MARK, "In The Name Of Ruler!")), exe_in_the_name_of_ruler, [AbilityType.ACTION, AbilityType.MENTAL, AbilityType.STUN, AbilityType.UNIQUE]
     ],
     "ruler2": [
         "Minion - Minael and Yunael",
         "Deals 15 damage to target enemy or gives 10 destructible defense to Ruler.",
-        [0, 0, 0, 0, 1, 0], Target.SINGLE, target_minion_minael_yunael, exe_minael_yunael
+        [0, 0, 0, 0, 1, 0], Target.SINGLE, target_minion_minael_yunael, exe_minael_yunael, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "ruler3": [
         "Minion - Tama",
         "The next time target ally receives a new harmful ability, that ability is countered and its user takes 20 piercing damage. This effect can only be active on one target at a time.",
         [0, 0, 0, 0, 2, 2], Target.SINGLE,
-        default_target("HELPFUL"), exe_tama
+        default_target("HELPFUL"), exe_tama, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "ruler4": [
         "Minion - Swim Swim", "Ruler becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_swim_swim
+        default_target("SELF"), exe_swim_swim, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "ryohei1": [
         "Maximum Cannon", "Ryohei deals 20 damage to a single target.",
         [1, 0, 0, 0, 0, 1], Target.SINGLE,
-        default_target("HOSTILE"), exe_maximum_cannon
+        default_target("HOSTILE"), exe_maximum_cannon, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "ryohei2": [
         "Kangaryu", "Ryohei heals target ally for 15 health.",
         [1, 0, 0, 0, 0, 0], Target.SINGLE,
-        default_target("HELPFUL"), exe_kangaryu
+        default_target("HELPFUL"), exe_kangaryu, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "ryohei3": [
         "Vongola Headgear",
         "For the next 2 turns, Ryohei will ignore all random cost increases to Maximum Cannon and Kangaryu, and using them will not consume stacks of To The Extreme!",
         [0, 0, 0, 0, 2, 4], Target.SINGLE,
-        default_target("SELF"), exe_vongola_headgear
+        default_target("SELF"), exe_vongola_headgear, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "ryohei4": [
         "To The Extreme!",
-        "For the rest of the game, whenever Ryohei takes 20 damage, he will gain one stack of To The Extreme! For each stack of To The Extreme! on him, Maximum Cannon will deal 15 more damage and cost one more random"
+        "For the rest of the game, whenever Ryohei takes 30 damage, he will gain one stack of To The Extreme! For each stack of To The Extreme! on him, Maximum Cannon will deal 15 more damage and cost one more random"
         +
         " energy, and Kangaryu will restore 20 more health and cost one more random energy. Using either ability will reset all stacks of To The Extreme!",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("SELF", lockout=(EffectType.MARK, "To The Extreme!")), exe_to_the_extreme
+        default_target("SELF", lockout=(EffectType.MARK, "To The Extreme!")), exe_to_the_extreme, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "saber1": [
         "Excalibur",
         "Saber deals 50 piercing damage to one enemy. This ability cannot be countered.",
         [1, 0, 0, 1, 1, 2], Target.SINGLE,
-        default_target("HOSTILE"), exe_excalibur
+        default_target("HOSTILE"), exe_excalibur, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "saber2": [
         "Wind Blade Combat",
         "Saber deals 10 damage to one enemy for three turns. During this time, Saber"
         + " cannot be stunned. This ability cannot be countered.",
         [1, 0, 0, 0, 1, 2], Target.SINGLE,
-        default_target("HOSTILE"), exe_wind_blade_combat
+        default_target("HOSTILE"), exe_wind_blade_combat, [AbilityType.ACTION, AbilityType.PHYSICAL]
     ],
     "saber3": [
         "Avalon",
         "One ally permanently heals 10 health per turn. This ability can only affect one ally at a time.",
         [0, 0, 0, 1, 0, 0], Target.SINGLE,
-        default_target("HELPFUL", protection=(EffectType.MARK, "Avalon")), exe_avalon
+        default_target("HELPFUL", protection=(EffectType.MARK, "Avalon")), exe_avalon, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "saber4": [
         "Saber Parry", "Saber becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_saber_parry
+        default_target("SELF"), exe_saber_parry, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "saitama1": [
         "One Punch", "Saitama deals 75 piercing damage to one enemy.",
         [2, 0, 0, 0, 1, 2], Target.SINGLE,
-        default_target("HOSTILE"), exe_one_punch
+        default_target("HOSTILE"), exe_one_punch, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "saitama2": [
         "Consecutive Normal Punches",
         "Saitama deals 15 damage to one enemy for 3 turns.",
         [1, 0, 0, 0, 1, 2], Target.SINGLE,
-        default_target("HOSTILE"), exe_consecutive_normal_punches
+        default_target("HOSTILE"), exe_consecutive_normal_punches, [AbilityType.ACTION, AbilityType.PHYSICAL]
     ],
     "saitama3": [
         "Serious Series - Serious Punch",
         "On the following turn Saitama deals 35 damage to target enemy. During this time, Saitama will ignore all effects.",
         [1, 0, 0, 0, 2, 3], Target.SINGLE,
-        default_target("HOSTILE"), exe_serious_punch
+        default_target("HOSTILE"), exe_serious_punch, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.UNIQUE]
     ],
     "saitama4": [
         "Serious Series - Serious Sideways Jumps",
         "Saitama becomes invulnerable for one turn.", [0, 0, 0, 0, 1,
                                                        4], Target.SINGLE,
-        default_target("SELF"), exe_sideways_jumps
+        default_target("SELF"), exe_sideways_jumps, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "seryu1": [
         "Body Modification - Arm Gun",
         "Seryu deals 20 damage to one enemy. Becomes Body Modification - Self Destruct if Seryu falls below 50 health.",
         [0, 0, 0, 0, 1, 1], Target.SINGLE,
-        default_target("HOSTILE"), exe_body_mod_arm_gun
+        default_target("HOSTILE"), exe_body_mod_arm_gun, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "seryu2": [
         "Raging Koro",
         "Koro deals 20 damage to one enemy for two turns. Becomes Insatiable Justice while active.",
         [0, 0, 0, 0, 2, 2], Target.SINGLE,
-        default_target("HOSTILE"), exe_raging_koro
+        default_target("HOSTILE"), exe_raging_koro, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.UNIQUE]
     ],
     "seryu3": [
         "Berserker Howl",
         "Koro deals 15 damage to all enemies and lowers the damage they deal by 10 for 2 turns.",
         [0, 0, 0, 0, 3, 3], Target.MULTI_ENEMY,
-        default_target("HOSTILE"), exe_berserker_howl
+        default_target("HOSTILE"), exe_berserker_howl, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "seryu4": [
         "Koro Defense", "Seryu becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_koro_defense
+        default_target("SELF"), exe_koro_defense, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "seryualt1": [
         "Body Modification - Self Destruct",
         "Seryu deals 30 damage to all enemies. After using this ability, Seryu dies. Effects that prevent death cannot prevent Seryu from dying. This ability cannot be countered.",
         [0, 0, 0, 0, 2, 0], Target.MULTI_ENEMY,
-        default_target("HOSTILE"), exe_self_destruct
+        default_target("HOSTILE"), exe_self_destruct, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "seryualt2": [
         "Insatiable Justice",
         "Koro instantly kills one enemy that is below 60 health. Effects that prevent death cannot prevent this ability.",
-        [0, 0, 0, 0, 2, 5], Target.SINGLE, target_insatiable_justice, exe_insatiable_justice
+        [0, 0, 0, 0, 2, 5], Target.SINGLE, target_insatiable_justice, exe_insatiable_justice, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "sheele1": [
         "Extase - Bisector of Creation",
-        "Sheele deals 30 damage to one enemy. This ability cannot be countered, reflected, or ignored, and deals 15 more damage if the target has destructible defense.",
-        [0,0,0,1,1,0], Target.SINGLE, default_target("HOSTILE"), exe_extase
+        "Sheele deals 35 damage to one enemy. This ability cannot be countered, reflected, or ignored, and deals 15 more damage if the target has destructible defense.",
+        [0,0,0,1,1,0], Target.SINGLE, default_target("HOSTILE"), exe_extase, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "sheele2": [
         "Savior Strike",
-        "Sheele deals 25 damage to one enemy. If that enemy is using a continuous ability, that ability is ended as though that character were stunned.",
-        [0,0,0,1,1,0], Target.SINGLE, default_target("HOSTILE"), exe_savior_strike
+        "Sheele deals 25 damage to one enemy. If that enemy is using an Action ability, that ability is ended as though that character were stunned.",
+        [0,0,0,1,1,0], Target.SINGLE, default_target("HOSTILE"), exe_savior_strike, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "sheele3": [
         "Trump Card - Blinding Light",
         "Target enemy is stunned for two turns. During this time, they cannot reduce damage or become invulnerable and Extase - Bisector of Creation will deal 10 additional damage to them.",
-        [0,0,1,1,0,5], Target.SINGLE, default_target("HOSTILE"), exe_blinding_light
+        [0,0,1,1,0,5], Target.SINGLE, default_target("HOSTILE"), exe_blinding_light, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.STUN]
     ],
     "sheele4": [
         "Extase Block",
         "Sheele becomes invulnerable for one turn.",
-        [0,0,0,0,1,4], Target.SINGLE, default_target("SELF"), exe_extase_block
+        [0,0,0,0,1,4], Target.SINGLE, default_target("SELF"), exe_extase_block, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "shigaraki1": [
         "Decaying Touch",
         "Shigaraki deals 5 affliction damage to target enemy for the rest of the game. This damage is doubled each time Decaying Touch is applied.",
         [1, 0, 0, 0, 0, 1], Target.SINGLE,
-        default_target("HOSTILE"), exe_decaying_touch
+        default_target("HOSTILE"), exe_decaying_touch, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.AFFLICTION]
     ],
     "shigaraki2": [
         "Decaying Breakthrough",
         "Shigaraki applies a stack of Decaying Touch to all enemies.",
         [1, 0, 0, 0, 2, 4], Target.MULTI_ENEMY,
-        default_target("HOSTILE"), exe_decaying_breakthrough
+        default_target("HOSTILE"), exe_decaying_breakthrough, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.AFFLICTION]
     ],
     "shigaraki3": [
         "Destroy What You Hate, Destroy What You Love",
         "Shigaraki's allies deal 10 more damage for 2 turns. During this time they take 5 more damage from all effects and cannot reduce damage or become invulnerable.",
         [0, 0, 1, 0, 0, 3], Target.MULTI_ALLY,
-        default_target("SELFLESS"), exe_destroy_what_you_love
+        default_target("SELFLESS"), exe_destroy_what_you_love, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "shigaraki4": [
         "Kurogiri Escape", "Shigaraki becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_kurogiri_escape
+        default_target("SELF"), exe_kurogiri_escape, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "shikamaru1": [
         "Shadow Bind Jutsu",
         "Shikamaru stuns one enemy for 2 turns. This ability will also affect any enemy affected by Shadow Pin, ignoring invulnerability.",
-        [0, 0, 1, 0, 1, 4], Target.SINGLE, default_target("HOSTILE"), exe_shadow_bind_jutsu
+        [0, 0, 1, 0, 1, 4], Target.SINGLE, default_target("HOSTILE"), exe_shadow_bind_jutsu, [AbilityType.ACTION, AbilityType.MENTAL, AbilityType.STUN]
     ],
     "shikamaru2": [
         "Shadow Neck Bind",
         "Shikamaru deals 15 affliction damage to one enemy for 2 turns. This ability will also affect any enemy affected by Shadow Pin, ignoring invulnerability.",
-        [0, 0, 1, 0, 1, 1], Target.SINGLE, default_target("HOSTILE"), exe_shadow_neck_bind
+        [0, 0, 1, 0, 1, 1], Target.SINGLE, default_target("HOSTILE"), exe_shadow_neck_bind, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.AFFLICTION]
     ],
     "shikamaru3": [
         "Shadow Pin",
         "For one turn, target enemy cannot target enemies.",
         [0, 0, 0, 1, 0, 1], Target.SINGLE,
-        default_target("HOSTILE"), exe_shadow_pin
+        default_target("HOSTILE"), exe_shadow_pin, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "shikamaru4": [
         "Shikamaru Hide", "Shikamaru becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_hide
+        default_target("SELF"), exe_hide, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "misaki1": [
         "Mental Out",
         "Shokuhou stuns target enemy for 2 turns. During this time, Mental Out is replaced by one of their abilities, and Shokuhou can use that ability as though she were the stunned enemy. All negative effects applied to Misaki as a result of this ability's use are applied to the stunned enemy instead.",
         [0, 0, 2, 0, 0, 3], Target.SINGLE,
-        target_mental_out, exe_mental_out
+        target_mental_out, exe_mental_out, [AbilityType.ACTION, AbilityType.MENTAL, AbilityType.STUN, AbilityType.UNIQUE]
     ],
     "misaki2": [
         "Exterior",
         "Shokuhou takes 40 affliction damage. For the next 4 turns, Mental Out costs 1 less mental energy and lasts 1 more turn.",
         [0, 0, 0, 0, 2, 5], Target.SINGLE,
-        default_target("SELF"), exe_exterior
+        default_target("SELF"), exe_exterior, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "misaki3": [
         "Ally Mobilization",
         "For 2 turns, both of Shokuhou's allies will ignore stuns and gain 15 damage reduction.",
         [0, 0, 1, 0, 1, 1], Target.MULTI_ALLY,
-        default_target("SELFLESS"), exe_ally_mobilization
+        default_target("SELFLESS"), exe_ally_mobilization, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "misaki4": [
         "Loyal Guard",
         "Shokuhou becomes invulnerable for 1 turn. This ability is only usable if Shokuhou has a living ally.",
-        [0, 0, 1, 0, 0, 1], Target.SINGLE, target_loyal_guard, exe_loyal_guard
+        [0, 0, 1, 0, 0, 1], Target.SINGLE, target_loyal_guard, exe_loyal_guard, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "misakialt1": [
         "Mental Out - Order",
         "Placeholder ability to be replaced by a controlled enemy's ability.",
-        [0, 0, 0, 0, 0, 0], Target.SINGLE, target_mental_out_order, exe_mental_out_order
+        [0, 0, 0, 0, 0, 0], Target.SINGLE, target_mental_out_order, exe_mental_out_order, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "snowwhite1": [
         "Enhanced Strength", "Snow White deals 15 damage to one enemy.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HOSTILE"), exe_enhanced_strength
+        default_target("HOSTILE"), exe_enhanced_strength, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "snowwhite2": [
         "Hear Distress",
@@ -6661,46 +6657,46 @@ ability_info_db = {
         +
         " skill is invisible until triggered and ignores invulnerability and isolation.",
         [0, 0, 1, 0, 0, 2], Target.SINGLE,
-        default_target("ALL", def_type="BYPASS"), exe_hear_distress
+        default_target("ALL", def_type="BYPASS"), exe_hear_distress, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "snowwhite3": [
         "Lucky Rabbit's Foot",
         "Snow White targets an ally other than herself. For 1 turn, if that ally dies, they instead"
         + " return to 35 health. This healing cannot be prevented.",
         [0, 0, 0, 0, 2, 5], Target.SINGLE,
-        default_target("SELFLESS"), exe_rabbits_foot
+        default_target("SELFLESS"), exe_rabbits_foot, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "snowwhite4": [
         "Leap", "Snow White becomes invulnerable for one turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_leap
+        default_target("SELF"), exe_leap, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "swimswim1": [
         "Ruler", "Swim Swim deals 25 damage to target enemy.",
-        [0, 0, 0, 1, 0, 1], Target.SINGLE, target_ruler, exe_ruler
+        [0, 0, 0, 1, 0, 1], Target.SINGLE, target_ruler, exe_ruler, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "swimswim2": [
         "Dive",
         "Swim Swim ignores all hostile effects for one turn. The following turn, her abilities will ignore invulnerability.",
-        [0, 0, 1, 0, 0, 2], Target.SINGLE, default_target("SELF"), exe_dive
+        [0, 0, 1, 0, 0, 2], Target.SINGLE, default_target("SELF"), exe_dive, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "swimswim3": [
         "Vitality Pills",
         ("For 3 turns, Swim Swim gains 10 points of damage reduction and her"
         " abilities will deal 10 more damage."),
         [0, 0, 0, 0, 2, 3], Target.SINGLE,
-        default_target("SELF"), exe_vitality_pills
+        default_target("SELF"), exe_vitality_pills, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "swimswim4": [
         "Water Body", "Swim Swim becomes invulnerable for 1 turn.",
         [0, 0, 0, 0, 1, 4], Target.SINGLE,
-        default_target("SELF"), exe_water_body
+        default_target("SELF"), exe_water_body, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "tatsumaki1": [
         "Rubble Barrage",
         "Tatsumaki deals 10 damage to all enemies for two turns.",
         [0, 0, 1, 0, 1, 1], Target.MULTI_ENEMY,
-        default_target("HOSTILE"), exe_rubble_barrage
+        default_target("HOSTILE"), exe_rubble_barrage, [AbilityType.INSTANT, AbilityType.MENTAL]
     ],
     "tatsumaki2": [
         "Arrest Assault",
@@ -6708,33 +6704,33 @@ ability_info_db = {
         " This effect is invisible. After being used, this ability is replaced "
         "by Return Assault for one turn."), [0, 0, 1, 0, 0,
                                               3], Target.MULTI_ALLY,
-        default_target("HELPFUL"), exe_arrest_assault
+        default_target("HELPFUL"), exe_arrest_assault, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "tatsumaki3": [
         "Gather Power",
         "Tatsumaki gains one random energy and one stack of Gather Power. For each stack of Gather Power on her, Rubble Barrage"
         +
         " deals 5 more damage, Arrest Assault grants 5 more damage reduction, and Gather Power has one less cooldown.",
-        [0, 0, 1, 0, 0, 4], Target.SINGLE, default_target("SELF"), exe_gather_power
+        [0, 0, 1, 0, 0, 4], Target.SINGLE, default_target("SELF"), exe_gather_power, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "tatsumaki4": [
         "Psionic Barrier", "Tatsumaki becomes invulnerable for one turn.",
-        [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_psionic_barrier
+        [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_psionic_barrier, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "tatsumakialt1": [
         "Return Assault",
         "Tatsumaki deals 0 damage to all enemies. This ability deals 20 more damage for every damaging ability Tatsumaki's team received on the previous turn.",
-        [0, 0, 1, 0, 1, 2], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_return_assault
+        [0, 0, 1, 0, 1, 2], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_return_assault, [AbilityType.INSTANT, AbilityType.MENTAL]
     ],
     "todoroki1": [
         "Quirk - Half-Cold",
         "Deals 20 damage to all enemies and lowers their damage dealt by 10 for one turn. Increases the cost of all of Todoroki's abilities by one random energy until he uses Flashfreeze Heatwave.",
-        [0, 1, 0, 0, 0, 0], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_half_cold
+        [0, 1, 0, 0, 0, 0], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_half_cold, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.UNIQUE]
     ],
     "todoroki2": [
         "Quirk - Half-Hot",
         "Deals 30 damage to one enemy and 10 damage to Todoroki's allies. The damage dealt to Todoroki's allies is permanently increased by 10 with each use until he uses Flashfreeze Heatwave.",
-        [0, 1, 0, 0, 0, 0], Target.SINGLE, default_target("HOSTILE"), exe_half_hot
+        [0, 1, 0, 0, 0, 0], Target.SINGLE, default_target("HOSTILE"), exe_half_hot, [AbilityType.INSTANT, AbilityType.ENERGY, AbilityType.UNIQUE]
     ],
     "todoroki3": [
         "Flashfreeze Heatwave",
@@ -6745,83 +6741,83 @@ ability_info_db = {
     ],
     "todoroki4": [
         "Ice Rampart", "Todoroki becomes invulnerable for one turn.",
-        [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_ice_rampart
+        [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_ice_rampart, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "tatsumi1": [
         "Killing Strike",
         "Tatsumi deals 25 damage to one enemy. If that enemy is stunned or below half"
         + " health, they take 10 more damage. Both damage boosts can occur.",
-        [1, 0, 0, 0, 1, 1], Target.SINGLE, default_target("HOSTILE"), exe_killing_strike
+        [1, 0, 0, 0, 1, 1], Target.SINGLE, default_target("HOSTILE"), exe_killing_strike, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "tatsumi2": [
         "Incursio",
         "For four turns, Tatsumi gains 25 points of destructible defense and "
-        + "Neuntote becomes usable.", [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_incursio
+        + "Neuntote becomes usable.", [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_incursio, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "tatsumi3": [
         "Neuntote",
         "Tatsumi deals 25 damage to target enemy. For two turns, that enemy receives double"
         + " damage from Neuntote. This effect stacks.", [0, 0, 0, 1, 1,
-                                                         0], Target.SINGLE, default_target("HOSTILE", prep_req="Incursio"), exe_neuntote
+                                                         0], Target.SINGLE, default_target("HOSTILE", prep_req="Incursio"), exe_neuntote, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.UNIQUE]
     ],
     "tatsumi4": [
         "Invisibility", "Tatsumi becomes invulnerable for one turn.",
-        [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_invisibility
+        [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_invisibility, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "toga1": [
         "Thirsting Knife",
         "Toga deals 10 damage to one enemy and applies two stacks of Quirk - Transform to them.",
-        [0, 0, 0, 0, 1, 0], Target.SINGLE, default_target("HOSTILE"), exe_thirsting_knife
+        [0, 0, 0, 0, 1, 0], Target.SINGLE, default_target("HOSTILE"), exe_thirsting_knife, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "toga2": [
         "Vacuum Syringe",
-        "Toga deals 10 affliction damage to one enemy for 3 turns. Each turn, she applies a stack of Quirk - Transform to them.", [0, 0, 0, 0, 2, 1], Target.SINGLE, default_target("HOSTILE"), exe_vacuum_syringe
+        "Toga deals 10 affliction damage to one enemy for 3 turns. Each turn, she applies a stack of Quirk - Transform to them.", [0, 0, 0, 0, 2, 1], Target.SINGLE, default_target("HOSTILE"), exe_vacuum_syringe, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.AFFLICTION]
     ],
     "toga3": [
         "Quirk - Transform",
         "Toga consumes all stacks of Quirk - Transform on one enemy, turning into a copy of them"
         + " for one turn per stack consumed. This effect ignores invulnerability.", [0, 0, 0, 0, 1,
-                                                5], Target.SINGLE, target_transform, exe_transform
+                                                5], Target.SINGLE, target_transform, exe_transform, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "toga4": [
         "Toga Dodge", "Toga becomes invulnerable for one turn.",
-        [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_toga_dodge
+        [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_toga_dodge, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "touka1":[
         "Draw Stance",
         "Touka enters Draw Stance for one turn and this ability is replaced by Raikiri. During this time, she will counter the first harmful ability to target her and deal 15 damage to the countered enemy, and this effect will end.",
         [0,0,0,0,0,2],
-        Target.SINGLE, default_target("SELF"), exe_draw_stance
+        Target.SINGLE, default_target("SELF"), exe_draw_stance, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     
     ],
     "touka2":[
         "Nukiashi",
-        "For the next 3 turns, Draw Stance and Raikou are invisible.",
+        "For the next 3 turns, Draw Stance and Raikou are invisible. This effect is invisible.",
         [0,0,1,0,0,4],
-        Target.SINGLE, default_target("SELF"), exe_nukiashi
+        Target.SINGLE, default_target("SELF"), exe_nukiashi, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "touka3":[
         "Raikou",
         "Touka deals 20 damage to one enemy. For one turn, any ability they use has its cooldown increased by 2.",
         [0,1,0,0,0,0],
-        Target.SINGLE, default_target("HOSTILE"), exe_raiou
+        Target.SINGLE, default_target("HOSTILE"), exe_raiou, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "touka4":[
         "Lightning Speed Dodge",
         "Touka becomes invulnerable for one turn.",
         [0,0,0,0,1,4],
-        Target.SINGLE, default_target("SELF"), exe_lightning_speed_dodge
+        Target.SINGLE, default_target("SELF"), exe_lightning_speed_dodge, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "toukaalt1":[
         "Raikiri",
         "Touka deals 40 piercing damage to one enemy.",
         [0,0,0,1,1,0],
-        Target.SINGLE, default_target("HOSTILE"), exe_touka_raikiri
+        Target.SINGLE, default_target("HOSTILE"), exe_touka_raikiri, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "tsunayoshi1": [
         "X-Burner",
-        "Tsuna deals 25 damage to one enemy and 10 damage to all others.",
-        [0, 1, 0, 0, 1, 1], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_xburner
+        "Tsuna deals 25 damage to one enemy and 15 damage to all others.",
+        [0, 1, 0, 0, 1, 1], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_xburner, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "tsunayoshi2": [
         "Zero Point Breakthrough",
@@ -6829,100 +6825,100 @@ ability_info_db = {
         " will be countered, and the countered enemy will be stunned for two turns. If this successfully"
         +
         " counters an ability, Tsuna will deal 10 additional damage with X-Burner for two turns.",
-        [0, 0, 0, 0, 2, 4], Target.SINGLE, default_target("SELF"), exe_zero_point_breakthrough
+        [0, 0, 0, 0, 2, 4], Target.SINGLE, default_target("SELF"), exe_zero_point_breakthrough, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "tsunayoshi3": [
         "Burning Axle",
         "Tsuna deals 35 damage to one enemy. For one turn, if that enemy takes new"
         + " damage, they are stunned for one turn and take 15 damage.",
-        [0, 1, 0, 1, 1, 3], Target.SINGLE, default_target("HOSTILE"), exe_burning_axle
+        [0, 1, 0, 1, 1, 3], Target.SINGLE, default_target("HOSTILE"), exe_burning_axle, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.STUN]
     ],
     "tsunayoshi4": [
         "Flare Burst", "Tsuna becomes invulnerable for one turn.",
-        [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_flare_burst
+        [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_flare_burst, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "uraraka1": [
         "Quirk - Zero Gravity",
-        "Uraraka targets one enemy or one ally for 3 turns. If used on an enemy, that enemy will take 10 more damage from all sources and be unable to reduce damage"
+        "Uraraka targets one enemy or one ally for 3 turns. If used on an enemy, that enemy will take 10 more non-affliction damage from all sources and be unable to reduce damage"
         +
         " or become invulnerable. If used on an ally, that ally will gain 10 points of damage reduction and their abilities will ignore invulnerability.",
-        [0, 0, 1, 0, 0, 2], Target.SINGLE, default_target("ALL"), exe_zero_gravity
+        [0, 0, 1, 0, 0, 2], Target.SINGLE, default_target("ALL"), exe_zero_gravity, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "uraraka2": [
         "Meteor Storm",
         "Uraraka deals 15 damage to all enemies. If a damaged enemy is currently targeted by Zero Gravity, that enemy will be stunned for one turn. If an ally is currently targeted by "
         +
         "Zero Gravity, they will deal 5 more damage with abilities this turn.",
-        [0, 0, 1, 0, 1, 1], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_meteor_storm
+        [0, 0, 1, 0, 1, 1], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_meteor_storm, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "uraraka3": [
         "Comet Home Run",
         "Uraraka deals 20 damage to one enemy. If the damaged enemy is currently targeted by Zero Gravity, that enemy will lose one random energy. If an ally is currently targeted by "
         + "Zero Gravity, they will become invulnerable for one turn.",
-        [1, 0, 0, 0, 1, 1], Target.SINGLE, default_target("HOSTILE"), exe_comet_home_run
+        [1, 0, 0, 0, 1, 1], Target.SINGLE, default_target("HOSTILE"), exe_comet_home_run, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "uraraka4": [
         "Gunhead Martial Arts", "Uraraka becomes invulnerable for one turn.",
-        [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_float
+        [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_float, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "wendy3": [
         "Troia",
         "Wendy heals target ally for 40 health. For 3 turns, this ability will have 50% effect.",
-        [0, 1, 0, 0, 0, 0], Target.SINGLE, default_target("HELPFUL"), exe_troia
+        [0, 1, 0, 0, 0, 0], Target.SINGLE, default_target("HELPFUL"), exe_troia, [AbilityType.INSTANT, AbilityType.ENERGY, AbilityType.STRATEGIC]
     ],
     "wendy2": [
         "Shredding Wedding",
         "For three turns, Wendy and target enemy will take 20 piercing damage when they attempt to target anyone that isn't each other. During this time, any other characters that attempt to target either will take 20 piercing damage and Shredding Wedding becomes Piercing Winds.",
-        [0, 2, 0, 0, 0, 5], Target.SINGLE, default_target("HOSTILE"), exe_shredding_wedding
+        [0, 2, 0, 0, 0, 5], Target.SINGLE, default_target("HOSTILE"), exe_shredding_wedding, [AbilityType.ACTION, AbilityType.ENERGY, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "wendy1": [
         "Sky Dragon's Roar",
         "Deals 20 damage to all enemies and heals Wendy for 15 health.",
-        [0, 1, 0, 0, 1, 0], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_sky_dragons_roar
+        [0, 1, 0, 0, 1, 0], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_sky_dragons_roar, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "wendy4": [
         "Wendy Dodge", "Wendy becomes invulnerable for 1 turn.",
-        [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_wendy_dodge
+        [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_wendy_dodge, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "wendyalt1": [
         "Piercing Winds",
         "Wendy deals 25 piercing damage to the enemy affected by Shredding Wedding.",
-        [0, 1, 0, 0, 0, 0], Target.SINGLE, default_target("HOSTILE", mark_req="Shredding Wedding"), exe_piercing_winds
+        [0, 1, 0, 0, 0, 0], Target.SINGLE, default_target("HOSTILE", mark_req="Shredding Wedding"), exe_piercing_winds, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
     "yamamoto1": [
         "Shinotsuku Ame",
         "Yamamoto deals 30 damage to one enemy and reduces the damage they deal by 10 for three turns. Grants Yamamoto"
         +
         " one stack of Asari Ugetsu. Using this ability on an enemy already affected by it will refresh the effect.",
-        [0, 0, 0, 1, 1, 1], Target.SINGLE, default_target("HOSTILE"), exe_shinotsuku_ame
+        [0, 0, 0, 1, 1, 1], Target.SINGLE, default_target("HOSTILE"), exe_shinotsuku_ame, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "yamamoto2": [
         "Utsuhi Ame",
         "On the following turn, Yamamoto will deal 20 damage to target enemy and grant himself one stack of"
         + " Asari Ugetsu. If that enemy uses a new ability " +
         "during this time, Yamamoto deals 40 damage to them and grants himself 3 stacks of Asari Ugetsu instead.",
-        [0, 0, 0, 1, 0, 2], Target.SINGLE, default_target("HOSTILE"), exe_utsuhi_ame
+        [0, 0, 0, 1, 0, 2], Target.SINGLE, default_target("HOSTILE"), exe_utsuhi_ame, [AbilityType.ACTION, AbilityType.PHYSICAL, AbilityType.UNIQUE]
     ],
     "yamamoto3": [
         "Asari Ugetsu",
         "Consumes all stacks of Asari Ugetsu on use, and remains active for one turn plus one per stack consumed. While active, replaces Shinotsuku Ame with Scontro di Rondine and "
         +
         "Utsuhi Ame with Beccata di Rondine, and Yamamoto gains 20 points of damage reduction.",
-        [0, 0, 0, 1, 0, 3], Target.SINGLE, default_target("SELF", lockout=(EffectType.ALL_DR, "Asari Ugetsu")), exe_asari_ugetsu
+        [0, 0, 0, 1, 0, 3], Target.SINGLE, default_target("SELF", lockout=(EffectType.ALL_DR, "Asari Ugetsu")), exe_asari_ugetsu, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "yamamoto4": [
         "Sakamaku Ame", "Yamamoto becomes invulnerable for one turn.",
-        [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_sakamaku_ame
+        [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_sakamaku_ame, [AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "yamamotoalt1": [
         "Scontro di Rondine",
         "Yamamoto deals 20 damage to one enemy. If that enemy's damage is being reduced by at least 10, this ability deals 10 bonus damage.",
-        [0, 0, 0, 1, 0, 0], Target.SINGLE, default_target("HOSTILE"), exe_scontro_di_rondine
+        [0, 0, 0, 1, 0, 0], Target.SINGLE, default_target("HOSTILE"), exe_scontro_di_rondine, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     "yamamotoalt2": [
         "Beccata di Rondine",
         "Yamamoto deals 5 damage to all enemies and reduces their damage dealt by 5 for 3 turns.",
-        [0, 0, 0, 1, 0, 0], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_beccata_di_rondine
+        [0, 0, 0, 1, 0, 0], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_beccata_di_rondine, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],
     #"" : ["", "", [], Target.],
 }

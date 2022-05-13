@@ -16,10 +16,11 @@ from playsound import playsound
 from pathlib import Path
 from typing import Optional
 import typing
+import logging
 from animearena.mission_handler import MissionHandler
 from animearena.turn_timer import TurnTimer
 from animearena.resource_manager import init_font
-
+import random
 if typing.TYPE_CHECKING:
     from animearena.scene_manager import SceneManager
 
@@ -48,13 +49,11 @@ class AbilityMessage:
     ability_id: int
     ally_targets: list[int]
     enemy_targets: list[int]
-    random_rolls: list[int]
     primary_id: int
 
     def __init__(self, manager: Optional["CharacterManager"] = None):
         self.ally_targets = list()
         self.enemy_targets = list()
-        self.random_rolls = list()
         if manager:
             self.user_id = manager.char_id
             for i, ability in enumerate(manager.source.current_abilities):
@@ -243,9 +242,8 @@ class BattleScene(engine.Scene):
     ability_messages: list["AbilityMessage"]
     scene_manager: "SceneManager"
     random_spent: list
-    random_rolls: list
-    replay_random_rolls: list
     catching_up: bool
+    d20: random.Random
     
     @property
     def pteam(self):
@@ -261,7 +259,9 @@ class BattleScene(engine.Scene):
 
     def __init__(self, scene_manager, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.dying_to_doping = False
         self.catching_up = False
+        self.d20 = random.Random()
         self.ability_messages = list()
         self.timer = TurnTimer(1, self.empty_placeholder)
         self.random_spent = [0, 0, 0, 0]
@@ -270,7 +270,6 @@ class BattleScene(engine.Scene):
         self.waiting_for_turn = True
         self.first_turn = True
         self.acting_order = list()
-        self.replay_random_rolls = list()
         self.target_clicked = False
         self.sharingan_reflecting = False
         self.sharingan_reflector = None
@@ -299,7 +298,6 @@ class BattleScene(engine.Scene):
         self.enemy_detail_character = None
         self.enemy_detail_ability = None
         self.active_effect_buttons = list()
-        self.random_rolls = list()
         self.offered_pool = {
             Energy.PHYSICAL: 0,
             Energy.SPECIAL: 0,
@@ -903,7 +901,7 @@ class BattleScene(engine.Scene):
 
     def handle_reconnection_catchup(self, first_turn: bool,
                                     stored_turns: list[list["AbilityMessage"]],
-                                    energy_pools: list[list[int]], all_random_expenditure: list[list[int]], all_random_rolls: list[list[int]], time_remaining: int):
+                                    energy_pools: list[list[int]], all_random_expenditure: list[list[int]], time_remaining: int):
 
         self.catching_up = True
         for manager in self.pteam:
@@ -921,17 +919,15 @@ class BattleScene(engine.Scene):
         else:
             self.waiting_for_turn = True
             if first_turn:
-                self.player_catchup_execution(stored_turns, energy_pools, all_random_expenditure, all_random_rolls, time_remaining)
+                self.player_catchup_execution(stored_turns, energy_pools, all_random_expenditure, time_remaining)
             else:
-                self.enemy_catchup_execution(stored_turns, energy_pools, all_random_expenditure, all_random_rolls, time_remaining)
+                self.enemy_catchup_execution(stored_turns, energy_pools, all_random_expenditure, time_remaining)
 
-    def player_catchup_execution(self, stored_turns: list[list["AbilityMessage"]], energy_pools: list[list[int]], all_random_expenditure: list[list[int]], all_random_rolls: list[list[int]], time_remaining: int):
+    def player_catchup_execution(self, stored_turns: list[list["AbilityMessage"]], energy_pools: list[list[int]], all_random_expenditure: list[list[int]], time_remaining: int):
         current_turn = stored_turns[0]
         stored_turns = stored_turns[1:]
         current_random_expenditure = all_random_expenditure[0]
         all_random_expenditure = all_random_expenditure[1:]
-        self.random_rolls = all_random_rolls[0]
-        all_random_rolls = all_random_rolls[1:]
 
         for ability in current_turn:
             self.pteam[ability.user_id].used_ability = self.pteam[
@@ -966,34 +962,31 @@ class BattleScene(engine.Scene):
 
         #TODO if stored_turns still has turns left, activate enemy_catchup_execution, else set player state to waiting
         if stored_turns:
-            self.enemy_catchup_execution(stored_turns, energy_pools, all_random_expenditure, all_random_rolls, time_remaining)
+            self.enemy_catchup_execution(stored_turns, energy_pools, all_random_expenditure, time_remaining)
         else:
             self.catching_up = False
 
 
 
-    def enemy_catchup_execution(self, stored_turns: list[list["AbilityMessage"]], energy_pools: list[list[int]], all_random_expenditure: list[list[int]], all_random_rolls: list[list[int]], time_remaining: int):
+    def enemy_catchup_execution(self, stored_turns: list[list["AbilityMessage"]], energy_pools: list[list[int]], all_random_expenditure: list[list[int]], time_remaining: int):
         current_turn = stored_turns[0]
         stored_turns = stored_turns[1:]
         this_turn_pool = energy_pools[0]
         energy_pools = energy_pools[1:]
         
-        random_rolls = all_random_rolls[0]
-        all_random_rolls = all_random_rolls[1:]
     
         all_random_expenditure = all_random_expenditure[1:]
         #TODO Execute all abilities in current_turn
-        self.enemy_execution_loop(current_turn, this_turn_pool, random_rolls)
+        self.enemy_execution_loop(current_turn, this_turn_pool)
 
         #TODO if stored_turns still has turns left, and activate player_catchup_execution,
         #else set player state to active
         if stored_turns:
-            self.player_catchup_execution(stored_turns, energy_pools, all_random_expenditure, all_random_rolls, time_remaining)
+            self.player_catchup_execution(stored_turns, energy_pools, all_random_expenditure, time_remaining)
         else:
             self.timer = self.start_timer(time_remaining)
             self.waiting_for_turn = False
             self.catching_up = False
-            self.random_rolls = list()
             self.full_update()
 
 
@@ -1006,9 +999,8 @@ class BattleScene(engine.Scene):
         self.acting_order.clear()
 
     def enemy_execution_loop(self, executed_abilities: list["AbilityMessage"],
-                             potential_energy: list[int], random_rolls: list[int]):
+                             potential_energy: list[int]):
 
-        self.random_rolls = random_rolls
         
         for ability in executed_abilities:
             self.eteam[ability.user_id].used_ability = self.eteam[
@@ -1051,7 +1043,6 @@ class BattleScene(engine.Scene):
             for i in range(5):
                 new_energy[i] += personal_contribution[i]
 
-
         #TODO add energy removal at some point?
 
         for i in range(new_energy[4]):
@@ -1090,40 +1081,40 @@ class BattleScene(engine.Scene):
         is currently ending are triggered and resolved."""
         for manager in self.player_display.team.character_managers:
             gen = (eff for eff in manager.source.current_effects
-                   if eff.eff_type == EffectType.CONT_DMG)
+                if eff.eff_type == EffectType.CONT_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(
                         eff, team_id) and (eff.mag > 15
-                                           or not manager.deflecting()):
+                                        or not manager.deflecting()):
                     eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.NORMAL)
             gen = (eff for eff in manager.source.current_effects
-                   if eff.eff_type == EffectType.CONT_PIERCE_DMG)
+                if eff.eff_type == EffectType.CONT_PIERCE_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(
                         eff, team_id) and (eff.mag > 15
-                                           or not manager.deflecting()):
+                                        or not manager.deflecting()):
                     eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.PIERCING)
             gen = (eff for eff in manager.source.current_effects
-                   if eff.eff_type == EffectType.CONT_AFF_DMG)
+                if eff.eff_type == EffectType.CONT_AFF_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(
                         eff, team_id) and (eff.mag > 15
-                                           or not manager.deflecting()):
+                                        or not manager.deflecting()):
                     if eff.name == "Doping Rampage":
                         self.dying_to_doping = True
                     eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.AFFLICTION)
             gen = (eff for eff in manager.source.current_effects
-                   if eff.eff_type == EffectType.CONT_HEAL)
+                if eff.eff_type == EffectType.CONT_HEAL and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(eff, team_id):
                     eff.user.give_eff_healing(eff.mag, manager, eff)
             gen = (eff for eff in manager.source.current_effects
-                   if eff.eff_type == EffectType.CONT_DEST_DEF)
+                if eff.eff_type == EffectType.CONT_DEST_DEF and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(eff, team_id):
                     if manager.has_effect(EffectType.DEST_DEF, eff.name):
                         manager.get_effect(EffectType.DEST_DEF,
-                                           eff.name).alter_dest_def(eff.mag)
+                                        eff.name).alter_dest_def(eff.mag)
                     else:
                         manager.add_effect(
                             Effect(
@@ -1132,45 +1123,45 @@ class BattleScene(engine.Scene):
                                 f"This character has {eff.mag} destructible defense.",
                                 eff.mag))
             gen = (eff for eff in manager.source.current_effects
-                   if eff.eff_type == EffectType.CONT_UNIQUE)
+                if eff.eff_type == EffectType.CONT_UNIQUE and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(eff, team_id):
                     manager.check_unique_cont(eff, team_id)
 
         for manager in self.enemy_display.team.character_managers:
             gen = (eff for eff in manager.source.current_effects
-                   if eff.eff_type == EffectType.CONT_DMG)
+                if eff.eff_type == EffectType.CONT_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(
                         eff, team_id) and (eff.mag > 15
-                                           or not manager.deflecting()):
+                                        or not manager.deflecting()):
                     eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.NORMAL)
             gen = (eff for eff in manager.source.current_effects
-                   if eff.eff_type == EffectType.CONT_PIERCE_DMG)
+                if eff.eff_type == EffectType.CONT_PIERCE_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(
                         eff, team_id) and (eff.mag > 15
-                                           or not manager.deflecting()):
+                                        or not manager.deflecting()):
                     eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.PIERCING)
             gen = (eff for eff in manager.source.current_effects
-                   if eff.eff_type == EffectType.CONT_AFF_DMG)
+                if eff.eff_type == EffectType.CONT_AFF_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(
                         eff, team_id) and (eff.mag > 15
-                                           or not manager.deflecting()):
+                                        or not manager.deflecting()):
                     eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.AFFLICTION)
             gen = (eff for eff in manager.source.current_effects
-                   if eff.eff_type == EffectType.CONT_HEAL)
+                if eff.eff_type == EffectType.CONT_HEAL and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(eff, team_id):
                     eff.user.give_eff_healing(eff.mag, manager, eff)
             gen = (eff for eff in manager.source.current_effects
-                   if eff.eff_type == EffectType.CONT_DEST_DEF)
+                if eff.eff_type == EffectType.CONT_DEST_DEF and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(eff, team_id):
                     if manager.has_effect(EffectType.DEST_DEF, eff.name):
                         manager.get_effect(EffectType.DEST_DEF,
-                                           eff.name).alter_dest_def(eff.mag)
+                                        eff.name).alter_dest_def(eff.mag)
                     else:
                         manager.add_effect(
                             Effect(
@@ -1179,7 +1170,7 @@ class BattleScene(engine.Scene):
                                 f"This character has {eff.mag} destructible defense.",
                                 eff.mag))
             gen = (eff for eff in manager.source.current_effects
-                   if eff.eff_type == EffectType.CONT_UNIQUE)
+                if eff.eff_type == EffectType.CONT_UNIQUE and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(eff, team_id):
                     manager.check_unique_cont(eff, team_id)
@@ -1200,7 +1191,7 @@ class BattleScene(engine.Scene):
                 self.refund_energy_costs(manager.used_ability)
         self.ability_messages.clear()
         self.random_spent = [0,0,0,0]
-        self.turn_end()
+        self.turn_end(timeout=True)
         self.full_update()
         pass
 
@@ -1212,8 +1203,18 @@ class BattleScene(engine.Scene):
             for ability in manager.source.alt_abilities:
                 ability.cooldown_remaining = max(
                     ability.cooldown_remaining - 1, 0)
-
-    def turn_end(self):
+                
+    def tick_enemy_cooldowns(self):
+        # For testing purposes only, typically this is handled by another client
+        for manager in self.enemy_display.team.character_managers:
+            for ability in manager.source.main_abilities:
+                ability.cooldown_remaining = max(
+                    ability.cooldown_remaining - 1, 0)
+            for ability in manager.source.alt_abilities:
+                ability.cooldown_remaining = max(
+                    ability.cooldown_remaining - 1, 0)
+    
+    def turn_end(self, timeout=False):
         self.sharingan_reflecting = False
         self.sharingan_reflector = None
 
@@ -1273,9 +1274,7 @@ class BattleScene(engine.Scene):
                     EffectType.MARK, "Yatsufusa"):
                 yatsu = manager.get_effect(EffectType.MARK, "Yatsufusa")
                 manager.source.dead = False
-                yatsu = manager.get_effect(EffectType.MARK,
-                                           "Yatsufusa").user.progress_mission(
-                                               1, 1)
+                yatsu.user.progress_mission(1, 1)
                 manager.source.hp = 40
                 manager.remove_effect(
                     manager.get_effect(EffectType.MARK, "Yatsufusa"))
@@ -1311,10 +1310,10 @@ class BattleScene(engine.Scene):
 
 
         if not self.catching_up:
-            self.scene_manager.connection.send_match_communication(
-                self.ability_messages, self.random_spent, self.random_rolls)
+            if not timeout:
+                self.scene_manager.connection.send_match_communication(
+                    self.ability_messages, self.random_spent)
             self.ability_messages.clear()
-            self.random_rolls.clear()
             self.random_spent = [0, 0, 0, 0]
 
     def get_energy_pool(self) -> list:
@@ -1334,10 +1333,8 @@ class BattleScene(engine.Scene):
     def tick_effect_duration(self, enemy_tick: bool = False):
         player_team = self.player_display.team.character_managers
         enemy_team = self.enemy_display.team.character_managers
-
-        for manager in player_team:
+        for i, manager in enumerate(player_team):
             for eff in manager.source.current_effects:
-
                 if not enemy_tick:
                     #region Spend Turn Under Effect Mission Check
                     if not eff.eff_type == EffectType.SYSTEM:
@@ -1406,7 +1403,7 @@ class BattleScene(engine.Scene):
                                               eff.name):
                         eff.removing = True
                 eff.tick_duration()
-
+                logging.debug("Ally %s's %s (%s) has %i turns remaining", manager.source.name, eff.name, eff.eff_type.name, eff.duration)
                 #Effects that trigger upon ending
 
                 if eff.duration == 0:
@@ -1427,17 +1424,9 @@ class BattleScene(engine.Scene):
                                        system=True))
 
                     if eff.name == "Quirk - Transform":
-                        for effect in manager.source.current_effects:
-                            if effect.user == manager:
-                                manager.remove_effect(effect)
+                        logging.debug("Flushing Toga's transformed effects:")
+                        manager.toga_flush_effects()
                         manager.toga_transform("toga")
-                        manager.add_effect(
-                            Effect("TogaReturnSignal",
-                                   EffectType.SYSTEM,
-                                   manager,
-                                   280000,
-                                   lambda eff: "",
-                                   system=True))
 
                     if eff.name == "Bunny Assault" and eff.eff_type == EffectType.CONT_USE:
                         if manager.has_effect(EffectType.DEST_DEF,
@@ -1543,10 +1532,10 @@ class BattleScene(engine.Scene):
 
             manager.source.current_effects = new_list
 
-        for manager in enemy_team:
+        for i, manager in enumerate(enemy_team):
             for eff in manager.source.current_effects:
                 eff.tick_duration()
-
+                logging.debug("Enemy %s's %s (%s) has %i turns remaining", manager.source.name, eff.name, eff.eff_type.name, eff.duration)
                 if eff.name == "Consecutive Normal Punches":
                     if manager.has_effect(
                             EffectType.SYSTEM, "SaitamaMission2Tracker"
@@ -1575,6 +1564,15 @@ class BattleScene(engine.Scene):
                         eff.user.progress_mission(5, 1)
                     if eff.name == "Illusory Disorientation":
                         eff.user.progress_mission(5, 1)
+                    if eff.name == "Lightning Dragon's Roar":
+                        manager.add_effect(
+                            Effect(Ability("laxus2"),
+                                   EffectType.ALL_DR,
+                                   eff.user,
+                                   2,
+                                   lambda eff:
+                                   "This character will take 10 more damage.",
+                                   mag=-10))
             new_list = [
                 eff for eff in manager.source.current_effects
                 if eff.duration > 0 and not eff.removing
@@ -1586,13 +1584,18 @@ class BattleScene(engine.Scene):
         ]
         self.sharingan_reflected_effects = new_reflected_list
 
+    def scene_remove_effect(self, effect_name: str, user: CharacterManager):
+        for character in self.pteam:
+            character.full_remove_effect(effect_name, user)
+        for character in self.eteam:
+            character.full_remove_effect(effect_name, user)
+
     def turn_start(self):
         self.sharingan_reflecting = False
         self.sharingan_reflector = None
         if not self.catching_up:
             self.waiting_for_turn = False
             self.timer = self.start_timer()
-            self.random_rolls = list()
         self.round_any_cost = 0
         self.acting_character = None
         
@@ -1813,20 +1816,7 @@ class BattleScene(engine.Scene):
         if not surrendered:
             self.scene_manager.connection.send_match_ending()
 
-    def generate_energy(self):
-        total_energy = 0
-        for manager in self.player_display.team.character_managers:
-            pool = manager.check_energy_contribution()
-            total_energy += pool[Energy.RANDOM.value]
-            for i in range(4):
-                self.player_display.team.energy_pool[i] += pool[i]
-                self.player_display.team.energy_pool[4] += pool[i]
-            manager.source.energy_contribution = 1
-        for _ in range(total_energy):
-            self.player_display.team.energy_pool[randint(0, 3)] += 1
-            self.player_display.team.energy_pool[4] += 1
-
-        self.update_energy_region()
+    
 
     def update_energy_region(self):
         if self.exchanging_energy:
@@ -2057,12 +2047,13 @@ class BattleScene(engine.Scene):
                     enemy_team: list[Character],
                     player: Player = None,
                     enemy: Player = None,
-                    energy=[0, 0, 0, 0]):
+                    energy=[0, 0, 0, 0], seed: int = 0):
         self.window_closing = True
         self.sharingan_reflecting = False
         self.sharingan_reflector = None
         self.clicked_surrender = False
         self.round_any_cost = 0
+        self.d20 = random.Random(x = seed)
         self.has_exchanged = False
         self.region.clear()
         self.enemy_detail_ability = None
