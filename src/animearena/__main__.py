@@ -8,6 +8,7 @@ import time
 import sdl2
 import sdl2.ext
 import sdl2.sdlttf
+import pyautogui
 from playsound import playsound
 from animearena import client
 from animearena.byte_buffer import ByteBuffer
@@ -71,7 +72,7 @@ async def server_loop(scene_manager: SceneManager):
     while not scene_manager.connected:
         try:
             #34.125.127.187
-            reader, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", 5692, limit = 1024 * 256, happy_eyeballs_delay=0.25), 1)
+            reader, writer = await asyncio.wait_for(asyncio.open_connection("34.125.127.187", 5692, limit = 1024 * 256, happy_eyeballs_delay=0.25), 1)
             
             scene_manager.connected = True
             scene_manager.connection.writer = writer
@@ -85,10 +86,10 @@ async def server_loop(scene_manager: SceneManager):
             cancelled = True
             break
     while True and not cancelled:
-        # if not VERSION_CHECKED:
-        #     print("Checking version")
-        #     scene_manager.connection.send_version_request()
-        #     VERSION_CHECKED = True
+        if not VERSION_CHECKED:
+            print("Checking version")
+            scene_manager.connection.send_version_request()
+            VERSION_CHECKED = True
         try:
             data = await reader.readuntil(b'\x1f\x1f\x1f')
         except CancelledError:
@@ -133,6 +134,20 @@ async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server
                     scene_manager.login_scene.tab_between_boxes()
                 if event.key.keysym.sym == sdl2.SDLK_BACKSPACE and scene_manager.current_scene == scene_manager.login_scene:
                     scene_manager.login_scene.prepare_backspace()
+            if event.type == sdl2.SDL_MOUSEBUTTONUP:
+                if scene_manager.current_scene == scene_manager.char_select:
+                    scene_manager.char_select.char_select_pressed = False
+                    scene_manager.char_select.team_select_pressed = False
+                    if scene_manager.char_select.dragging_picture:
+                        scene_manager.char_select.resolve_drag_release()
+            if event.type == sdl2.SDL_MOUSEMOTION:
+                scene_manager.update_mouse_position(event.motion.x, event.motion.y)
+                if scene_manager.char_select.char_select_pressed:
+                    scene_manager.char_select.start_dragging()
+                if scene_manager.char_select.team_select_pressed:
+                    scene_manager.char_select.start_dragging_from_selected()
+                if scene_manager.char_select.player and scene_manager.char_select.dragging_picture:
+                    scene_manager.char_select.render_character_selection()
             for sprite in scene_manager.current_scene.eventables():
                 scene_manager.uiprocessor.dispatch(sprite, event)
                 if scene_manager.current_scene.triggered_event:

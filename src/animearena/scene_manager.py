@@ -37,6 +37,8 @@ class SceneManager:
     username_raw: str
     password_raw: str
     uiprocessor: sdl2.ext.UIProcessor
+    mouse_x: int
+    mouse_y: int
     
     def __init__(self, window: sdl2.ext.Window = None):
         self.username_raw = ""
@@ -46,6 +48,8 @@ class SceneManager:
         self.sounds = dict()
         self.connection = None
         self.uiprocessor = sdl2.ext.UIProcessor()
+        self.mouse_x = 0
+        self.mouse_y = 0
         if window:
             self.window = window
             self.factory = sdl2.ext.SpriteFactory(sdl2.ext.SOFTWARE, free=False)
@@ -112,7 +116,6 @@ class SceneManager:
         return self
     
     def __exit__(self, type, value, traceback):
-        print("Exited the scene manager!")
         self.battle_scene.timer.cancel()
 
     def dispatch_message(self, packet_id: int, data: list[bytes]):
@@ -122,6 +125,10 @@ class SceneManager:
         # with importlib.resources.path('animearena.resources', file_name) as path:
         #     playsound(str(path), False)
         pass
+
+    def update_mouse_position(self, x: int, y: int):
+        self.mouse_x = x
+        self.mouse_y = y
 
     def initialize_scenes(self):
         self.char_select = make_character_select_scene(self)

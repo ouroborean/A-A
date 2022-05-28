@@ -115,16 +115,19 @@ class CharacterManager(collections.abc.Container):
                 height=10)
             cost_to_display: list[Energy] = sorted(
                 self.selected_ability.cost_iter())
-            energy_squares = [
-                energy_display_region.subregion(x, y=0, width=10, height=10)
-                for x in itertools.islice(range(0, 1000, 10 + 4),
-                                          self.selected_ability.total_cost)
-            ]
-            for cost, energy_square in zip(cost_to_display, energy_squares):
-                energy_surface = self.scene.scene_manager.surfaces[cost.name]
-                energy_sprite = self.scene.sprite_factory.from_surface(
-                    self.scene.get_scaled_surface(energy_surface), free=True)
-                energy_square.add_sprite(energy_sprite, x=0, y=0)
+            if self.selected_ability.total_cost > 0:
+                energy_squares = [
+                    energy_display_region.subregion(x, y=0, width=10, height=10)
+                    for x in itertools.islice(range(0, 1000, 10 + 4),
+                                            self.selected_ability.total_cost)
+                ]
+                for cost, energy_square in zip(cost_to_display, energy_squares):
+                    energy_surface = self.scene.scene_manager.surfaces[cost.name]
+                    energy_sprite = self.scene.sprite_factory.from_surface(
+                        self.scene.get_scaled_surface(energy_surface), free=True)
+                    energy_square.add_sprite(energy_sprite, x=0, y=0)
+            else:
+                energy_display_region.add_sprite(self.scene.create_text_display(self.scene.font, "No Cost", BLACK, WHITE, 0, 0, 80, 4), 0, -6)
             cooldown_text_sprite = self.scene.create_text_display(
                 self.scene.font,
                 "CD: " + str(self.selected_ability.cooldown),
@@ -352,7 +355,9 @@ class CharacterManager(collections.abc.Container):
             self.get_effect(EffectType.MARK, "Counter-Balance").user.progress_mission(1, 1)
 
         if target.is_stunned():
-            target.action_effect_cancel()
+            for eff in target.source.current_effects:
+                if eff.eff_type == EffectType.CONT_USE:
+                    target.scene.scene_remove_effect(eff.name, eff.user)
 
     def cancel_control_effects(self):
         for eff in self.source.current_effects:
@@ -403,6 +408,9 @@ class CharacterManager(collections.abc.Container):
         return total_drain * -1
 
     def check_unique_cont(self, eff: Effect, team_id: str):
+        if eff.name == "Kill, Kamishini no Yari":
+            if self.final_can_effect("BYPASS"):
+                eff.user.deal_eff_damage(eff.mag * 10, self, eff, DamageType.AFFLICTION)
         if eff.name == "Utsuhi Ame":
             if self.final_can_effect(eff.user.check_bypass_effects()):
                 eff.user.deal_eff_damage(eff.mag * 20, self, eff, DamageType.NORMAL)
@@ -415,7 +423,7 @@ class CharacterManager(collections.abc.Container):
                             280000,
                             lambda eff:
                             f"Yamamoto has {eff.mag} stack(s) of Asari Ugetsu.",
-                            mag=1), eff.user)
+                            mag=1, print_mag=True), eff.user)
                 else:
                     eff.user.progress_mission(1, 1)
                     eff.user.apply_stack_effect(
@@ -440,8 +448,11 @@ class CharacterManager(collections.abc.Container):
                         280000,
                         lambda eff:
                         f"Toga has drawn blood from this character {eff.mag} time(s).",
-                        mag=1), eff.user)
+                        mag=1, print_mag=True), eff.user)
                 eff.user.progress_mission(2, 1)
+        if eff.name == "Fire Dragon's Sword Horn":
+            if self.final_can_effect("BYPASS"):
+                eff.user.deal_eff_damage(eff.mag, self, eff, DamageType.AFFLICTION)
         if eff.name == "Decaying Touch":
             if self.final_can_effect(eff.user.check_bypass_effects()):
                 eff.user.deal_eff_damage((5 * (2**eff.mag)), self, eff, DamageType.AFFLICTION)
@@ -555,13 +566,13 @@ class CharacterManager(collections.abc.Container):
                 eff.user.deal_eff_damage(15, self, eff, DamageType.NORMAL)
                 self.apply_stack_effect(
                     Effect(
-                        Ability("ichimaru3"),
+                        Ability("ichimaru1"),
                         EffectType.STACK,
                         eff.user,
                         280000,
                         lambda eff:
                         f"This character will take {10 * eff.mag} affliction damage from Kill, Kamishini no Yari.",
-                        mag=1), eff.user)
+                        mag=1, print_mag=True), eff.user)
         if eff.name == "Rubble Barrage":
             if self.final_can_effect(
                     eff.user.check_bypass_effects()) and not self.deflecting():
@@ -583,7 +594,7 @@ class CharacterManager(collections.abc.Container):
                     base_defense += (5 * eff.user.get_effect(EffectType.STACK, "Overcharge").mag)
                 self.apply_dest_def_effect(Effect(eff.source, EffectType.DEST_DEF, eff.user, 2, lambda eff: f"This character has {eff.mag} points of destructible defense.", mag = base_defense))
         if eff.name == "Overcharge":
-            self.apply_stack_effect(Effect(eff.source, EffectType.STACK, eff.user, 280000, lambda eff: "", mag = 1), eff.user)
+            self.apply_stack_effect(Effect(eff.source, EffectType.STACK, eff.user, 280000, lambda eff: "", mag = 1, print_mag=True), eff.user)
             self.progress_mission(4, 1)
         if eff.name == "Level-6 Shift":
             if not eff.user.is_stunned():
@@ -916,6 +927,7 @@ class CharacterManager(collections.abc.Container):
                         lambda eff:
                         "This character will ignore counter effects."))
         if target.has_effect(EffectType.MARK, "Whirlwind Rush"):
+            logging.debug("%s triggered the Whirlwind Rush Mark!", self.source.name)
             src = target.get_effect(EffectType.MARK, "Whirlwind Rush")
             src.user.progress_mission(3, 1)
             src.user.add_effect(Effect("KilluaMission5Tracker", EffectType.MARK, src.user, 2, lambda eff: "", system=True))
@@ -956,7 +968,7 @@ class CharacterManager(collections.abc.Container):
                         lambda leff:
                         f"Detonate will deal {20 * leff.mag} damage to this character.",
                         mag=eff.mag,
-                        invisible=True), eff.user)
+                        invisible=True, print_mag=True), eff.user)
                 eff.user.progress_mission(1, eff.mag)
                 target.full_remove_effect("Doll Trap", eff.user)
         if target.source.hp <= 0:
@@ -1011,7 +1023,7 @@ class CharacterManager(collections.abc.Container):
             if AbilityType.ENERGY in self.used_ability.types and target.has_effect(EffectType.UNIQUE, "Galvanism"):
                 target.receive_eff_healing(mod_damage, target.get_effect(EffectType.UNIQUE, "Galvanism"))
                 target.progress_mission(3, 1)
-                target.apply_stack_effect(Effect(target.get_effect(EffectType.UNIQUE, "Galvanism").source, EffectType.STACK, target, 2, lambda eff:f"Frankenstein will deal {eff.mag * 10} damage with her abilities.", mag=1), target)
+                target.apply_stack_effect(Effect(target.get_effect(EffectType.UNIQUE, "Galvanism").source, EffectType.STACK, target, 2, lambda eff:f"Frankenstein will deal {eff.mag * 10} damage with her abilities.", mag=1, print_mag=True), target)
                 mod_damage = 0
             else:
                 if self.mission_active("ryohei", self):
@@ -1070,7 +1082,7 @@ class CharacterManager(collections.abc.Container):
                               "Conductivity").user.receive_eff_damage(
                                   10,
                                   self.get_effect(EffectType.ALL_DR,
-                                                    "Conductivity"), DamageType.NORMAL)
+                                                    "Conductivity"), DamageType.AFFLICTION)
 
         if mod_damage < 0:
             mod_damage = 0
@@ -1232,7 +1244,7 @@ class CharacterManager(collections.abc.Container):
             if AbilityType.ENERGY in source.source.types and target.has_effect(EffectType.UNIQUE, "Galvanism"):
                 target.receive_eff_healing(damage, target.get_effect(EffectType.UNIQUE, "Galvanism"))
                 target.progress_mission(3, 1)
-                target.apply_stack_effect(Effect(target.get_effect(EffectType.UNIQUE, "Galvanism").source, EffectType.STACK, target, 2, lambda eff:f"Frankenstein will deal {eff.mag * 10} damage with her abilities.", mag=1), target)
+                target.apply_stack_effect(Effect(target.get_effect(EffectType.UNIQUE, "Galvanism").source, EffectType.STACK, target, 2, lambda eff:f"Frankenstein will deal {eff.mag * 10} damage with her abilities.", mag=1, print_mag=True), target)
                 damage = 0
             else:
                 
@@ -1440,18 +1452,19 @@ class CharacterManager(collections.abc.Container):
             for ability in self.source.alt_abilities:
                 self.alt_ability_sprites.append(self.scene.ui_factory.from_surface(sdl2.ext.BUTTON, self.scene.get_scaled_surface(self.scene.scene_manager.surfaces[ability.db_name]), free=True))
             for j, sprite in enumerate(self.alt_ability_sprites):
-                    sprite.selected_pane = self.scene.ui_factory.from_surface(sdl2.ext.BUTTON, self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["selected"]), free=True)
-                    sprite.ability = self.source.alt_abilities[j]
-                    sprite.null_pane = self.scene.ui_factory.from_surface(sdl2.ext.BUTTON, self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["locked"]), free=True)
-                    sprite.null_pane.ability = self.source.main_abilities[j]
-                    sprite.null_pane.in_battle_desc = self.scene.create_text_display(self.scene.font, sprite.null_pane.ability.name + ": " + sprite.null_pane.ability.desc, BLACK, WHITE, 5, 0, 520, 110)
-                    sprite.null_pane.text_border = self.scene.ui_factory.from_color(sdl2.ext.BUTTON, BLACK, (524, 129))
-                    sprite.null_pane.click += self.set_selected_ability
-                    sprite.in_battle_desc = self.scene.create_text_display(self.scene.font, sprite.ability.name + ": " + sprite.ability.desc, BLACK, WHITE, 5, 0, 520, 110)
-                    sprite.border = self.scene.ui_factory.from_color(sdl2.ext.BUTTON, BLACK, (104, 104))
-                    sprite.text_border = self.scene.ui_factory.from_color(sdl2.ext.BUTTON, BLACK, (524, 129))
-                    sprite.click += self.set_selected_ability
+                sprite.selected_pane = self.scene.ui_factory.from_surface(sdl2.ext.BUTTON, self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["selected"]), free=True)
+                sprite.ability = self.source.alt_abilities[j]
+                sprite.null_pane = self.scene.ui_factory.from_surface(sdl2.ext.BUTTON, self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["locked"]), free=True)
+                sprite.null_pane.ability = self.source.main_abilities[j]
+                sprite.null_pane.in_battle_desc = self.scene.create_text_display(self.scene.font, sprite.null_pane.ability.name + ": " + sprite.null_pane.ability.desc, BLACK, WHITE, 5, 0, 520, 110)
+                sprite.null_pane.text_border = self.scene.ui_factory.from_color(sdl2.ext.BUTTON, BLACK, (524, 129))
+                sprite.null_pane.click += self.set_selected_ability
+                sprite.in_battle_desc = self.scene.create_text_display(self.scene.font, sprite.ability.name + ": " + sprite.ability.desc, BLACK, WHITE, 5, 0, 520, 110)
+                sprite.border = self.scene.ui_factory.from_color(sdl2.ext.BUTTON, BLACK, (104, 104))
+                sprite.text_border = self.scene.ui_factory.from_color(sdl2.ext.BUTTON, BLACK, (524, 129))
+                sprite.click += self.set_selected_ability
         except AttributeError:
+            #TODO add test flag to remove code crime
             pass
 
         self.source.hp = swap_hp
@@ -1699,12 +1712,9 @@ class CharacterManager(collections.abc.Container):
     def pass_through_dest_def(self, dmg: int) -> int:
         gen = [eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.DEST_DEF]
-        if gen:
-            print(f"{len(gen)} dest def effects to ping")
         gen.sort(key = lambda effect: effect.duration)
         if gen:
             for eff in gen:
-                print(f"pinging {eff.name}, with {eff.mag} dest def")
                 current_def = eff.mag
                 self.check_for_absorb_missions(eff, dmg)
                 eff.alter_dest_def(-dmg)
@@ -1827,7 +1837,7 @@ class CharacterManager(collections.abc.Container):
                         280000,
                         lambda eff:
                         f"Maximum Cannon will deal {eff.mag * 15} more damage and cost {eff.mag} more random energy.",
-                        mag=stacks), self)
+                        mag=stacks, print_mag=True), self)
                 self.apply_stack_effect(
                     Effect(
                         Ability("ryohei2"),
@@ -1836,7 +1846,7 @@ class CharacterManager(collections.abc.Container):
                         280000,
                         lambda eff:
                         f"Kangaryu will heal {eff.mag * 20} more health and cost {eff.mag} more random energy.",
-                        mag=stacks), self)
+                        mag=stacks, print_mag=True), self)
         if self.has_effect(EffectType.MARK,
                     "You Are Needed") and self.source.hp < 80:
             self.full_remove_effect("You Are Needed", self)
@@ -1914,6 +1924,7 @@ class CharacterManager(collections.abc.Container):
                 self.full_remove_effect("Susano'o", self)
                 if self.scene.player:
                     self.update_profile()
+                    self.check_ability_swaps()
                 if not self.has_effect(EffectType.SYSTEM, "ItachiMission4Tracker"):
                     self.add_effect(Effect("ItachiMission4Tracker", EffectType.SYSTEM, self, 280000, lambda eff:"", system = True))
 
@@ -1964,7 +1975,7 @@ class CharacterManager(collections.abc.Container):
                         280000,
                         lambda eff:
                         f"Maximum Cannon will deal {eff.mag * 15} more damage and cost {eff.mag} more random energy.",
-                        mag=stacks), self)
+                        mag=stacks, print_mag=True), self)
                 self.apply_stack_effect(
                     Effect(
                         Ability("ryohei2"),
@@ -1973,7 +1984,7 @@ class CharacterManager(collections.abc.Container):
                         280000,
                         lambda eff:
                         f"Kangaryu will heal {eff.mag * 20} more health and cost {eff.mag} more random energy.",
-                        mag=stacks), self)
+                        mag=stacks, print_mag=True), self)
         if self.has_effect(EffectType.CONT_UNIQUE, "Nemurin Nap"):
             self.get_effect(EffectType.CONT_UNIQUE,
                             "Nemurin Nap").alter_mag(-1)
@@ -2070,6 +2081,7 @@ class CharacterManager(collections.abc.Container):
                 self.full_remove_effect("Susano'o", self)
                 if self.scene.player:
                     self.update_profile()
+                    self.check_ability_swaps()
                 if not self.has_effect(EffectType.SYSTEM, "ItachiMission4Tracker"):
                     self.add_effect(Effect("ItachiMission4Tracker", EffectType.SYSTEM, self, 280000, lambda eff:"", system = True))
 
@@ -2515,12 +2527,17 @@ class CharacterManager(collections.abc.Container):
         y_offset = 27
         max_columns = 4
 
-        for idx, effect_set in enumerate(self.make_effect_clusters().values()):
+        for idx, effect_cluster in enumerate(self.make_effect_clusters().items()):
             (column, row) = (idx // max_columns, idx % max_columns)
+            cluster_name, effect_set = effect_cluster
             effect_sprite = self.scene.ui_factory.from_surface(
                 sdl2.ext.BUTTON,
                 self.scene.get_scaled_surface(effect_set[0].eff_img, 25, 25),
                 free=True)
+            for eff in effect_set:
+                if eff.print_mag:
+                    effect_sprite.surface = self.stamp_stack_count(eff.mag, effect_sprite.surface)
+                    break
             effect_sprite.effects = effect_set
             effect_sprite.ID = f"{idx}/{self.id}"
             effect_sprite.is_enemy = self.is_enemy()
@@ -2529,6 +2546,81 @@ class CharacterManager(collections.abc.Container):
                                            BLACK, row * x_offset,
                                            column * y_offset)
 
+    def stamp_stack_count(self, stacks: int,
+                       surface: sdl2.SDL_Surface) -> sdl2.SDL_Surface:
+        
+        if stacks < 10:
+            font = self.scene.stack_font
+            x_offset = 7
+            y_offset = -5
+        elif stacks < 100:
+            font = self.scene.large_stack_font
+            x_offset = 2
+            y_offset = -2
+        elif stacks < 200:
+            font = self.scene.huge_stack_font
+            x_offset = 1
+            y_offset = 2
+        else:
+            font = self.scene.huge_stack_font
+            x_offset = 0
+            y_offset = 2
+        
+        text_border_surface = sdl2.sdlttf.TTF_RenderText_Blended(
+            font, str.encode(f"{stacks}"), BLACK)
+        text_surface = sdl2.sdlttf.TTF_RenderText_Blended(
+            font, str.encode(f"{stacks}"), WHITE)
+        
+        sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
+                                     sdl2.SDL_Rect(x_offset - 1, y_offset - 1, 25, 25))
+        sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
+                                     sdl2.SDL_Rect(x_offset, y_offset - 1, 25, 25))
+        sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
+                                     sdl2.SDL_Rect(x_offset + 1, y_offset - 1, 25, 25))
+        sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
+                                     sdl2.SDL_Rect(x_offset - 1, y_offset, 25, 25))
+        sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
+                                     sdl2.SDL_Rect(x_offset + 1, y_offset, 25, 25))
+        sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
+                                     sdl2.SDL_Rect(x_offset - 1, y_offset + 1, 25, 25))
+        sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
+                                     sdl2.SDL_Rect(x_offset, y_offset + 1, 25, 25))
+        sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
+                                     sdl2.SDL_Rect(x_offset + 1, y_offset + 1, 25, 25))
+        
+        sdl2.surface.SDL_BlitSurface(text_surface, None, surface,
+                                     sdl2.SDL_Rect(x_offset, y_offset, 25, 25))
+        
+        return surface
+        
+    def stamp_cooldown(self, cooldown: int,
+                       surface: sdl2.SDL_Surface) -> sdl2.SDL_Surface:
+        text_border_surface = sdl2.sdlttf.TTF_RenderText_Blended(
+            self.scene.cooldown_font, str.encode(f"{cooldown}"), BLACK)
+        text_surface = sdl2.sdlttf.TTF_RenderText_Blended(
+            self.scene.cooldown_font, str.encode(f"{cooldown}"), WHITE)
+        
+        sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
+                                     sdl2.SDL_Rect(23, -18, 0, 0))
+        sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
+                                     sdl2.SDL_Rect(25, -18, 0, 0))
+        sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
+                                     sdl2.SDL_Rect(27, -18, 0, 0))
+        sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
+                                     sdl2.SDL_Rect(23, -20, 0, 0))
+        sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
+                                     sdl2.SDL_Rect(27, -20, 0, 0))
+        sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
+                                     sdl2.SDL_Rect(23, -22, 0, 0))
+        sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
+                                     sdl2.SDL_Rect(25, -22, 0, 0))
+        sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
+                                     sdl2.SDL_Rect(27, -22, 0, 0))
+        
+        
+        sdl2.surface.SDL_BlitSurface(text_surface, None, surface,
+                                     sdl2.SDL_Rect(25, -20, 0, 0))
+        return surface
 
     def is_in_bounds(self) -> bool:
         mouse_x, mouse_y = engine.get_mouse_position()
@@ -2544,7 +2636,6 @@ class CharacterManager(collections.abc.Container):
             return False
 
         return True
-
 
     def make_effect_clusters(self) -> dict[str, list[Effect]]:
         output: dict[str, list[Effect]] = {}
@@ -2837,12 +2928,5 @@ class CharacterManager(collections.abc.Container):
                         self.character_region.add_sprite(
                             button.null_pane, 150 + (i * 140), 0)
 
-    def stamp_cooldown(self, cooldown: int,
-                       surface: sdl2.SDL_Surface) -> sdl2.SDL_Surface:
-        text_surface = sdl2.sdlttf.TTF_RenderText_Blended(
-            self.scene.cooldown_font, str.encode(f"{cooldown}"), BLACK)
-        sdl2.surface.SDL_BlitSurface(text_surface, None, surface,
-                                     sdl2.SDL_Rect(25, -20, 0, 0))
-        return surface
 
 

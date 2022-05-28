@@ -26,8 +26,9 @@ if typing.TYPE_CHECKING:
 
 FONTSIZE = 16
 COOLDOWN_FONTSIZE = 100
-
-
+STACK_FONTSIZE = 25
+LARGE_STACK_FONTSIZE = 20
+HUGE_STACK_FONTSIZE = 16
 
 def play_sound(file_name: str):
     # with importlib.resources.path('animearena.resources', file_name) as path:
@@ -288,6 +289,9 @@ class BattleScene(engine.Scene):
         self.moving_first = False
         self.font = init_font(FONTSIZE)
         self.cooldown_font = init_font(COOLDOWN_FONTSIZE)
+        self.stack_font = init_font(STACK_FONTSIZE)
+        self.large_stack_font = init_font(LARGE_STACK_FONTSIZE)
+        self.huge_stack_font = init_font(HUGE_STACK_FONTSIZE)
         self.selected_ability = None
         self.acting_character = None
         self.exchanging_energy = False
@@ -598,7 +602,13 @@ class BattleScene(engine.Scene):
 
     def draw_timer_region(self):
         self.timer_region.clear()
-        timer_sprite = self.create_text_display(self.cooldown_font, str(self.timer.time_left), BLACK, WHITE, 3, -20, 120, 80)
+        if self.timer:
+            time_left = str(self.timer.time_left)
+            timer_offset = 3 if len(time_left) == 2 else 32
+        else:
+            time_left = "--"
+            timer_offset = 8
+        timer_sprite = self.create_text_display(self.cooldown_font, time_left, BLACK, WHITE, timer_offset, -20, 120, 80)
         self.add_bordered_sprite(self.timer_region, timer_sprite, BLACK, 0, 0)
 
     def draw_enemy_info_region(self):
@@ -687,20 +697,24 @@ class BattleScene(engine.Scene):
                 ability_description, 165,
                 (135 - ability_description.size[1]) // 2)
 
-    def add_ability_details_to_enemy_info(self, ability):
-        energy_display_region = self.enemy_info_region.subregion(
-            x=105, y=15, width=(4 + 10) * ability.total_cost, height=10)
-        cost_to_display: list[Energy] = sorted(ability.cost_iter())
-        energy_squares = [
-            energy_display_region.subregion(x, y=0, width=10, height=10)
-            for x in itertools.islice(range(0, 1000, 10 +
-                                            4), ability.total_cost)
-        ]
-        for cost, energy_square in zip(cost_to_display, energy_squares):
-            energy_surface = self.scene_manager.surfaces[cost.name]
-            energy_sprite = self.sprite_factory.from_surface(
-                self.get_scaled_surface(energy_surface), free=True)
-            energy_square.add_sprite(energy_sprite, x=0, y=0)
+    def add_ability_details_to_enemy_info(self, ability: Ability):
+        if ability.total_base_cost > 0:
+            energy_display_region = self.enemy_info_region.subregion(
+                x=105, y=15, width=(4 + 10) * ability.total_cost, height=10)
+            cost_to_display: list[Energy] = sorted(ability.cost_iter())
+            energy_squares = [
+                energy_display_region.subregion(x, y=0, width=10, height=10)
+                for x in itertools.islice(range(0, 1000, 10 +
+                                                4), ability.total_cost)
+            ]
+            for cost, energy_square in zip(cost_to_display, energy_squares):
+                energy_surface = self.scene_manager.surfaces[cost.name]
+                energy_sprite = self.sprite_factory.from_surface(
+                    self.get_scaled_surface(energy_surface), free=True)
+                energy_square.add_sprite(energy_sprite, x=0, y=0)
+        else:
+            energy_display_region = self.enemy_info_region.subregion(x=105, y=15, width = 14, height=10)
+            energy_display_region.add_sprite(self.create_text_display(self.font, "No Cost", BLACK, WHITE, 0, 0, 80, 4), 0, -6)
         cooldown_text_sprite = self.create_text_display(self.font,
                                                         "CD: " +
                                                         str(ability.cooldown),
@@ -911,7 +925,6 @@ class BattleScene(engine.Scene):
         if not stored_turns:
             self.waiting_for_turn = not first_turn
             self.catching_up = False
-            print(first_turn)
             self.moving_first = first_turn
             if not self.waiting_for_turn:
                 self.timer = self.start_timer(time_remaining)
@@ -1039,9 +1052,10 @@ class BattleScene(engine.Scene):
         new_energy = [0, 0, 0, 0, 0]
 
         for character in self.pteam:
-            personal_contribution = character.check_energy_contribution()
-            for i in range(5):
-                new_energy[i] += personal_contribution[i]
+            if not character.source.dead:
+                personal_contribution = character.check_energy_contribution()
+                for i in range(5):
+                    new_energy[i] += personal_contribution[i]
 
         #TODO add energy removal at some point?
 
@@ -1149,6 +1163,8 @@ class BattleScene(engine.Scene):
                 if eff.check_waiting() and self.is_allied_effect(
                         eff, team_id) and (eff.mag > 15
                                         or not manager.deflecting()):
+                    if eff.name == "Doping Rampage":
+                        self.dying_to_doping = True
                     eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.AFFLICTION)
             gen = (eff for eff in manager.source.current_effects
                 if eff.eff_type == EffectType.CONT_HEAL and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
@@ -1302,10 +1318,6 @@ class BattleScene(engine.Scene):
         #endregion
 
         self.full_update()
-        if game_lost:
-            self.lose_game()
-        if game_won and not game_lost:
-            self.win_game()
 
 
 
@@ -1315,6 +1327,11 @@ class BattleScene(engine.Scene):
                     self.ability_messages, self.random_spent)
             self.ability_messages.clear()
             self.random_spent = [0, 0, 0, 0]
+        
+        if game_lost:
+            self.lose_game()
+        if game_won and not game_lost:
+            self.win_game()
 
     def get_energy_pool(self) -> list:
         output = []
@@ -1683,7 +1700,8 @@ class BattleScene(engine.Scene):
         self.player.losses += 1
 
         self.lose_game_mission_check()
-
+        if self.timer:
+            self.timer.cancel()
         for i in range(3):
             self.player.missions[
                 self.player_display.team.character_managers[i].source.
@@ -1706,11 +1724,7 @@ class BattleScene(engine.Scene):
                 name][4] += self.player_display.team.character_managers[
                     i].source.mission5progress
 
-        self.scene_manager.connection.send_player_update(self.player)
-        self.scene_manager.connection.send_match_statistics([
-            manager.source.name
-            for manager in self.player_display.team.character_managers
-        ], False)
+        
         self.window_up = True
         loss_panel = self.sprite_factory.from_surface(
             self.get_scaled_surface(self.scene_manager.surfaces["lost"]))
@@ -1721,6 +1735,12 @@ class BattleScene(engine.Scene):
         return_button.click += self.return_to_char_select
         self.add_bordered_sprite(self.game_end_region, return_button, WHITE,
                                  550, 400)
+        self.scene_manager.connection.send_match_ending(won=False)
+        self.scene_manager.connection.send_player_update(self.player)
+        self.scene_manager.connection.send_match_statistics([
+            manager.source.name
+            for manager in self.player_display.team.character_managers
+        ], False)
 
     def return_to_char_select(self, button, sender):
         play_sound(self.scene_manager.sounds["click"])
@@ -1776,7 +1796,8 @@ class BattleScene(engine.Scene):
         self.player.wins += 1
 
         self.win_game_mission_check()
-
+        if self.timer:
+            self.timer.cancel()
         for i in range(3):
             self.player.missions[
                 self.player_display.team.character_managers[i].source.
@@ -1798,11 +1819,7 @@ class BattleScene(engine.Scene):
                 self.player_display.team.character_managers[i].source.
                 name][4] += self.player_display.team.character_managers[
                     i].source.mission5progress
-        self.scene_manager.connection.send_player_update(self.player)
-        self.scene_manager.connection.send_match_statistics([
-            manager.source.name
-            for manager in self.player_display.team.character_managers
-        ], True)
+        
         self.window_up = True
         win_panel = self.sprite_factory.from_surface(
             self.get_scaled_surface(self.scene_manager.surfaces["won"]))
@@ -1813,9 +1830,13 @@ class BattleScene(engine.Scene):
         return_button.click += self.return_to_char_select
         self.add_bordered_sprite(self.game_end_region, return_button, WHITE,
                                  20, 25)
-        if not surrendered:
-            self.scene_manager.connection.send_match_ending()
-
+        
+        self.scene_manager.connection.send_match_ending(won=True)
+        self.scene_manager.connection.send_player_update(self.player)
+        self.scene_manager.connection.send_match_statistics([
+            manager.source.name
+            for manager in self.player_display.team.character_managers
+        ], True)
     
 
     def update_energy_region(self):
@@ -2021,7 +2042,7 @@ class BattleScene(engine.Scene):
                     character,
                     280000,
                     lambda eff: f"The Sistema C.A.I. is at Stage {eff.mag}.",
-                    mag=1))
+                    mag=1, print_mag=True))
         if character.source.name == "aizen":
             character.add_effect(
                 Effect("AizenMission5Tracker",

@@ -87,6 +87,7 @@ class Effect:
     action: bool
     unique: bool
     affliction: bool
+    print_mag: bool
 
     def __init__(self,
                  source: Union["Ability", str],
@@ -96,13 +97,15 @@ class Effect:
                  desc,
                  mag: int = 0,
                  invisible=False,
-                 system=False):
+                 system=False,
+                 print_mag=False):
         self.eff_type = eff_type
         self.mag = mag
         self.duration = duration
         self.action = False
         self.instant = False
         self.unique = False
+        self.print_mag = print_mag
         if type(source) == str:
             self.name = source
             self.db_name = source

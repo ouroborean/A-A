@@ -1,5 +1,6 @@
 from asyncio.streams import StreamReader, StreamWriter
 import socket
+import threading
 import os
 import pathlib
 import sys
@@ -13,7 +14,7 @@ import hashlib
 if typing.TYPE_CHECKING:
     from animearena.scene_manager import SceneManager
 
-VERSION = "0.9.943"
+VERSION = "0.9.9"
 
 SALT = b'gawr gura for president'
 
@@ -66,6 +67,28 @@ class ConnectionHandler:
         self.scene_manager.battle_scene.handle_timeout()
         
 
+    def update_thread(self, newest_version: str):
+        s = sys.argv[0]
+        
+        version_tag = newest_version.replace(".", "-")
+        file_name = f"AnimeArena{version_tag}.exe"
+        abs_path = pathlib.Path().resolve()
+        final_path = abs_path / file_name
+        url = "https://storage.googleapis.com/a-a-latest/AnimeArena.exe"
+        file = requests.get(url, stream=True)
+        with open(abs_path / file_name, "wb") as f:
+            for block in file.iter_content(1024):
+                if not block:
+                    break
+                f.write(block)
+        with open("animearenatemp.config", "w") as f:
+            f.write(s)
+        new_env = os.environ.copy()
+        new_env.pop("PYSDL2_DLL_PATH")
+        os.execve(final_path, [final_path,], new_env)
+        
+        
+
     def handle_version_check(self, data:list[bytes]):
         buffer = ByteBuffer()
         buffer.write_bytes(data)
@@ -77,41 +100,18 @@ class ConnectionHandler:
             self.scene_manager.login_scene.updating=True
             self.scene_manager.login_scene.full_render()
             
-            s = sys.argv[0]
+            update_version_thread = threading.Thread(target=self.update_thread, args=(newest_version,), daemon=True)
             
-            version_tag = newest_version.replace(".", "-")
-
-            file_name = f"AnimeArena{version_tag}.exe"
-
-            abs_path = pathlib.Path().resolve()
-            
-            final_path = abs_path / file_name
-
-            url = "https://storage.googleapis.com/a-a-latest/AnimeArena.exe"
-            file = requests.get(url, stream=True)
-            with open(abs_path / file_name, "wb") as f:
-                for block in file.iter_content(1024):
-                    if not block:
-                        break
-                    f.write(block)
-            s = sys.argv[0]
-            with open("temp.config", "w") as f:
-                f.write(s)
-            new_env = os.environ.copy()
-            new_env.pop("PYSDL2_DLL_PATH")
-            os.execve(final_path, [final_path,], new_env)
+            update_version_thread.start()
             
         else:
             
             abs_path = pathlib.Path().resolve()
-            if os.path.exists("temp.config"):
-                with open("temp.config", "r") as f:
+            if os.path.exists("animearenatemp.config"):
+                with open("animearenatemp.config", "r") as f:
                     old_file = f.read().strip()
-                os.remove("temp.config")
+                os.remove("animearenatemp.config")
                 os.remove(abs_path / old_file)
-            
-        self.scene_manager.login_scene.updating = False
-        self.scene_manager.login_scene.full_render()
         buffer.clear()
 
     def send_version_request(self):
@@ -298,9 +298,13 @@ class ConnectionHandler:
             self.waiting_for_login = True
         buffer.clear()
 
-    def send_match_ending(self):
+    def send_match_ending(self, won: bool):
         buffer = ByteBuffer()
         buffer.write_int(8)
+        if won:
+            buffer.write_int(1)
+        else:
+            buffer.write_int(0)
         buffer.write_byte(b'\x1f\x1f\x1f')
         self.writer.write(buffer.get_byte_array())
         buffer.clear()

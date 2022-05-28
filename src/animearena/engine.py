@@ -24,6 +24,8 @@ def get_image_from_path(file_name: str) -> Image:
         return Image.open(path)
 
 RESOURCES = Path(__file__).parent.parent.parent / "resources"
+WHITE = sdl2.SDL_Color(255, 255, 255)
+
 
 def sat_subtract(subtractor: int, subtractee: int) -> int:
     subtractee -= subtractor
@@ -59,7 +61,6 @@ class Scene:
     def load_assets(self, **kwargs: str):
         log = logging.getLogger(__name__)
         for (k, v) in kwargs.items():
-            log.debug("Loading image: %s", v)
             self.surfaces[k] = get_image_from_path(v)
 
     def renderables(self) -> Iterator[sdl2.ext.Sprite]:
@@ -200,6 +201,59 @@ class Scene:
 
         return new_sprite
 
+    def create_bordered_font_text_display(  # pylint: disable=too-many-arguments
+            self,
+            font: sdl2.sdlttf.TTF_Font,
+            text: str,
+            text_color: sdl2.ext.Color,
+            background_color: sdl2.ext.Color,
+            x: int,
+            y: int,
+            width: int,
+            height: Optional[int] = None) -> sdl2.ext.Sprite:
+
+        # create fake tiny lowercase constants to appease the overlord
+        horizontal_margin = x
+        max_width = width - (horizontal_margin * 2)
+        y_offset = 15
+        vertical_margin = 15
+        char_width = 7.3
+        chars_per_line = max_width // char_width
+
+        # get list of lines from full string based on box width
+        # lines = textwrap.wrap(text, chars_per_line)
+        lines = animearena.text_formatter.get_lines(text, max_width)
+
+        # if height is on auto, then set it to a function of the margin plus
+        # the space required for all lines
+        if height is None:
+            true_height = vertical_margin + (13 * len(lines))
+        else:
+            true_height = vertical_margin + height
+
+        # create rectangular button using parameter-supplied color as background
+        # and specified dimensions
+        new_sprite = self.ui_factory.from_color(sdl2.ext.BUTTON,
+                                                background_color,
+                                                size=(width, true_height))
+        # for each line in the list of lines, render that line on the sprite's surface
+        for row, line in enumerate(lines):
+            border_text_surface = sdl2.sdlttf.TTF_RenderText_Blended(font, str.encode(line), text_color)
+            text_surface = sdl2.sdlttf.TTF_RenderText_Blended(font, str.encode(line), WHITE)
+            sdl2.surface.SDL_BlitSurface(border_text_surface, None, new_sprite.surface,
+                                        sdl2.SDL_Rect(x - 1, y + (row * y_offset) - 1, 0, 0))
+            sdl2.surface.SDL_BlitSurface(border_text_surface, None, new_sprite.surface,
+                                        sdl2.SDL_Rect(x - 1, y + (row * y_offset) + 1, 0, 0))
+            sdl2.surface.SDL_BlitSurface(border_text_surface, None, new_sprite.surface,
+                                        sdl2.SDL_Rect(x + 1, y + (row * y_offset) - 1, 0, 0))
+            sdl2.surface.SDL_BlitSurface(border_text_surface, None, new_sprite.surface,
+                                        sdl2.SDL_Rect(x + 1, y + (row * y_offset) + 1, 0, 0))
+            
+            sdl2.surface.SDL_BlitSurface(text_surface, None, new_sprite.surface,
+                                         sdl2.SDL_Rect(x, y + (row * y_offset), 0, 0))
+            sdl2.SDL_FreeSurface(text_surface)
+
+        return new_sprite
 
 class Region:
     """Spatial region on the screen with relative coordinate offsets & spinning rims."""
