@@ -266,7 +266,6 @@ class BattleScene(engine.Scene):
         self.ability_messages = list()
         self.timer = TurnTimer(1, self.empty_placeholder)
         self.random_spent = [0, 0, 0, 0]
-        self.window_closing = True
         self.window_closing = False
         self.waiting_for_turn = True
         self.first_turn = True
@@ -1420,7 +1419,6 @@ class BattleScene(engine.Scene):
                                               eff.name):
                         eff.removing = True
                 eff.tick_duration()
-                logging.debug("Ally %s's %s (%s) has %i turns remaining", manager.source.name, eff.name, eff.eff_type.name, eff.duration)
                 #Effects that trigger upon ending
 
                 if eff.duration == 0:
@@ -1441,7 +1439,6 @@ class BattleScene(engine.Scene):
                                        system=True))
 
                     if eff.name == "Quirk - Transform":
-                        logging.debug("Flushing Toga's transformed effects:")
                         manager.toga_flush_effects()
                         manager.toga_transform("toga")
 
@@ -1552,7 +1549,6 @@ class BattleScene(engine.Scene):
         for i, manager in enumerate(enemy_team):
             for eff in manager.source.current_effects:
                 eff.tick_duration()
-                logging.debug("Enemy %s's %s (%s) has %i turns remaining", manager.source.name, eff.name, eff.eff_type.name, eff.duration)
                 if eff.name == "Consecutive Normal Punches":
                     if manager.has_effect(
                             EffectType.SYSTEM, "SaitamaMission2Tracker"

@@ -148,6 +148,17 @@ class CharacterManager(collections.abc.Container):
     def adjust_targeting_types(self):
         for i, abi in enumerate(self.source.current_abilities):
             abi.target_type = Target(abi._base_target_type.value)
+            ffs_shokuhou = False
+            shokuhou_locker = None
+            if abi.name == "Mental Out - Order":
+                ffs_shokuhou = True
+                controlled_character = self.get_controlled_character(self)
+                stolen_slot = self.get_effect(EffectType.UNIQUE, "Mental Out").mag
+                stolen_ability = controlled_character.source.main_abilities[stolen_slot] if stolen_slot < 4 else controlled_character.source.alt_abilities[stolen_slot - 4]
+                abi.name = stolen_ability.name
+                abi.target_type = stolen_ability._base_target_type
+                shokuhou_locker = self
+                self = controlled_character
             gen = (eff for eff in self.source.current_effects
                    if eff.eff_type == EffectType.TARGET_SWAP)
             for eff in gen:
@@ -164,10 +175,33 @@ class CharacterManager(collections.abc.Container):
                 abi.target_type = Target.ALL_TARGET
             if abi.name == "I Reject!" and two(self) and three(self):
                 abi.target_type = Target.MULTI_ALLY
+            if ffs_shokuhou:
+                self = shokuhou_locker
+                abi.name = "Mental Out - Order"
+
+    def get_controlled_character(self, user: "CharacterManager") -> "CharacterManager":
+        for enemy in self.scene.eteam:
+            if enemy.has_effect_with_user(EffectType.MARK, "Mental Out", user):
+                return enemy
 
     def adjust_ability_costs(self):
         for i, ability in enumerate(self.source.current_abilities):
             ability.reset_costs()
+            ffs_shokuhou = False
+            shokuhou_locker = None
+            if ability.name == "Mental Out - Order":
+                ffs_shokuhou = True
+                controlled_character = self.get_controlled_character(self)
+                logging.debug(f"Mental Out Order holder effect list: {self}")
+                stolen_slot = self.get_effect(EffectType.UNIQUE, "Mental Out").mag
+                stolen_ability = controlled_character.source.main_abilities[stolen_slot] if stolen_slot < 4 else controlled_character.source.alt_abilities[stolen_slot - 4]
+                
+                for i in range(5):
+                    ability.cost[Energy(i)] = 0
+                    ability.modify_ability_cost(Energy(i), stolen_ability.all_costs[i])
+                ability.name = stolen_ability.name
+                shokuhou_locker = self
+                self = controlled_character
             if self.has_effect(EffectType.STACK, "Quirk - Half-Cold"):
                 ability.modify_ability_cost(
                     Energy(4),
@@ -209,6 +243,9 @@ class CharacterManager(collections.abc.Container):
                 if ability_to_modify - 1 == i or ability_to_modify == 0:
                     ability.modify_ability_cost(Energy(cost_type - 1),
                                                 magnitude)
+            if ffs_shokuhou:
+                self = shokuhou_locker
+                ability.name = "Mental Out - Order"
 
     def check_on_harm(self):
         for character in self.current_targets:
@@ -927,7 +964,6 @@ class CharacterManager(collections.abc.Container):
                         lambda eff:
                         "This character will ignore counter effects."))
         if target.has_effect(EffectType.MARK, "Whirlwind Rush"):
-            logging.debug("%s triggered the Whirlwind Rush Mark!", self.source.name)
             src = target.get_effect(EffectType.MARK, "Whirlwind Rush")
             src.user.progress_mission(3, 1)
             src.user.add_effect(Effect("KilluaMission5Tracker", EffectType.MARK, src.user, 2, lambda eff: "", system=True))
@@ -1039,7 +1075,6 @@ class CharacterManager(collections.abc.Container):
                     if self.has_effect(EffectType.UNIQUE, "King of Beasts Transformation - Lionel"):
                         self.give_eff_healing(10, self, self.get_effect(EffectType.UNIQUE, "King of Beasts Transformation - Lionel"))
 
-                logging.debug("%s dealt %i damage to %s with %s!", self.source.name, mod_damage, target.source.name, self.used_ability.name)
                 target.receive_active_damage(mod_damage, self, damage_type)
 
                 if target.has_effect(EffectType.ALL_DR, "Flag of the Ruler"):
@@ -1077,7 +1112,6 @@ class CharacterManager(collections.abc.Container):
             mod_damage = mod_damage * 2
 
         if self.has_effect(EffectType.ALL_DR, "Conductivity"):
-            logging.debug("Pinging Lambo with electricity!")
             self.get_effect(EffectType.ALL_DR,
                               "Conductivity").user.receive_eff_damage(
                                   10,
@@ -1248,7 +1282,6 @@ class CharacterManager(collections.abc.Container):
                 damage = 0
             else:
                 
-                logging.debug("%s dealt %i damage to %s with %s!", self.source.name, damage, target.source.name, source.name)
                 
                 target.receive_eff_damage(damage, source, damage_type)
         else:
@@ -1421,24 +1454,19 @@ class CharacterManager(collections.abc.Container):
 
     def toga_flush_effects(self):
         DANGER_TYPES = (EffectType.ABILITY_SWAP, EffectType.PROF_SWAP, EffectType.ALL_BOOST, EffectType.COST_ADJUST, EffectType.TARGET_SWAP)
-        logging.debug("%d effects pre-flush", len(self.source.current_effects))
         for eff in self.source.current_effects:
             if eff.user == self:
                 if eff.unique:
-                    logging.debug("Flushing %s for reason: TAGGED UNIQUE", eff)
                     self.scene.scene_remove_effect(eff.name, self)
                 elif eff.action:
-                    logging.debug("Flushing %s for reason: TAGGED ACTION", eff)
                     self.scene.scene_remove_effect(eff.name, self)
                 elif eff.eff_type in DANGER_TYPES:
-                    logging.debug("Flushing %s for reason: TYPE IN DANGER TYPES", eff)
                     self.remove_effect(eff)
                 
 
     def toga_transform(self, target_name: str):
         swap_hp = self.source.hp
         swap_effects = self.source.current_effects
-        logging.debug("%d effects in Toga's swap effects", len(swap_effects))
         self.source = self.scene.return_character(target_name)
         try:
             for i, sprite in enumerate(self.main_ability_sprites):
@@ -1519,14 +1547,12 @@ class CharacterManager(collections.abc.Container):
                 continue
             if eff.mag < 0:
                 negative = True
-                logging.debug("%s has a negative boost of magnitude %d (%s)", self.source.name, eff.mag, eff.name)
             ability_target = math.trunc(eff.mag / 100)
 
             boost_value = eff.mag - (ability_target * 100)
             if negative:
                 ability_target = ability_target * -1
             if ability_target == which or ability_target == 0:
-                logging.debug("%s is receiving a boost of %i from %s's %s!", self.source.name, boost_value, eff.user.source.name, eff.name)
                 mod_damage = mod_damage + boost_value
 
         if self.used_ability != None and self.used_ability.name == "Trap of Argalia - Down With A Touch!":
@@ -1593,8 +1619,6 @@ class CharacterManager(collections.abc.Container):
                     dr += eff.mag
             else:
                 dr += eff.mag
-        if dr:
-            logging.debug("%s's incoming damage is being %s by %i", self.source.name, ("boosted", "reduced")[eff.mag>0], abs(eff.mag))
         return dr
 
     def check_for_cooldown_mod(self, ability: Ability) -> int:
@@ -2333,7 +2357,6 @@ class CharacterManager(collections.abc.Container):
             healer.progress_mission(1, mod_healing)
 
         #endregion
-        logging.debug("%s received %d healing from %s's %s", self.source.name, mod_healing, healer.source.name, healer.used_ability.name)
         self.source.hp += mod_healing
         if self.source.hp > 200:
             self.source.hp = 200
@@ -2358,7 +2381,6 @@ class CharacterManager(collections.abc.Container):
             source.user.progress_mission(1, mod_healing)
         #endregion
 
-        logging.debug("%s received %d healing from %s's %s", self.source.name, mod_healing, source.user.source.name, source.name)
         self.source.hp += mod_healing
         if self.source.hp > 200:
             self.source.hp = 200
@@ -2730,8 +2752,8 @@ class CharacterManager(collections.abc.Container):
     def update(self, x: int = 0, y: int = 0):
         self.character_region.clear()
         self.update_profile(x, y)
-        self.adjust_ability_costs()
         self.update_ability()
+        self.adjust_ability_costs()
         self.update_targeted_sprites()
         self.update_text()
         self.update_effect_region()
@@ -2739,7 +2761,6 @@ class CharacterManager(collections.abc.Container):
 
     def update_limited(self, x: int = 0, y: int = 0):
         self.character_region.clear()
-        self.adjust_ability_costs()
         self.update_enemy_profile(x, y)
         self.update_targeted_sprites()
         self.update_effect_region()
@@ -2855,7 +2876,7 @@ class CharacterManager(collections.abc.Container):
             self.scene.full_update()
 
     def set_selected_ability(self, button, _sender):
-        if not self.scene.window_up:
+        if not self.scene.window_up and not self.scene.window_closing:
             play_sound(self.scene.scene_manager.sounds["click"])
             self.selected_ability = button.ability
             self.selected_button = button

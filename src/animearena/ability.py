@@ -748,11 +748,11 @@ def target_mental_out_order(user: "CharacterManager",
               fake_targeting: bool = False) -> int:
     total_targets = 0
     controlled_character = get_controlled_character(user, enemyTeam)
-    stolen_ability = user.get_effect_with_user(EffectType.MARK, "Mental Out", user).mag
+    stolen_ability = user.get_effect_with_user(EffectType.UNIQUE, "Mental Out", user).mag
     if stolen_ability < 4:
-        total_targets = controlled_character.source.main_abilities[stolen_ability].target(controlled_character, playerTeam, enemyTeam, fake_targeting)
+        total_targets = controlled_character.source.main_abilities[stolen_ability].target(controlled_character, playerTeam, enemyTeam, fake_targeting=fake_targeting)
     else:
-        total_targets = controlled_character.source.alt_abilities[stolen_ability - 4].target(controlled_character, playerTeam, enemyTeam, fake_targeting)
+        total_targets = controlled_character.source.alt_abilities[stolen_ability - 4].target(controlled_character, playerTeam, enemyTeam, fake_targeting=fake_targeting)
     return total_targets
 
 def target_loyal_guard(user: "CharacterManager",
@@ -762,7 +762,6 @@ def target_loyal_guard(user: "CharacterManager",
     total_targets = 0
     for ally in playerTeam:
         if ally != user and not ally.source.dead:
-            logging.debug("Shokuhou can be guarded by %s!", ally.source.name)
             if not fake_targeting:
                 user.set_targeted()
             total_targets = 1
@@ -1312,8 +1311,7 @@ def exe_chelsea_smoke(user: "CharacterManager", playerTeam: list["CharacterManag
         if target.id != user.id:
             if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                 has_counter = list([eff for eff in target.source.current_effects if eff.eff_type == EffectType.COUNTER_RECEIVE and eff.user.id == target.id])
-                logging.debug("Emergency Smoke detected %d allied counter effects on %s", len(has_counter), target.source.name)
-                logging.debug("%s", target)
+
                 if has_counter:
                     user.progress_mission(4, 1)
                     user.deal_active_damage(15, target, DamageType.AFFLICTION)
@@ -1562,7 +1560,6 @@ def exe_titanias_rampage(user: "CharacterManager", playerTeam: list["CharacterMa
     if valid_targets:
         target = user.scene.d20.randint(0, len(valid_targets) - 1)
         user.deal_active_damage(15, valid_targets[target], DamageType.PIERCING)
-        logging.debug("Rampage dealing 15 damage to %s", valid_targets[target].source.name)
     user.check_on_use()
     if valid_targets:
         user.check_on_harm()
@@ -4420,17 +4417,17 @@ def exe_mental_out(user: "CharacterManager", playerTeam: list["CharacterManager"
                     base_duration = 6
                 target.add_effect(Effect(user.used_ability, EffectType.MARK, user, base_duration, lambda eff: "Shokuhou is controlling this character."))
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_STUN, user, base_duration, lambda eff: "This character is stunned."))
-                user.add_effect(Effect(user.used_ability, EffectType.MARK, user, base_duration - 1, lambda eff: "Shokuhou is controlling a character, and can command them to act for her."))
+                user.add_effect(Effect(user.used_ability, EffectType.UNIQUE, user, base_duration - 1, lambda eff: "Shokuhou is controlling a character, and can command them to act for her."))
                 stolen_slot = mental_out_ability_switch(target)
-                user.get_effect_with_user(EffectType.MARK, "Mental Out", user).alter_mag(stolen_slot)
+                user.get_effect_with_user(EffectType.UNIQUE, "Mental Out", user).alter_mag(stolen_slot)
                 if stolen_slot > 3:
                     stolen_ability = target.source.alt_abilities[stolen_slot - 4]
                 else:
                     stolen_ability = target.source.main_abilities[stolen_slot]
-                user.source.alt_abilities[0] = Ability(stolen_ability.db_name)
                 try:
+                    user.source.alt_abilities[0].image = stolen_ability.image
                     user.alt_ability_sprites[0].surface = user.scene.get_scaled_surface(user.scene.scene_manager.surfaces[stolen_ability.db_name])
-                    user.alt_ability_sprites[0].ability = user.source.alt_abilities[0]
+                    user.alt_ability_sprites[0].in_battle_desc = user.scene.create_text_display(user.scene.font, stolen_ability.name + ": " + stolen_ability.desc, BLACK, WHITE, 5, 0, 520, 110)
                 except AttributeError:
                     pass
                 user.add_effect(Effect(user.used_ability, EffectType.ABILITY_SWAP, user, base_duration - 1, lambda eff: f"Mental Out has been replaced by {stolen_ability.name}.", mag = 11))
@@ -4462,14 +4459,22 @@ def exe_loyal_guard(user: "CharacterManager", playerTeam: list["CharacterManager
     user.check_on_use()
 
 def exe_mental_out_order(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    stolen_slot = user.get_effect_with_user(EffectType.MARK, "Mental Out", user).mag
+    stolen_slot = user.get_effect_with_user(EffectType.UNIQUE, "Mental Out", user).mag
     controlled_character = get_controlled_character(user, enemyTeam)
+    
+    logging.debug(f"Controlled character is showing up as {controlled_character.source.name}")
     if stolen_slot < 4:
         stolen_ability = controlled_character.source.main_abilities[stolen_slot]
     else:
         stolen_ability = controlled_character.source.alt_abilities[stolen_slot - 4]
+    controlled_character.used_ability = stolen_ability
+    controlled_character.current_targets = user.current_targets
+    controlled_character.primary_target = user.primary_target
     controlled_character.toggle_allegiance()
     stolen_ability.execute(controlled_character, playerTeam, enemyTeam)
+    controlled_character.used_ability = None
+    controlled_character.current_targets.clear()
+    controlled_character.primary_target = None
     controlled_character.toggle_allegiance()
 #endregion
 #region Snow White Execution
@@ -4603,6 +4608,7 @@ def exe_half_cold(user: "CharacterManager", playerTeam: list["CharacterManager"]
                 user.deal_active_damage(20, target, DamageType.NORMAL)
                 target.add_effect(Effect(user.used_ability, EffectType.ALL_BOOST, user, 2, lambda eff: "This character will deal 10 less damage.", mag=-10))
         user.apply_stack_effect(Effect(user.used_ability, EffectType.STACK, user, 280000, lambda eff: f"Todoroki's ability costs are increased by {eff.mag} random energy until he uses Flashfreeze Heatwave.", mag = 1, print_mag=True), user)
+        logging.debug(f"{user.source.name} took the stack!")
         user.check_on_use()
         user.check_on_harm()
 

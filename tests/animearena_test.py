@@ -3102,8 +3102,8 @@ def test_plasma_bomb_immunity(accelerator_test_game:TestGame):
     
     game.player_action(0, 1, [3, 4, 5])
     
-    game.queue_enemy_action(0, 0, [3])
     game.queue_enemy_action(1, 1, [3])
+    game.queue_enemy_action(0, 0, [3])
     game.execute_enemy_turn()
     assert game.pteam[0].is_stunned()
     assert game.pteam[0].hp == 85
@@ -4651,10 +4651,39 @@ def test_arrest_return_assault(tatsumaki_test_game:TestGame):
 
 def test_satellite_cannon(chachamaru_test_game:TestGame):
     game=chachamaru_test_game
-    
+
+    game.player_action_pass(0, 0, [3])
+    assert game.quick_target(0, 1) == 1
+
+    game.player_action_pass(0, 0, [4])
+    assert game.quick_target(0, 1) == 2
+
+    game.player_action_pass(0, 0, [5])
+    assert game.quick_target(0, 1) == 3
+
+    game.player_action_pass(0, 1, [3, 4, 5])
+    for enemy in game.eteam:
+        assert enemy.hp == 65
+
 def test_active_combat_mode(chachamaru_test_game:TestGame):
     game=chachamaru_test_game
 
+    game.player_action_pass(0, 0, [3])
+
+    game.player_action_pass(0, 2, [3])
+    assert game.eteam[0].hp == 90
+    assert game.pteam[0].get_dest_def_total() == 15
+
+    game.pass_turn()
+    game.pass_turn()
+    assert game.eteam[0].hp == 70
+    assert game.pteam[0].get_dest_def_total() == 45
+
+    game.player_action(0, 2, [4])
+    assert game.quick_target(0, 1) == 0
+
+    game.enemy_action(0, 0, [3])
+    assert not (EffectType.CONT_DMG, "Active Combat Mode") in game.eteam[1]
 #endregion
 
 #region Mirai Tests
@@ -4662,14 +4691,36 @@ def test_active_combat_mode(chachamaru_test_game:TestGame):
 def test_blood_suppression_removal(mirai_test_game:TestGame):
     game=mirai_test_game
 
+    game.player_action_pass(0, 0, [0])
+    assert game.pteam[0].hp == 90
+    assert game.pteam[0].source.current_abilities[0].name == "Blood Bullet"
+
+    game.player_action_pass(0, 1, [3])
+    assert game.eteam[0].hp == 60
+    game.pass_turn()
+    assert game.eteam[0].hp == 50
+    assert game.pteam[0].hp == 70
+
+
 def test_blood_bullet(mirai_test_game:TestGame):
     game=mirai_test_game
-    
-def test_blood_blade(mirai_test_game:TestGame):
-    game=mirai_test_game
-    
+
+    game.player_action_pass(0, 0, [0])
+    game.player_action_pass(0, 0, [4])
+    game.pass_turn()
+
+    assert game.eteam[1].hp == 60
+        
 def test_blood_shield(mirai_test_game:TestGame):
     game=mirai_test_game
+
+    game.player_action_pass(0, 0, [0])
+    game.player_action(0, 2, [0])
+    game.queue_enemy_action(2, 0, [3])
+    game.queue_enemy_action(0, 1, [3])
+    game.execute_enemy_turn()
+
+    assert game.pteam[0].hp == 65
 
 #endregion
 
@@ -4677,12 +4728,21 @@ def test_blood_shield(mirai_test_game:TestGame):
 
 def test_raikou(touka_test_game:TestGame):
     game=touka_test_game
+
+    game.player_action(0, 2, [3])
+    assert game.eteam[0].hp == 80
+
+    game.enemy_action(0, 1, [3])
+    assert game.pteam[0].hp == 85
+    assert game.eteam[0].source.current_abilities[1].cooldown_remaining == 2
     
 def test_draw_stance(touka_test_game:TestGame):
     game=touka_test_game
-    
-def test_nukiashi(touka_test_game:TestGame):
-    game=touka_test_game
+    game.player_action(0, 0, [0])
+    assert game.pteam[0].source.current_abilities[0].name == "Raikiri"
+    game.enemy_action(0, 1, [3])
+    assert game.pteam[0].source.current_abilities[0].name == "Draw Stance"
+    assert game.eteam[0].hp == 85
 
 #endregion
 
@@ -4690,14 +4750,49 @@ def test_nukiashi(touka_test_game:TestGame):
 
 def test_lightning_palm(killua_test_game:TestGame):
     game=killua_test_game
+    game.queue_action(0, 0, [3])
+    game.queue_action(1, 0, [3])
+    game.execute_turn()
+
+    assert game.eteam[0].hp == 65
+
+    game.enemy_action(0, 0, [4])
+    assert not game.pteam[1].is_stunned()
     
 def test_narukami(killua_test_game:TestGame):
     game=killua_test_game
+    game.enemy_action(0, 2, [2])
+    game.queue_action(0, 1, [3])
+    game.queue_action(1, 0, [3])
+    game.execute_turn()
+    assert game.eteam[0].hp == 65
+    game.execute_enemy_turn()
+    game.player_action(1, 0, [5])
+    assert game.eteam[2].hp == 85
+    assert game.pteam[1].hp == 100
     
 def test_godspeed(killua_test_game:TestGame):
     game=killua_test_game
+    assert game.pteam[0].source.current_abilities[2].name == "Godspeed"
+    game.player_action_pass(0, 2, [0])
+    assert game.pteam[0].source.current_abilities[2].name == "Whirlwind Rush"
+
+    game.player_action(0, 0, [3])
+    for ally in game.pteam:
+        assert (EffectType.STUN_IMMUNE, "Lightning Palm") in ally
+    assert game.eteam[0].hp == 75
     
 def test_whirlwind_palm(killua_test_game:TestGame):
     game=killua_test_game
+    game.player_action_pass(0, 2, [0])
+    game.queue_action(0, 2, [3])
+    game.queue_action(1, 0, [3])
+    game.queue_action(2, 0, [3])
+    game.execute_turn()
+
+    assert game.eteam[0].hp == 35
+    logging.debug("%s", game.pteam[1])
+    assert game.pteam[1].check_invuln()
+    assert game.pteam[2].check_invuln()
 
 #endregion
