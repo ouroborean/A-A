@@ -170,10 +170,10 @@ class CharacterManager(collections.abc.Container):
                     EffectType.STACK, "Guts") and self.get_effect(
                         EffectType.STACK, "Guts").mag >= 3:
                 abi.target_type = Target.MULTI_ENEMY
-            if abi.name == "I Reject!" and one(self) and two(self) and three(
+            if abi.name == "Dance of the Heavenly Six" and one(self) and two(self) and three(
                     self):
                 abi.target_type = Target.ALL_TARGET
-            if abi.name == "I Reject!" and two(self) and three(self):
+            if abi.name == "Five-God Inviolate Shield" and two(self) and three(self):
                 abi.target_type = Target.MULTI_ALLY
             if ffs_shokuhou:
                 self = shokuhou_locker
@@ -592,12 +592,12 @@ class CharacterManager(collections.abc.Container):
                                           ) and not enemy.deflecting():
                     self.deal_eff_damage(15, enemy, eff, DamageType.NORMAL)
         if eff.name == "Butou Renjin":
-            
-            eff.user.get_effect(EffectType.SYSTEM, "IchimaruMission4Tracker").duration = 3
-            eff.user.get_effect(EffectType.SYSTEM, "IchimaruMission4Tracker").alter_mag(1)
-            if eff.user.get_effect(EffectType.SYSTEM, "IchimaruMission4Tracker").mag >= 8:
-                eff.user.remove_effect(eff.user.get_effect(EffectType.SYSTEM, "IchimaruMission4Tracker"))
-                eff.user.progress_mission(4, 1)
+            if eff.user.has_effect(EffectType.SYSTEM, "IchimaruMission4Tracker"):
+                eff.user.get_effect(EffectType.SYSTEM, "IchimaruMission4Tracker").duration = 3
+                eff.user.get_effect(EffectType.SYSTEM, "IchimaruMission4Tracker").alter_mag(1)
+                if eff.user.get_effect(EffectType.SYSTEM, "IchimaruMission4Tracker").mag >= 8:
+                    eff.user.remove_effect(eff.user.get_effect(EffectType.SYSTEM, "IchimaruMission4Tracker"))
+                    eff.user.progress_mission(4, 1)
             if self.final_can_effect(
                     eff.user.check_bypass_effects()) and not self.deflecting():
                 eff.user.deal_eff_damage(15, self, eff, DamageType.NORMAL)
@@ -1694,10 +1694,10 @@ class CharacterManager(collections.abc.Container):
     def check_for_collapsing_dest_def(self, eff: Effect):
         if eff.mag == 0:
             if eff.name == "Five-God Inviolate Shield":
-                self.full_remove_effect("Five-God Inviolate Shield", eff.user)
-                for manager in self.scene.player_display.team.character_managers:
-                    manager.full_remove_effect("Five-God Inviolate Shield",
-                                               eff.user)
+                if self.id == "ally":
+                    self.scene.collapsing_ally_inviolate_shield = True
+                elif self.id == "enemy":
+                    self.scene.collapsing_enemy_inviolate_shield = True
             if eff.name == "Four-God Resisting Shield":
                 self.full_remove_effect("Four-God Resisting Shield", eff.user)
             if eff.name == "Three-God Linking Shield":

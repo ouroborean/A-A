@@ -98,6 +98,19 @@ class Character:
             except FileNotFoundError:
                 break
 
+    def reset_character_post_match(self):
+        self.hp = 200
+        self.current_effects.clear()
+        self.current_abilities = self.main_abilities
+        for ability in self.main_abilities:
+            ability.cost = ability._base_cost
+            ability.cooldown = ability._base_cooldown
+            ability.target_type = ability._base_target_type
+        for ability in self.alt_abilities:
+            ability.cost = ability._base_cost
+            ability.cooldown = ability._base_cooldown
+            ability.target_type = ability._base_target_type
+
     def clear_effects(self, final=False):
         if not final:
             new_effects = [eff for eff in self.current_effects if eff.system == True]
@@ -131,9 +144,7 @@ class Character:
         logging.debug("%s's energy contribution of %d has been altered by %d", self.name, self.energy_contribution, energy_change)
         self.energy_contribution += energy_change
 
-def get_character(name: str):
-    return copy.copy(get_character_db()[name])
-        
+
 character_db = None
 
 def get_character_db():
@@ -141,6 +152,10 @@ def get_character_db():
     if not character_db:
         character_db = make_character_db()
     return character_db
+
+def reset_character_db():
+    global character_db
+    character_db = None
 
 
 def make_character_db():

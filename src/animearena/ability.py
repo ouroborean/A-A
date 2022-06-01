@@ -73,6 +73,7 @@ class Ability():
             self.unpack_details(details_package)
         except KeyError:
             pass
+        
 
     def resources_available(self, energy: list[int]) -> bool:
         for k, v in self.cost.items():
@@ -417,7 +418,7 @@ def target_kill_shinso(user: "CharacterManager",
     total_targets = 0
     for enemy in enemyTeam:
         if enemy.hostile_target(user, "BYPASS"):
-            if enemy.has_effect(EffectType.STACK, "Kill, Kamishini no Yari"):
+            if enemy.has_effect(EffectType.STACK, "Butou Renjin") or enemy.has_effect(EffectType.STACK, "13 Kilometer Swing"):
                 total_targets += 1
                 if not fake_targeting:
                     enemy.set_targeted()
@@ -2277,7 +2278,7 @@ def exe_kamishini_no_yari(user: "CharacterManager", playerTeam: list["CharacterM
                 if target.has_effect_with_user(EffectType.CONT_UNIQUE, "Kill, Kamishini no Yari", user):
                     target.get_effect_with_user(EffectType.CONT_UNIQUE, "Kill, Kamishini no Yari", user).alter_mag(stacks)
                 else:
-                    target.add_effect(Effect(user.used_ability, EffectType.CONT_UNIQUE, user, 280000, lambda eff: f"This character will take {eff.mag} affliction damage.", mag = base_damage, print_mag=True))
+                    target.add_effect(Effect(user.used_ability, EffectType.CONT_UNIQUE, user, 280000, lambda eff: f"This character will take {eff.mag * 10} affliction damage.", mag = stacks, print_mag=True))
                 if butou:
                     target.remove_effect(target.get_effect_with_user(EffectType.STACK, "Butou Renjin", user))
                 if kilometer:
@@ -3644,7 +3645,10 @@ def two(user):
 
 def three(user):
     return user.has_effect(EffectType.MARK, "Lily! Hinagiku! Baigon!")
-   
+
+
+
+
 
 def rename_i_reject(user: "CharacterManager"):
     def one():
@@ -3676,11 +3680,18 @@ def rename_i_reject(user: "CharacterManager"):
         user.source.current_abilities[3].desc = "Target ally heals 20 health for two turns."
     elif one():
         user.source.current_abilities[3].name = "Lone-God Slicing Shield"
-        user.source.current_abilities[3].desc = "All allies gain 30 points of destructible defense, and will heal 10 health per turn. This effect ends on all allies once any of the destructible defense is fully depleted."
+        user.source.current_abilities[3].desc = "Deals 15 damage to target enemy and permanently increases their damage taken by 5."
     else:
         user.source.current_abilities[3].name = "I Reject!"
         user.source.current_abilities[3].desc = "Orihime activates her Shun Shun Rikka, with a composite effect depending on the flowers she has activated. This will end any active Shun Shun Rikka effect originating from a name she is currently calling out."
-
+    try:
+        user.main_ability_sprites[3].in_battle_desc = user.scene.create_text_display(
+                        user.scene.font, user.source.current_abilities[3].name + ": " +
+                        user.source.current_abilities[3].desc, BLACK, WHITE, 5, 0, 520,
+                        110)
+    except:
+        pass
+    
 def exe_tsubaki(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "Orihime has prepared an offensive effect."))
     rename_i_reject(user)
@@ -3779,6 +3790,11 @@ def exe_i_reject(user: "CharacterManager", playerTeam: list["CharacterManager"],
             user.check_on_help()
         if harmed:
             user.check_on_harm()
+        
+        user.full_remove_effect("Tsubaki!", user)
+        user.full_remove_effect("Ayame! Shun'o!", user)
+        user.full_remove_effect("Lily! Hinagiku! Baigon!", user)
+        rename_i_reject(user)
 
 #endregion
 #region Ripple Execution

@@ -1,3 +1,4 @@
+from os import rename
 import sdl2
 import sdl2.ext
 import sdl2.surface
@@ -6,7 +7,7 @@ import itertools
 import textwrap
 from animearena import engine
 from animearena.character import Character, get_character_db
-from animearena.ability import Ability, Target, DamageType
+from animearena.ability import Ability, Target, DamageType, rename_i_reject
 from animearena.energy import Energy
 from animearena.effects import Effect, EffectType
 from animearena.player import Player
@@ -245,6 +246,8 @@ class BattleScene(engine.Scene):
     random_spent: list
     catching_up: bool
     d20: random.Random
+    collapsing_ally_inviolate_shield: bool
+    collapsing_enemy_inviolate_shield: bool
     
     @property
     def pteam(self):
@@ -262,6 +265,8 @@ class BattleScene(engine.Scene):
         super().__init__(*args, **kwargs)
         self.dying_to_doping = False
         self.catching_up = False
+        self.collapsing_ally_inviolate_shield = False
+        self.collapsing_enemy_inviolate_shield = False
         self.d20 = random.Random()
         self.ability_messages = list()
         self.timer = TurnTimer(1, self.empty_placeholder)
@@ -1252,6 +1257,17 @@ class BattleScene(engine.Scene):
         self.traded_for_energy = 5
         self.exchanging_energy = False
 
+        if self.collapsing_enemy_inviolate_shield:
+            for manager in self.eteam:
+                if manager.has_effect(EffectType.DEST_DEF, "Five-God Inviolate Shield"):
+                    manager.full_remove_effect("Five-God Inviolate Shield", manager.get_effect(EffectType.DEST_DEF, "Five-God Inviolate Shield").user)
+                    self.collapsing_enemy_inviolate_shield = False
+        if self.collapsing_ally_inviolate_shield:
+            for manager in self.eteam:
+                if manager.has_effect(EffectType.DEST_DEF, "Five-God Inviolate Shield"):
+                    manager.full_remove_effect("Five-God Inviolate Shield", manager.get_effect(EffectType.DEST_DEF, "Five-God Inviolate Shield").user)
+                    self.collapsing_ally_inviolate_shield = False
+        
         game_lost = True
         for manager in self.player_display.team.character_managers:
             manager.refresh_character()
@@ -1740,6 +1756,18 @@ class BattleScene(engine.Scene):
 
     def return_to_char_select(self, button, sender):
         play_sound(self.scene_manager.sounds["click"])
+        for manager in self.pteam:
+            manager.targeted = False
+            manager.targeting = False
+            manager.used_ability = False
+            manager.current_targets.clear()
+            manager.primary_target = None
+            manager.used_ability = None
+            manager.received_ability.clear()
+            manager.acted = False
+            if manager.source.name == "orihime":
+                manager.source.current_effects.clear()
+                rename_i_reject(manager)
         self.scene_manager.return_to_select(self.player)
         self.window_up = False
 
@@ -2048,6 +2076,8 @@ class BattleScene(engine.Scene):
                        lambda eff: "",
                        mag=0,
                        system=True))
+        if character.source.name == "orihime":
+            rename_i_reject(character)
         if character.source.name == "jiro":
             character.add_effect(
                 Effect("JiroMission5Tracker",

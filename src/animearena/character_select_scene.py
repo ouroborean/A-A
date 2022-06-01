@@ -11,7 +11,7 @@ from PIL import Image
 import dill as pickle
 from animearena import engine
 from animearena.player import Player
-from animearena.character import Character, get_character_db
+from animearena.character import Character, get_character_db, reset_character_db
 from animearena.ability import Ability
 from animearena.mission import mission_db
 from animearena.resource_manager import init_font
@@ -688,7 +688,7 @@ class CharacterSelectScene(engine.Scene):
         self.player_wins = wins
         self.player_losses = losses
         self.player_medals = medals
-
+        reset_character_db()
         self.nametag = self.create_text_display(self.font, self.player_name, BLACK, WHITE, 0, 0, 95)
         self.wintag = self.create_text_display(self.font, f"Wins: {self.player_wins}", BLACK, WHITE, 0, 0, 95)
         self.losstag = self.create_text_display(self.font, f"Losses: {self.player_losses}", BLACK, WHITE, 0, 0, 95)
