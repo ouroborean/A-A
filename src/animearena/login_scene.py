@@ -127,14 +127,18 @@ class LoginScene(engine.Scene):
         self.send_login()
     
     def send_login(self):
-        if not self.clicked_login and not self.clicked_register and self.scene_manager.connected:
+        if self.username_box.text.strip() == "" and self.password_box.text.strip() == "":
+            self.receive_message("Please enter a username and password to log-in.")
+        elif not self.clicked_login and not self.clicked_register and self.scene_manager.connected:
             self.clicked_login = True
             self.scene_manager.username_raw = self.username_box.text.strip()
             self.scene_manager.password_raw = self.password_box.text.strip()
             self.scene_manager.connection.request_login_nonce()
 
     def register_click(self, button, sender):
-        if not self.clicked_login and not self.clicked_register and self.scene_manager.connected:
+        if self.username_box.text.strip() == "" and self.password_box.text.strip() == "":
+            self.receive_message("Please enter a username and password you would like to register.")
+        elif not self.clicked_login and not self.clicked_register and self.scene_manager.connected:
             play_sound(self.scene_manager.sounds["click"])
             self.clicked_register = True
             self.scene_manager.connection.send_registration(self.username_box.text, self.password_box.text)

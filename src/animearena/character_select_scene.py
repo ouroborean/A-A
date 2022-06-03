@@ -101,9 +101,9 @@ class CharacterSelectScene(engine.Scene):
         self.start_match_region = self.region.subregion(685, 50, 100, 40)
         self.how_to_region = self.region.subregion(685, 90, 100, 40)
         self.player_profile_region = self.region.subregion(15, 20, 200, 100)
-        self.mission_region = self.region.subregion(210, 158, 0, 0)
         self.filter_region = self.region.subregion(70, 655, 210, 30)
         self.character_select_region = self.region.subregion(15, 400, 770, 285)
+        self.mission_region = self.region.subregion(210, 158, 0, 0)
         self.search_panel_region = self.region.subregion(144, 158, 0, 0)
         #endregion
         #region sprite initialization
@@ -372,8 +372,8 @@ class CharacterSelectScene(engine.Scene):
                 for i in range(v):
                     self.character_info_region.add_sprite(
                         self.sprite_factory.from_surface(
-                            self.get_scaled_surface(self.scene_manager.surfaces[k.name])),
-                        185 + (total_energy * 13), 240)
+                            self.get_scaled_surface(self.scene_manager.surfaces[k.name], 18, 18)),
+                        185 + (total_energy * 21), 235)
                     total_energy += 1
         else:
             self.character_info_region.add_sprite(self.create_text_display(self.font, "No Cost", BLACK, WHITE, 0, 0, 80, 4), 185, 234)

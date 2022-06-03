@@ -118,13 +118,13 @@ class CharacterManager(collections.abc.Container):
             if self.selected_ability.total_cost > 0:
                 energy_squares = [
                     energy_display_region.subregion(x, y=0, width=10, height=10)
-                    for x in itertools.islice(range(0, 1000, 10 + 4),
+                    for x in itertools.islice(range(0, 1000, 14 + 4),
                                             self.selected_ability.total_cost)
                 ]
                 for cost, energy_square in zip(cost_to_display, energy_squares):
                     energy_surface = self.scene.scene_manager.surfaces[cost.name]
                     energy_sprite = self.scene.sprite_factory.from_surface(
-                        self.scene.get_scaled_surface(energy_surface), free=True)
+                        self.scene.get_scaled_surface(energy_surface, 14, 14), free=True)
                     energy_square.add_sprite(energy_sprite, x=0, y=0)
             else:
                 energy_display_region.add_sprite(self.scene.create_text_display(self.scene.font, "No Cost", BLACK, WHITE, 0, 0, 80, 4), 0, -6)
