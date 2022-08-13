@@ -1020,9 +1020,17 @@ class BattleScene(engine.Scene):
 
         
         for ability in executed_abilities:
+            
+            
             self.eteam[ability.user_id].used_ability = self.eteam[
                 ability.user_id].source.current_abilities[ability.ability_id]
+            
+            logging.debug("%s", self.eteam[ability.user_id])
+            logging.debug(f"User's current abilities: ")
 
+            for abi in self.eteam[ability.user_id].source.current_abilities:
+                logging.debug("%s", abi.name)
+            
             if ability.primary_id != 69: #lol
                 if ability.primary_id < 3:
                     self.eteam[ability.user_id].primary_target = self.eteam[ability.primary_id]
@@ -1102,21 +1110,21 @@ class BattleScene(engine.Scene):
                 if eff.eff_type == EffectType.CONT_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(
-                        eff, team_id) and (eff.mag > 15
+                        eff, team_id) and (eff.mag >= 20
                                         or not manager.deflecting()):
                     eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.NORMAL)
             gen = (eff for eff in manager.source.current_effects
                 if eff.eff_type == EffectType.CONT_PIERCE_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(
-                        eff, team_id) and (eff.mag > 15
+                        eff, team_id) and (eff.mag >= 20
                                         or not manager.deflecting()):
                     eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.PIERCING)
             gen = (eff for eff in manager.source.current_effects
                 if eff.eff_type == EffectType.CONT_AFF_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(
-                        eff, team_id) and (eff.mag > 15
+                        eff, team_id) and (eff.mag >= 20
                                         or not manager.deflecting()):
                     if eff.name == "Doping Rampage":
                         self.dying_to_doping = True
@@ -1151,21 +1159,21 @@ class BattleScene(engine.Scene):
                 if eff.eff_type == EffectType.CONT_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(
-                        eff, team_id) and (eff.mag > 15
+                        eff, team_id) and (eff.mag >= 20
                                         or not manager.deflecting()):
                     eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.NORMAL)
             gen = (eff for eff in manager.source.current_effects
                 if eff.eff_type == EffectType.CONT_PIERCE_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(
-                        eff, team_id) and (eff.mag > 15
+                        eff, team_id) and (eff.mag >= 20
                                         or not manager.deflecting()):
                     eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.PIERCING)
             gen = (eff for eff in manager.source.current_effects
                 if eff.eff_type == EffectType.CONT_AFF_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
             for eff in gen:
                 if eff.check_waiting() and self.is_allied_effect(
-                        eff, team_id) and (eff.mag > 15
+                        eff, team_id) and (eff.mag >= 20
                                         or not manager.deflecting()):
                     if eff.name == "Doping Rampage":
                         self.dying_to_doping = True
@@ -1210,6 +1218,7 @@ class BattleScene(engine.Scene):
             if manager.acted:
                 self.refund_energy_costs(manager.used_ability)
         self.ability_messages.clear()
+        self.acting_order.clear()
         self.random_spent = [0,0,0,0]
         self.turn_end(timeout=True)
         self.full_update()
@@ -1464,7 +1473,7 @@ class BattleScene(engine.Scene):
                             manager.get_effect(
                                 EffectType.DEST_DEF,
                                 "Perfect Paper - Rampage Suit").alter_dest_def(
-                                    20)
+                                    30)
                             manager.progress_mission(3, 20)
                     if eff.name == "Thunder Palace":
                         for enemy in self.enemy_display.team.character_managers:
@@ -1506,7 +1515,7 @@ class BattleScene(engine.Scene):
                                     "Illusory Breakdown").user == manager:
                                 if emanager.final_can_effect(
                                         manager.check_bypass_effects()):
-                                    manager.deal_eff_damage(25, emanager, eff, DamageType.NORMAL)
+                                    manager.deal_eff_damage(30, emanager, eff, DamageType.NORMAL)
                                     emanager.add_effect(
                                         Effect(
                                             Ability("chrome2"),
@@ -1524,7 +1533,7 @@ class BattleScene(engine.Scene):
                                     "Mental Immolation").user == manager:
                                 if emanager.final_can_effect(
                                         manager.check_bypass_effects()):
-                                    manager.deal_eff_damage(20, emanager, eff, DamageType.NORMAL)
+                                    manager.deal_eff_damage(25, emanager, eff, DamageType.NORMAL)
                                     eff.user.progress_mission(3, 1)
                                     emanager.source.energy_contribution -= 1
                                     manager.check_on_drain(emanager)
@@ -1536,12 +1545,12 @@ class BattleScene(engine.Scene):
                                     EffectType.MARK,
                                     "Mental Annihilation").user == manager:
                                 if emanager.final_can_effect("BYPASS"):
-                                    manager.deal_eff_damage(35, emanager, eff, DamageType.NORMAL)
+                                    manager.deal_eff_damage(45, emanager, eff, DamageType.NORMAL)
                     if eff.name == "Illusory World Destruction" and eff.mag > 0:
                         for emanager in enemy_team:
                             if emanager.final_can_effect(
                                     manager.check_bypass_effects()):
-                                manager.deal_eff_damage(25, emanager, eff, DamageType.NORMAL)
+                                manager.deal_eff_damage(30, emanager, eff, DamageType.NORMAL)
                                 emanager.add_effect(
                                     Effect(
                                         Ability("chromealt2"),
@@ -1589,10 +1598,31 @@ class BattleScene(engine.Scene):
                                    2, lambda eff: f"{eff.name} has ended."))
                     if eff.name == "In The Name Of Ruler!" and eff.eff_type == EffectType.ALL_STUN:
                         eff.user.progress_mission(1, 1)
+                    if eff.name == "Quirk - Transform":
+                        manager.toga_flush_effects()
+                        manager.toga_transform("toga")    
+                    if eff.name == "Bunny Assault" and eff.eff_type == EffectType.CONT_USE:
+                        if manager.has_effect(EffectType.DEST_DEF,
+                                              "Perfect Paper - Rampage Suit"):
+                            manager.get_effect(
+                                EffectType.DEST_DEF,
+                                "Perfect Paper - Rampage Suit").alter_dest_def(
+                                    30)
+                            manager.progress_mission(3, 20)
+                    if eff.name == "Thunder Palace":
+                        for enemy in self.pteam:
+                            if enemy.final_can_effect(
+                                    manager.check_bypass_effects()):
+                                eff.user.deal_eff_damage(40, enemy, eff, DamageType.NORMAL)
                     if eff.name == "Hidden Mine" and eff.eff_Type == EffectType.UNIQUE:
                         eff.user.progress_mission(5, 1)
                     if eff.name == "Illusory Disorientation":
                         eff.user.progress_mission(5, 1)
+                    if eff.name == "Mahapadma" and eff.eff_type == EffectType.MARK:
+                        manager.add_effect(
+                            Effect(Ability("esdeathalt1"), EffectType.ALL_STUN,
+                                   manager, 5,
+                                   lambda eff: "Esdeath is stunned."))
                     if eff.name == "Lightning Dragon's Roar":
                         manager.add_effect(
                             Effect(Ability("laxus2"),
@@ -1602,6 +1632,67 @@ class BattleScene(engine.Scene):
                                    lambda eff:
                                    "This character will take 10 more damage.",
                                    mag=-10))
+                    if eff.name == "Illusory Breakdown" and eff.mag > 0:
+                        for emanager in self.pteam:
+                            if emanager.has_effect(
+                                    EffectType.SYSTEM, "Chrome1Target"
+                            ) and emanager.get_effect(
+                                    EffectType.SYSTEM, "Chrome1Target").user == manager:
+                                if emanager.final_can_effect(
+                                        manager.check_bypass_effects()):
+                                    manager.deal_eff_damage(30, emanager, eff, DamageType.NORMAL)
+                                    emanager.add_effect(
+                                        Effect(
+                                            Ability("chrome2"),
+                                            EffectType.ALL_STUN, manager, 2,
+                                            lambda eff:
+                                            "This character is stunned."))
+                                    if emanager.meets_stun_check():
+                                        manager.check_on_stun(emanager)
+                    if eff.name == "Mental Immolation" and eff.mag > 0:
+                        for emanager in self.pteam:
+                            if emanager.has_effect(
+                                    EffectType.SYSTEM, "Chrome2Target"
+                            ) and emanager.get_effect(
+                                    EffectType.SYSTEM, "Chrome2Target").user == manager:
+                                if emanager.final_can_effect(
+                                        manager.check_bypass_effects()):
+                                    manager.deal_eff_damage(25, emanager, eff, DamageType.NORMAL)
+                                    eff.user.progress_mission(3, 1)
+                                    emanager.source.energy_contribution -= 1
+                                    manager.check_on_drain(emanager)
+                    if eff.name == "Mental Annihilation" and eff.mag > 0:
+                        for emanager in self.pteam:
+                            if emanager.has_effect(
+                                    EffectType.SYSTEM, "MukuroTarget"
+                            ) and emanager.get_effect(
+                                    EffectType.SYSTEM, "MukuroTarget").user == manager:
+                                if emanager.final_can_effect("BYPASS"):
+                                    manager.deal_eff_damage(45, emanager, eff, DamageType.NORMAL)
+                    if eff.name == "Illusory World Destruction" and eff.mag > 0:
+                        for emanager in self.pteam:
+                            if emanager.final_can_effect(
+                                    manager.check_bypass_effects()):
+                                manager.deal_eff_damage(30, emanager, eff, DamageType.NORMAL)
+                                emanager.add_effect(
+                                    Effect(
+                                        Ability("chromealt2"),
+                                        EffectType.ALL_STUN, manager, 2, lambda
+                                        eff: "This character is stunned."))
+                                if emanager.meets_stun_check():
+                                    manager.check_on_stun(emanager)
+                    if eff.name == "Quickdraw - Rifle" and eff.eff_type == EffectType.CONT_USE:
+                        manager.full_remove_effect("Quickdraw - Rifle",
+                                                   manager)
+                        manager.add_effect(
+                            Effect(
+                                Ability("cmaryalt2"),
+                                EffectType.ABILITY_SWAP,
+                                manager,
+                                280000,
+                                lambda eff:
+                                "Quickdraw - Rifle has been replaced by Quickdraw - Sniper",
+                                mag=12))
             new_list = [
                 eff for eff in manager.source.current_effects
                 if eff.duration > 0 and not eff.removing

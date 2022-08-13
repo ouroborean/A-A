@@ -110,6 +110,7 @@ class SceneManager:
         self.surfaces["rand_icon"] = get_image_from_path("rand_icon.png")
         self.surfaces["exclusive_icon"] = get_image_from_path("exclusive_icon.png")
         self.surfaces["how_to"] = get_image_from_path("how_to.png")
+        self.surfaces["scroll_wheel"] = get_image_from_path("scroll_wheel.png")
         self.connected = False
 
     def __enter__(self):

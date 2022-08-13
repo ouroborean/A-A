@@ -286,7 +286,7 @@ class CharacterManager(collections.abc.Container):
                         Effect(
                             Ability("mirio2"), EffectType.MARK, character, 2,
                             lambda eff:
-                            "This character will take 15 more piercing damage from Phantom Menace, and it will automatically target them."
+                            "This character will take 20 more piercing damage from Phantom Menace, and it will automatically target them."
                         ))
                 if character.has_effect(EffectType.MARK, "Protect Ally"):
                     character.get_effect(EffectType.MARK, "Protect Ally").user.progress_mission(2, 1)
@@ -295,7 +295,7 @@ class CharacterManager(collections.abc.Container):
                         Effect(
                             Ability("mirio2"), EffectType.MARK, character, 2,
                             lambda eff:
-                            "This character will take 15 more piercing damage from Phantom Menace, and it will automatically target them."
+                            "This character will take 20 more piercing damage from Phantom Menace, and it will automatically target them."
                         ))
                 if character.has_effect(EffectType.DEST_DEF,
                                         "Four-God Resisting Shield"):
@@ -305,7 +305,7 @@ class CharacterManager(collections.abc.Container):
                                              "Four-God Resisting Shield"), DamageType.NORMAL)
         if self.has_effect(EffectType.UNIQUE, "Porcospino Nuvola"):
             self.receive_eff_damage(
-                10, self.get_effect(EffectType.UNIQUE,
+                15, self.get_effect(EffectType.UNIQUE,
                                          "Porcospino Nuvola"), DamageType.NORMAL)
 
     def check_on_help(self):
@@ -352,7 +352,7 @@ class CharacterManager(collections.abc.Container):
             self.get_effect(EffectType.CONT_UNIQUE, "Utsuhi Ame").alter_mag(1)
             self.get_effect(
                 EffectType.CONT_UNIQUE, "Utsuhi Ame"
-            ).desc = lambda eff: "This character will take 40 damage and Yamamoto will gain 3 stacks of Asari Ugetsu."
+            ).desc = lambda eff: "This character will take 50 damage and Yamamoto will gain 3 stacks of Asari Ugetsu."
         if self.has_effect(EffectType.MARK, "Hidden Mine"):
             if self.final_can_effect():
                 self.receive_eff_damage(
@@ -369,7 +369,7 @@ class CharacterManager(collections.abc.Container):
         if self.has_effect(EffectType.MARK, "Solid Script - Fire"):
             self.get_effect(EffectType.MARK, "Solid Script - Fire").user.progress_mission(1, 1)
             self.receive_eff_damage(
-                10,
+                15,
                 self.get_effect(EffectType.MARK, "Solid Script - Fire"), DamageType.AFFLICTION)
 
     def check_bypass_effects(self) -> str:
@@ -450,7 +450,7 @@ class CharacterManager(collections.abc.Container):
                 eff.user.deal_eff_damage(eff.mag * 10, self, eff, DamageType.AFFLICTION)
         if eff.name == "Utsuhi Ame":
             if self.final_can_effect(eff.user.check_bypass_effects()):
-                eff.user.deal_eff_damage(eff.mag * 20, self, eff, DamageType.NORMAL)
+                eff.user.deal_eff_damage(eff.mag * 25, self, eff, DamageType.NORMAL)
                 if eff.mag == 1:
                     eff.user.apply_stack_effect(
                         Effect(
@@ -492,7 +492,7 @@ class CharacterManager(collections.abc.Container):
                 eff.user.deal_eff_damage(eff.mag, self, eff, DamageType.AFFLICTION)
         if eff.name == "Decaying Touch":
             if self.final_can_effect(eff.user.check_bypass_effects()):
-                eff.user.deal_eff_damage((5 * (2**eff.mag)), self, eff, DamageType.AFFLICTION)
+                eff.user.deal_eff_damage((10 * (2**eff.mag)), self, eff, DamageType.AFFLICTION)
         if eff.name == "Nemurin Nap":
             if not self.has_effect(EffectType.SYSTEM, "NemurinActivityMarker"):
                 eff.alter_mag(1, 3)
@@ -532,7 +532,7 @@ class CharacterManager(collections.abc.Container):
                             mag=32))
         if eff.name == "Eight Trigrams - 128 Palms":
             if self.final_can_effect(eff.user.check_bypass_effects()) and (
-                    not self.deflecting() or (2 * (2 ** eff.mag) > 15)):
+                    not self.deflecting() or (2 * (2 ** eff.mag) >= 20)):
                 base_damage = (2 * (2**eff.mag))
                 eff.user.deal_eff_damage(base_damage, self, eff, DamageType.NORMAL)
                 
@@ -547,9 +547,9 @@ class CharacterManager(collections.abc.Container):
             if self.final_can_effect(
                     eff.user.check_bypass_effects()) and not self.deflecting():
                 if self.check_for_dmg_reduction() < 15:
-                    eff.user.deal_eff_damage(15, self, eff, DamageType.PIERCING)
+                    eff.user.deal_eff_damage(20, self, eff, DamageType.PIERCING)
                 else:
-                    eff.user.deal_eff_damage(15, self, eff, DamageType.NORMAL)
+                    eff.user.deal_eff_damage(20, self, eff, DamageType.NORMAL)
         if eff.name == "Bridal Chest":
             if team_id != "enemy":
                 team = self.scene.eteam
@@ -565,8 +565,7 @@ class CharacterManager(collections.abc.Container):
                 if eff.user.has_effect(EffectType.STACK, "Galvanism"):
                     damage = damage + (eff.user.get_effect(EffectType.STACK, "Galvanism").mag * 10)
                 target = self.scene.d20.randint(0, len(valid_targets) - 1)
-                if valid_targets[target].final_can_effect(self.check_bypass_effects()
-                                        ) and not valid_targets[target].deflecting():
+                if valid_targets[target].final_can_effect(self.check_bypass_effects()):
                     self.deal_eff_damage(damage, valid_targets[target], eff, DamageType.NORMAL)
         if eff.name == "Titania's Rampage":
             
@@ -579,18 +578,17 @@ class CharacterManager(collections.abc.Container):
                 if enemy.hostile_target(eff.user, eff.user.check_bypass_effects()):
                     valid_targets.append(enemy)
             if valid_targets:
-                damage = 15 + (eff.mag * 5)
+                damage = 25 + (eff.mag * 5)
                 target = self.scene.d20.randint(0, len(valid_targets) - 1)
                 
-                if valid_targets[target].final_can_effect(self.check_bypass_effects()
-                                        ) and not valid_targets[target].deflecting():
+                if valid_targets[target].final_can_effect(self.check_bypass_effects()):
                     self.deal_eff_damage(damage, valid_targets[target], eff, DamageType.PIERCING)
             eff.alter_mag(1)
         if eff.name == "Circle Blade":
             for enemy in self.scene.enemy_display.team.character_managers:
                 if enemy.final_can_effect(self.check_bypass_effects()
                                           ) and not enemy.deflecting():
-                    self.deal_eff_damage(15, enemy, eff, DamageType.NORMAL)
+                    self.deal_eff_damage(20, enemy, eff, DamageType.NORMAL)
         if eff.name == "Butou Renjin":
             if eff.user.has_effect(EffectType.SYSTEM, "IchimaruMission4Tracker"):
                 eff.user.get_effect(EffectType.SYSTEM, "IchimaruMission4Tracker").duration = 3
@@ -600,7 +598,7 @@ class CharacterManager(collections.abc.Container):
                     eff.user.progress_mission(4, 1)
             if self.final_can_effect(
                     eff.user.check_bypass_effects()) and not self.deflecting():
-                eff.user.deal_eff_damage(15, self, eff, DamageType.NORMAL)
+                eff.user.deal_eff_damage(20, self, eff, DamageType.NORMAL)
                 self.apply_stack_effect(
                     Effect(
                         Ability("ichimaru1"),
@@ -613,19 +611,19 @@ class CharacterManager(collections.abc.Container):
         if eff.name == "Rubble Barrage":
             if self.final_can_effect(
                     eff.user.check_bypass_effects()) and not self.deflecting():
-                base_damage = 10
+                base_damage = 15
                 if eff.user.has_effect(EffectType.STACK, "Gather Power"):
                     base_damage += (5 * eff.user.get_effect(
                         EffectType.STACK, "Gather Power").mag)
                 eff.user.deal_eff_damage(base_damage, self, eff, DamageType.NORMAL)
         if eff.name == "Railgun":
-            base_damage = 10
+            base_damage = 15
             if self.final_can_effect(eff.user.check_bypass_effects()):
                 if eff.user.has_effect(EffectType.STACK, "Overcharge"):
                     base_damage += (5 * eff.user.get_effect(EffectType.STACK, "Overcharge").mag)
                 eff.user.deal_eff_damage(base_damage, self, eff, DamageType.NORMAL)
         if eff.name == "Iron Sand":
-            base_defense = 10
+            base_defense = 15
             if self.helpful_target(eff.user, eff.user.check_bypass_effects()):
                 if eff.user.has_effect(EffectType.STACK, "Overcharge"):
                     base_defense += (5 * eff.user.get_effect(EffectType.STACK, "Overcharge").mag)
@@ -694,7 +692,7 @@ class CharacterManager(collections.abc.Container):
                             else:
                                 counter.user.progress_mission(5, 1, once=True)
                             if counter.user.final_can_effect():
-                                counter.user.receive_eff_damage(30, self.get_effect(EffectType.MARK, "Third Dance - Shirafune"), DamageType.NORMAL)
+                                counter.user.receive_eff_damage(40, self.get_effect(EffectType.MARK, "Third Dance - Shirafune"), DamageType.NORMAL)
                                 counter.user.add_effect(
                                     Effect(
                                         Ability("rukia3"), EffectType.ALL_STUN,
@@ -788,7 +786,7 @@ class CharacterManager(collections.abc.Container):
                         
                             if self.final_can_effect(
                             ) and not self.deflecting():
-                                self.receive_eff_damage(15, eff, DamageType.NORMAL)
+                                self.receive_eff_damage(20, eff, DamageType.NORMAL)
                             target.full_remove_effect("Draw Stance", eff.user)
                             self.shirafune_check(eff)
                             return True
@@ -851,7 +849,7 @@ class CharacterManager(collections.abc.Container):
                             eff.user.source.main_abilities[
                                 2].cooldown_remaining = 2
                             if self.final_can_effect():
-                                self.receive_eff_damage(20, eff, DamageType.PIERCING)
+                                self.receive_eff_damage(35, eff, DamageType.PIERCING)
                             self.shirafune_check(eff)
                             return True
                         if eff.name == "Casseur de Logistille":
@@ -1002,7 +1000,7 @@ class CharacterManager(collections.abc.Container):
                         eff.user,
                         280000,
                         lambda leff:
-                        f"Detonate will deal {20 * leff.mag} damage to this character.",
+                        f"Detonate will deal {30 * leff.mag} damage to this character.",
                         mag=eff.mag,
                         invisible=True, print_mag=True), eff.user)
                 eff.user.progress_mission(1, eff.mag)
@@ -1085,7 +1083,7 @@ class CharacterManager(collections.abc.Container):
                     target.full_remove_effect("Thunder Palace", target)
                 if target.has_effect(EffectType.UNIQUE, "Burning Axle"):
                     src = target.get_effect(EffectType.UNIQUE, "Burning Axle")
-                    target.receive_eff_damage(15, src, DamageType.NORMAL)
+                    target.receive_eff_damage(20, src, DamageType.NORMAL)
                     target.full_remove_effect("Burning Axle", src.user)
                     target.add_effect(
                         Effect(Ability("tsunayoshi3"), EffectType.ALL_STUN, src.user, 2,
@@ -1114,7 +1112,7 @@ class CharacterManager(collections.abc.Container):
         if self.has_effect(EffectType.ALL_DR, "Conductivity"):
             self.get_effect(EffectType.ALL_DR,
                               "Conductivity").user.receive_eff_damage(
-                                  10,
+                                  15,
                                   self.get_effect(EffectType.ALL_DR,
                                                     "Conductivity"), DamageType.AFFLICTION)
 
@@ -1705,12 +1703,6 @@ class CharacterManager(collections.abc.Container):
             if eff.name == "Perfect Paper - Rampage Suit":
                 self.full_remove_effect("Perfect Paper - Rampage Suit",
                                         eff.user)
-                self.add_effect(
-                    Effect(
-                        eff.source, EffectType.UNIQUE, self, 280000,
-                        lambda eff:
-                        "Naruha cannot use Perfect Paper - Rampage Suit."))
-                
             if eff.name == "Illusory Breakdown":
                 self.full_remove_effect("Illusory Breakdown", self)
                 for manager in self.scene.enemy_display.team.character_managers:
@@ -1860,7 +1852,7 @@ class CharacterManager(collections.abc.Container):
                         self,
                         280000,
                         lambda eff:
-                        f"Maximum Cannon will deal {eff.mag * 15} more damage and cost {eff.mag} more random energy.",
+                        f"Maximum Cannon will deal {eff.mag * 20} more damage and cost {eff.mag} more random energy.",
                         mag=stacks, print_mag=True), self)
                 self.apply_stack_effect(
                     Effect(
@@ -1869,7 +1861,7 @@ class CharacterManager(collections.abc.Container):
                         self,
                         280000,
                         lambda eff:
-                        f"Kangaryu will heal {eff.mag * 20} more health and cost {eff.mag} more random energy.",
+                        f"Kangaryu will heal {eff.mag * 25} more health and cost {eff.mag} more random energy.",
                         mag=stacks, print_mag=True), self)
         if self.has_effect(EffectType.MARK,
                     "You Are Needed") and self.source.hp < 80:
@@ -1919,6 +1911,7 @@ class CharacterManager(collections.abc.Container):
                     lambda eff:
                     "Mental Substitution has been replaced by Trident Deflection.",
                     mag=44))
+            self.check_ability_swaps()
             if self.has_effect(EffectType.DEST_DEF, "Illusory Breakdown"):
                 self.remove_effect(
                     self.get_effect(EffectType.DEST_DEF, "Illusory Breakdown"))
@@ -1998,7 +1991,7 @@ class CharacterManager(collections.abc.Container):
                         self,
                         280000,
                         lambda eff:
-                        f"Maximum Cannon will deal {eff.mag * 15} more damage and cost {eff.mag} more random energy.",
+                        f"Maximum Cannon will deal {eff.mag * 20} more damage and cost {eff.mag} more random energy.",
                         mag=stacks, print_mag=True), self)
                 self.apply_stack_effect(
                     Effect(
@@ -2007,7 +2000,7 @@ class CharacterManager(collections.abc.Container):
                         self,
                         280000,
                         lambda eff:
-                        f"Kangaryu will heal {eff.mag * 20} more health and cost {eff.mag} more random energy.",
+                        f"Kangaryu will heal {eff.mag * 25} more health and cost {eff.mag} more random energy.",
                         mag=stacks, print_mag=True), self)
         if self.has_effect(EffectType.CONT_UNIQUE, "Nemurin Nap"):
             self.get_effect(EffectType.CONT_UNIQUE,
@@ -2098,6 +2091,7 @@ class CharacterManager(collections.abc.Container):
                     manager.remove_effect(
                         manager.get_effect(EffectType.MARK,
                                            "Mental Immolation"))
+            self.check_ability_swaps()
         if self.has_effect(EffectType.CONT_AFF_DMG, "Susano'o"):
             if self.source.hp < 50 or self.get_effect(EffectType.DEST_DEF,
                                                       "Susano'o").mag <= 0:
@@ -2153,7 +2147,7 @@ class CharacterManager(collections.abc.Container):
                 self.source.hp = 1
                 self.progress_mission(4, 1)
             elif self.has_effect(EffectType.MARK, "Lucky Rabbit's Foot") and self.active_redeemable(targeter):
-                self.source.hp = 35
+                self.source.hp = 50
                 self.get_effect(EffectType.MARK, "Lucky Rabbit's Foot").user.progress_mission(3, 1)
                 self.add_effect(Effect("SnowWhiteMission5Tracker", EffectType.SYSTEM, self, 280000, lambda eff:"", system=True))
             else:
@@ -2246,9 +2240,9 @@ class CharacterManager(collections.abc.Container):
                 self.source.hp = 1
                 self.progress_mission(4, 1)
             elif self.has_effect(EffectType.MARK, "Lucky Rabbit's Foot"):
-                self.source.hp = 35
+                self.source.hp = 50
             else:
-
+                self.action_effect_cancel()
                 if self.source.name == "esdeath":
                     if not self.has_effect(EffectType.SYSTEM, "EsdeathMission3Failure"):
                         self.add_effect(Effect("EsdeathMission3Failure", EffectType.SYSTEM, self, 280000, lambda eff:"", system=True))
@@ -2738,6 +2732,7 @@ class CharacterManager(collections.abc.Container):
         self.used_ability = None
         self.set_untargeted()
         self.targeting = False
+        self.targeted = False
         for ability in self.source.current_abilities:
             ability.reset_cooldown()
         if self.scene.player:

@@ -72,7 +72,7 @@ async def server_loop(scene_manager: SceneManager):
     while not scene_manager.connected:
         try:
             #34.125.127.187
-            reader, writer = await asyncio.wait_for(asyncio.open_connection("34.125.127.187", 5692, limit = 1024 * 256, happy_eyeballs_delay=0.25), 1)
+            reader, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", 5692, limit = 1024 * 256, happy_eyeballs_delay=0.25), 1)
             
             scene_manager.connected = True
             scene_manager.connection.writer = writer
@@ -86,10 +86,10 @@ async def server_loop(scene_manager: SceneManager):
             cancelled = True
             break
     while True and not cancelled:
-        if not VERSION_CHECKED:
-            print("Checking version")
-            scene_manager.connection.send_version_request()
-            VERSION_CHECKED = True
+        # if not VERSION_CHECKED:
+        #     print("Checking version")
+        #     scene_manager.connection.send_version_request()
+        #     VERSION_CHECKED = True
         try:
             data = await reader.readuntil(b'\x1f\x1f\x1f')
         except CancelledError:
@@ -115,7 +115,7 @@ async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server
     running = True
     tasktask = asyncio.create_task(server_loop_task)
     while running:
-        start = time.monotonic()
+        start = sdl2.SDL_GetPerformanceCounter()
         scene_manager.reset_event_trigger()
         events = sdl2.ext.get_events()
         for event in events:
@@ -138,16 +138,26 @@ async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server
                 if scene_manager.current_scene == scene_manager.char_select:
                     scene_manager.char_select.char_select_pressed = False
                     scene_manager.char_select.team_select_pressed = False
+                    scene_manager.char_select.scrolling = False
                     if scene_manager.char_select.dragging_picture:
                         scene_manager.char_select.resolve_drag_release()
+                    scene_manager.char_select.dragging_character = ""
             if event.type == sdl2.SDL_MOUSEMOTION:
                 scene_manager.update_mouse_position(event.motion.x, event.motion.y)
                 if scene_manager.char_select.char_select_pressed:
                     scene_manager.char_select.start_dragging()
                 if scene_manager.char_select.team_select_pressed:
                     scene_manager.char_select.start_dragging_from_selected()
+                if scene_manager.char_select.scrolling:
+                    scene_manager.char_select.scroll_character_scroll_selection()
                 if scene_manager.char_select.player and scene_manager.char_select.dragging_picture:
-                    scene_manager.char_select.render_character_selection()
+                    scene_manager.char_select.render_character_scroll_selection()
+                
+            if event.type == sdl2.SDL_MOUSEWHEEL:
+                if event.wheel.y > 0:
+                    scene_manager.char_select.mouse_wheel_scroll(-10)
+                elif event.wheel.y < 0:
+                    scene_manager.char_select.mouse_wheel_scroll(10)
             for sprite in scene_manager.current_scene.eventables():
                 scene_manager.uiprocessor.dispatch(sprite, event)
                 if scene_manager.current_scene.triggered_event:
@@ -164,8 +174,8 @@ async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server
             scene_manager.current_scene.window_up = False
         scene_manager.spriterenderer.render(scene_manager.current_scene.renderables())
         window.refresh()
-        done = time.monotonic()
-        elapsed_time = start - done
+        done = sdl2.SDL_GetPerformanceCounter()
+        elapsed_time = (done - start) / float(sdl2.SDL_GetPerformanceFrequency())
         scene_manager.frame_count += 1
         if scene_manager.frame_count > 60:
             scene_manager.frame_count = 0

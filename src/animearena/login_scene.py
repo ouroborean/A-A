@@ -17,6 +17,7 @@ PURPLE = sdl2.SDL_Color(255, 60, 255)
 AQUA = sdl2.SDL_Color(30, 190, 210)
 BLACK = sdl2.SDL_Color(0, 0, 0)
 WHITE = sdl2.SDL_Color(255, 255, 255)
+
 FONTSIZE = 16
 
 def play_sound(file_name: str):
