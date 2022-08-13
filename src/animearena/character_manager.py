@@ -2543,12 +2543,12 @@ class CharacterManager(collections.abc.Container):
     def update_effect_region(self):
         self.effect_region.clear()
 
-        x_offset = 27
-        y_offset = 27
-        max_columns = 4
-
+        x_offset = 31
+        if self.character_region.x > 400:
+            position_modifier = -1
+        else:
+            position_modifier = 1
         for idx, effect_cluster in enumerate(self.make_effect_clusters().items()):
-            (column, row) = (idx // max_columns, idx % max_columns)
             cluster_name, effect_set = effect_cluster
             effect_sprite = self.scene.ui_factory.from_surface(
                 sdl2.ext.BUTTON,
@@ -2563,8 +2563,8 @@ class CharacterManager(collections.abc.Container):
             effect_sprite.is_enemy = self.is_enemy()
             self.scene.active_effect_buttons.append(effect_sprite)
             self.scene.add_bordered_sprite(self.effect_region, effect_sprite,
-                                           BLACK, row * x_offset,
-                                           column * y_offset)
+                                           BLACK, idx * x_offset * position_modifier,
+                                           0)
 
     def stamp_stack_count(self, stacks: int,
                        surface: sdl2.SDL_Surface) -> sdl2.SDL_Surface:
@@ -2883,7 +2883,7 @@ class CharacterManager(collections.abc.Container):
         self.scene.full_update()
 
     def detail_click(self, _button, _sender):
-        if self.character_region.x > 400 and not self.scene.target_clicked:
+        if not self.scene.target_clicked:
             play_sound(self.scene.scene_manager.sounds["select"])
             self.scene.enemy_detail_character = self.source
             self.scene.enemy_detail_ability = None

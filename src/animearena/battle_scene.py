@@ -30,6 +30,7 @@ COOLDOWN_FONTSIZE = 80
 STACK_FONTSIZE = 25
 LARGE_STACK_FONTSIZE = 20
 HUGE_STACK_FONTSIZE = 16
+TIMER_FONTSIZE = 100
 
 def play_sound(file_name: str):
     # with importlib.resources.path('animearena.resources', file_name) as path:
@@ -121,11 +122,11 @@ class ActiveTeamDisplay():
     def __init__(self, scene: engine.Scene):
         self.scene = scene
         self.team_region = self.scene.region.subregion(x=5,
-                                                       y=120,
+                                                       y=115,
                                                        width=670,
                                                        height=390)
         self.character_regions = [
-            self.team_region.subregion(x=0, y=i * 150, width=670, height=130)
+            self.team_region.subregion(x=0, y=i * 155, width=670, height=130)
             for i in range(3)
         ]
         for region in self.character_regions:
@@ -137,7 +138,7 @@ class ActiveTeamDisplay():
         self.text_regions: list[engine.Region] = []
         self.hp_bar_regions: list[engine.Region] = []
         for region in self.character_regions:
-            self.effect_regions.append(region.subregion(-3, 124, 106, 103))
+            self.effect_regions.append(region.subregion(135, 95, 0, 25))
             self.targeting_regions.append(
                 region.subregion(x=105, y=0, width=25, height=100))
             self.text_regions.append(
@@ -170,11 +171,11 @@ class EnemyTeamDisplay():
     def __init__(self, scene: engine.Scene):
         self.scene = scene
         self.enemy_region = self.scene.region.subregion(x=795,
-                                                        y=120,
+                                                        y=140,
                                                         width=130,
                                                         height=750)
         self.enemy_regions = [
-            self.enemy_region.subregion(x=0, y=i * 150, width=130, height=230)
+            self.enemy_region.subregion(x=0, y=i * 155, width=130, height=230)
             for i in range(3)
         ]
 
@@ -182,7 +183,7 @@ class EnemyTeamDisplay():
         self.targeting_regions: list[engine.Region] = []
         self.hp_bar_regions: list[engine.Region] = []
         for region in self.enemy_regions:
-            self.effect_regions.append(region.subregion(-3, 124, 106, 103))
+            self.effect_regions.append(region.subregion(-30, 100, 0, 25))
             self.targeting_regions.append(
                 region.subregion(x=-30, y=0, width=25, height=100))
             self.hp_bar_regions.append(region.subregion(0, 100, 100, 20))
@@ -296,6 +297,7 @@ class BattleScene(engine.Scene):
         self.stack_font = init_font(STACK_FONTSIZE)
         self.large_stack_font = init_font(LARGE_STACK_FONTSIZE)
         self.huge_stack_font = init_font(HUGE_STACK_FONTSIZE)
+        self.timer_font = init_font(TIMER_FONTSIZE)
         self.selected_ability = None
         self.acting_character = None
         self.exchanging_energy = False
@@ -350,12 +352,13 @@ class BattleScene(engine.Scene):
                                                         y=5,
                                                         width=220,
                                                         height=140)
-        self.hover_effect_region = self.region.subregion(0, 0, 0, 0)
+        
         self.player_region = self.region.subregion(2, 2, 200, 100)
         self.enemy_region = self.region.subregion(698, 2, 200, 100)
-        self.game_end_region = self.region.subregion(60, 207, 781, 484)
         self.surrender_button_region = self.region.subregion(725, 625, 0, 0)
-        self.enemy_info_region = self.region.subregion(5, 560, 670, 135)
+        self.enemy_info_region = self.region.subregion(5, 578, 670, 120)
+        self.hover_effect_region = self.region.subregion(0, 0, 0, 0)
+        self.game_end_region = self.region.subregion(60, 207, 781, 484)
         self.timer_region = self.region.subregion(x=565, y=5, width=120, height=80)
 
     #region On-Click event handlers
@@ -616,7 +619,7 @@ class BattleScene(engine.Scene):
         else:
             time_left = "--"
             timer_offset = 8
-        timer_sprite = self.create_text_display(self.cooldown_font, time_left, BLACK, WHITE, timer_offset, -20, 120, 80)
+        timer_sprite = self.create_text_display(self.timer_font, time_left, BLACK, WHITE, timer_offset, -20, 120, 80)
         self.add_bordered_sprite(self.timer_region, timer_sprite, BLACK, 0, 0)
 
     def draw_enemy_info_region(self):
@@ -627,12 +630,12 @@ class BattleScene(engine.Scene):
                     self.enemy_detail_character.alt_abilities)
             width = 10 + 90 + (65 * ability_count)
             enemy_info_panel = self.sprite_factory.from_color(
-                WHITE, (width, 135))
+                WHITE, (width, 120))
             self.add_bordered_sprite(self.enemy_info_region, enemy_info_panel,
                                      BLACK, 0, 0)
         elif self.enemy_detail_character and self.enemy_detail_ability:
             enemy_info_panel = self.sprite_factory.from_color(
-                WHITE, (670, 135))
+                WHITE, (670, 120))
             self.add_bordered_sprite(self.enemy_info_region, enemy_info_panel,
                                      BLACK, 0, 0)
 
@@ -645,7 +648,7 @@ class BattleScene(engine.Scene):
                                         height=90),
                 free=True)
             self.add_bordered_sprite(self.enemy_info_region, profile_sprite,
-                                     BLACK, 5, 20)
+                                     BLACK, 5, 15)
             ability_count = 0
             for ability in self.enemy_detail_character.main_abilities:
                 ability_sprite = self.ui_factory.from_surface(
@@ -659,7 +662,7 @@ class BattleScene(engine.Scene):
                 ability_sprite.click += self.enemy_info_ability_click
                 self.add_bordered_sprite(self.enemy_info_region,
                                          ability_sprite, BLACK,
-                                         100 + (ability_count * 65), 35)
+                                         100 + (ability_count * 65), 30)
                 ability_count += 1
             for ability in self.enemy_detail_character.alt_abilities:
                 ability_sprite = self.ui_factory.from_surface(
@@ -673,7 +676,7 @@ class BattleScene(engine.Scene):
                 ability_sprite.click += self.enemy_info_ability_click
                 self.add_bordered_sprite(self.enemy_info_region,
                                          ability_sprite, BLACK,
-                                         100 + (ability_count * 65), 35)
+                                         100 + (ability_count * 65), 30)
                 ability_count += 1
 
         elif self.enemy_detail_character and self.enemy_detail_ability:
@@ -686,7 +689,7 @@ class BattleScene(engine.Scene):
                 free=True)
             profile_sprite.click += self.enemy_info_profile_click
             self.add_bordered_sprite(self.enemy_info_region, profile_sprite,
-                                     BLACK, 5, 20)
+                                     BLACK, 5, 15)
             ability_sprite = self.ui_factory.from_surface(
                 sdl2.ext.BUTTON,
                 self.get_scaled_surface(self.scene_manager.surfaces[
@@ -695,7 +698,7 @@ class BattleScene(engine.Scene):
                                         height=60),
                 free=True)
             self.add_bordered_sprite(self.enemy_info_region, ability_sprite,
-                                     BLACK, 100, 35)
+                                     BLACK, 100, 30)
             self.add_ability_details_to_enemy_info(self.enemy_detail_ability)
             ability_description = self.create_text_display(
                 self.font, self.enemy_detail_ability.name + ": " +
@@ -703,7 +706,7 @@ class BattleScene(engine.Scene):
 
             self.enemy_info_region.add_sprite(
                 ability_description, 165,
-                (135 - ability_description.size[1]) // 2)
+                (120 - ability_description.size[1]) // 2)
 
     def add_ability_details_to_enemy_info(self, ability: Ability):
         if ability.total_base_cost > 0:
@@ -732,7 +735,7 @@ class BattleScene(engine.Scene):
                                                         y=0,
                                                         width=48,
                                                         height=6)
-        self.enemy_info_region.add_sprite(cooldown_text_sprite, 105, 105)
+        self.enemy_info_region.add_sprite(cooldown_text_sprite, 105, 95)
 
     def draw_surrender_region(self):
         self.surrender_button_region.clear()
