@@ -69,6 +69,12 @@ class Scene:
     def eventables(self) -> Iterator[sdl2.ext.Sprite]:
         return self.region.eventables()
 
+    def render_text(self, font, text, color, target, x, y):
+        text = sdl2.sdlttf.TTF_RenderText_Blended(font, str.encode(text), color)
+        sdl2.surface.SDL_BlitSurface(text, None, target.surface, sdl2.SDL_Rect(x, y))
+        sdl2.SDL_FreeSurface(text)
+        return target
+
     def get_scaled_surface(self, img, width: int = 0, height: int = 0, flipped=False) -> sdl2.SDL_Surface:
         image = img
         if width != 0 or height != 0:

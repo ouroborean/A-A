@@ -97,7 +97,7 @@ class CharacterSelectScene(engine.Scene):
         #region region initialization
         
         
-        self.character_info_region = self.region.subregion(72, 170, 770, 260)
+        self.character_info_region = self.region.subregion(15, 125, 770, 260)
         self.start_match_region = self.region.subregion(685, 50, 100, 40)
         self.how_to_region = self.region.subregion(685, 90, 100, 40)
         self.player_profile_region = self.region.subregion(15, 20, 200, 100)
@@ -106,6 +106,7 @@ class CharacterSelectScene(engine.Scene):
         self.character_scroll_selection_region = self.region.subregion(15, 400, 770, 285)
         self.scroll_bar_region = self.character_scroll_selection_region.subregion(485, 2, 20, 280)
         self.filter_region = self.character_scroll_selection_region.subregion(515, 240, 0, 0)
+        self.player_profile_region = self.character_scroll_selection_region.subregion(515, 20, 0, 0)
         self.team_region = self.character_scroll_selection_region.subregion(515, 150, 245, 75)
         self.mission_region = self.region.subregion(210, 158, 0, 0)
         self.search_panel_region = self.region.subregion(144, 158, 0, 0)
@@ -113,9 +114,11 @@ class CharacterSelectScene(engine.Scene):
         #region sprite initialization
         self.banner_border = self.sprite_factory.from_color(BLACK, (179, 254))
         self.search_panel_border = self.sprite_factory.from_color(BLACK, (516, 388))
-        self.player_region_border = self.sprite_factory.from_color(BLACK, (204, 104))
+        self.character_info_panel = self.sprite_factory.from_color(DARK_GRAY, (796, 286))
+        self.character_info_panel_border = self.sprite_factory.from_color(BLACK, (800, 290))
+        self.player_region_border = self.sprite_factory.from_color(BLACK, (249, 104))
         self.info_display_border = self.sprite_factory.from_color(BLACK, (479, 149))
-        self.avatar_upload_border = self.sprite_factory.from_color(WHITE, (94, 45))
+        self.avatar_upload_border = self.sprite_factory.from_color(DARK_BLUE, (79, 44))
         self.character_select_border = self.sprite_factory.from_color(BLACK, (774, 289))
         self.scroll_button = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["scroll_wheel"]), (20, 23))
         self.scroll_button.pressed += self.click_scroll
@@ -165,8 +168,8 @@ class CharacterSelectScene(engine.Scene):
                 sdl2.ext.BUTTON,
                 self.get_scaled_surface(self.scene_manager.surfaces["right_arrow"], width = 50, height = 50), free=True)
         self.alt_arrow.click += self.alt_arrow_click
-        self.avatar = self.sprite_factory.from_surface(self.get_scaled_surface(self.player_profile, 100, 100), free=True)
-        self.avatar.border_box = self.sprite_factory.from_color(BLACK, (104, 104))
+        self.avatar = self.sprite_factory.from_surface(self.get_scaled_surface(self.player_profile, 75, 75), free=True)
+        self.avatar.border_box = self.sprite_factory.from_color(BLACK, (79, 79))
         self.team_display = [self.ui_factory.from_color(sdl2.ext.BUTTON, BLACK, (75,75)) for i in range(3)]
         for sprite in self.team_display:
             sprite.click += self.team_display_click
@@ -174,7 +177,7 @@ class CharacterSelectScene(engine.Scene):
             sprite.border_box = self.sprite_factory.from_color(BLACK, (79, 79))
         self.info_text_panel = self.create_text_display(self.font, "", BLACK,
                                                    WHITE, 5, 0, 475, 130)
-        self.player_region_panel = self.sprite_factory.from_color(WHITE, self.player_profile_region.size())
+        self.player_region_panel = self.sprite_factory.from_color(WHITE, (245, 100))
         self.lock_icon = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["lock_icon"], width=30, height=30))
         self.lock_icon.click += self.lock_filter_click
         self.lock_border = self.sprite_factory.from_color(RED, (34, 34))
@@ -225,7 +228,6 @@ class CharacterSelectScene(engine.Scene):
             self.render_main_character_info()
         self.render_tutorial_button()
         self.render_start_button()
-        self.render_player_profile()
         self.render_character_scroll_selection()
         self.render_search_panel()
         gc.collect()
@@ -281,28 +283,17 @@ class CharacterSelectScene(engine.Scene):
         
         self.add_sprite_with_border(self.player_profile_region, self.player_region_panel, self.player_region_border, 0, 0)
         
-        
-
-        self.player_profile_region.add_sprite(self.nametag, 105, 4)
-        self.player_profile_region.add_sprite(self.wintag, 105, 38)
-        self.player_profile_region.add_sprite(self.losstag, 105, 72)
-        self.medaltag = self.create_text_display(self.font, f"Medals: {self.player.medals}", BLACK, WHITE, 12, 3, 95)
-        self.medal_tag_border = self.sprite_factory.from_color(BLACK, (self.medaltag.size[0] + 4, self.medaltag.size[1] + 4))
-        
-        self.add_sprite_with_border(self.player_profile_region, self.medaltag, self.medal_tag_border, 103, 110)
-        
-        
 
         self.player_profile_lock.acquire()
         if self.player_profile == None:
             self.player_profile = self.scene_manager.surfaces["default_prof"]
 
-        self.avatar.surface = self.get_scaled_surface(self.player_profile)
+        self.avatar.surface = self.get_scaled_surface(self.player_profile, 75, 75)
         
         self.add_sprite_with_border(self.player_profile_region, self.avatar, self.avatar.border_box, 0, 0)
-        upload_button = self.create_text_display(self.font, "Upload Avatar", WHITE, BLACK, 20, 0, 90)
+        upload_button = self.create_text_display(self.font, "Upload Avatar", WHITE, BLACK, 12, 1, 75)
         upload_button.click += self.avatar_upload_click
-        self.add_sprite_with_border(self.player_profile_region, upload_button, self.avatar_upload_border, 5, 104)
+        self.add_sprite_with_border(self.player_profile_region, upload_button, self.avatar_upload_border, 0, 79)
         self.player_profile_lock.release()
 
     def render_main_character_info(self):
@@ -328,7 +319,7 @@ class CharacterSelectScene(engine.Scene):
                                                   y=5)
 
         if self.display_character.alt_abilities:
-            self.character_info_region.add_sprite(self.alt_arrow, 670, 17)
+            self.character_info_region.add_sprite(self.alt_arrow, 670, 35)
 
         self.add_sprite_with_border(self.character_info_region, self.detail_target.char_select_desc, self.info_display_border, 180, 110)
         
@@ -362,7 +353,7 @@ class CharacterSelectScene(engine.Scene):
             sdl2.ext.BUTTON,
             self.get_scaled_surface(self.scene_manager.surfaces["left_arrow"], width = 50, height = 50), free=True)
         main_arrow.click += self.main_arrow_click
-        self.character_info_region.add_sprite(main_arrow, 670, 17)
+        self.character_info_region.add_sprite(main_arrow, 670, 35)
 
         if type(self.detail_target) == Ability:
             text = self.detail_target.name + ": " + self.detail_target.desc
@@ -479,6 +470,7 @@ class CharacterSelectScene(engine.Scene):
         self.scroll_bar_region.add_sprite(scroll_bar, 0, 0)
         self.render_filter_options()
         self.render_team_display()
+        self.render_player_profile()
         if self.scrolling:
             self.scroll_bar_y = self.scene_manager.mouse_y - 402 - self.scroll_button.click_offset
             if self.scroll_bar_y > (280 - self.scroll_button.size[1]):
@@ -570,6 +562,7 @@ class CharacterSelectScene(engine.Scene):
         self.scroll_bar_region.add_sprite(scroll_bar, 0, 0)
         self.render_team_display()
         self.render_filter_options()
+        self.render_player_profile()
         if self.scrolling:
             self.scroll_bar_y = self.scene_manager.mouse_y - 402 - self.scroll_button.click_offset
             if self.scroll_bar_y > (280 - self.scroll_button.size[1]):
@@ -655,7 +648,7 @@ class CharacterSelectScene(engine.Scene):
 
     def char_select_press(self, button, _sender):
         if hasattr(button, "character") and button.character and not self.window_up:
-            if not button.character.selected and self.player.missions[button.character.name][5]:
+            if not get_character_db()[button.character.name].selected and self.player.missions[button.character.name][5]:
                 self.char_select_pressed = True
                 self.drag_offset = self.get_click_coordinates(button)
                 self.dragging_character = button.character.name
@@ -680,8 +673,6 @@ class CharacterSelectScene(engine.Scene):
             character.selected = True
             self.selected_team.append(character)
             self.team_display[len(self.selected_team) - 1].character = character
-        else:
-            self.team_display[len(self.selected_team)].character = None
         
         self.drag_offset = (0, 0)
         self.dragging_picture = False
@@ -845,7 +836,7 @@ class CharacterSelectScene(engine.Scene):
             self.removing_from_team = False    
             for character in self.selected_team:
                 if character.name == self.dragging_character:
-                    character.selected = False
+                    get_character_db()[character.name].selected = False
                     self.selected_team.remove(character)
                     
         self.render_team_display()
@@ -911,9 +902,7 @@ class CharacterSelectScene(engine.Scene):
         self.player_losses = losses
         self.player_medals = medals
         reset_character_db()
-        self.nametag = self.create_text_display(self.font, self.player_name, BLACK, WHITE, 0, 0, 95)
-        self.wintag = self.create_text_display(self.font, f"Wins: {self.player_wins}", BLACK, WHITE, 0, 0, 95)
-        self.losstag = self.create_text_display(self.font, f"Losses: {self.player_losses}", BLACK, WHITE, 0, 0, 95)
+        
         if ava_code:
             
             new_image = pickle.loads(ava_code)
@@ -921,6 +910,17 @@ class CharacterSelectScene(engine.Scene):
             self.player_profile = Image.frombytes(mode = new_image["mode"], size = new_image["size"], data=new_image["pixels"])
         
         self.player = Player(self.player_name, self.player_wins, self.player_losses, self.player_profile, mission_data, self.player_medals, missions_complete=mission_complete)
+        self.player_region_panel = self.sprite_factory.from_color(WHITE, (245, 100))
+        sdl2.sdlttf.TTF_SetFontStyle(self.font, sdl2.sdlttf.TTF_STYLE_BOLD)
+        self.render_text(self.font, self.player.name, DARK_RED, self.player_region_panel, 80, 2)
+        self.render_text(self.font, "Wins: ", BLACK, self.player_region_panel, 80, 20)
+        self.render_text(self.font, "Losses: ", BLACK, self.player_region_panel, 80, 36)
+        self.render_text(self.font, "Medals: ", BLACK, self.player_region_panel, 80, 52)
+        sdl2.sdlttf.TTF_SetFontStyle(self.font, sdl2.sdlttf.TTF_STYLE_NORMAL)
+        
+        self.render_text(self.font, str(self.player.wins), BLACK, self.player_region_panel, 145, 20)
+        self.render_text(self.font, str(self.player.losses), BLACK, self.player_region_panel, 145, 36)
+        self.render_text(self.font, str(self.player.medals), BLACK, self.player_region_panel, 145, 52)
         
         self.full_render()
 

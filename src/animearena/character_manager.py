@@ -70,6 +70,10 @@ class CharacterManager(collections.abc.Container):
         self.received_ability = list()
         self.current_targets = list()
         self.primary_target = None
+        self.used_slot = self.scene.ui_factory.from_surface(sdl2.ext.BUTTON, self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["used_slot"], 80, 80))
+        self.used_slot.border = self.scene.sprite_factory.from_color(BLACK, (84, 84))
+        self.used_slot.click += self.used_slot_click
+        self.used_slot.ability = None
 
     def __contains__(self, __x: Tuple[EffectType, str]) -> bool:
         for eff in self.source.current_effects:
@@ -2617,21 +2621,21 @@ class CharacterManager(collections.abc.Container):
             self.scene.cooldown_font, str.encode(f"{cooldown}"), WHITE)
         
         sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
-                                     sdl2.SDL_Rect(23, -18, 0, 0))
+                                     sdl2.SDL_Rect(20, -15, 0, 0))
         sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
-                                     sdl2.SDL_Rect(25, -18, 0, 0))
+                                     sdl2.SDL_Rect(22, -15, 0, 0))
         sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
-                                     sdl2.SDL_Rect(27, -18, 0, 0))
+                                     sdl2.SDL_Rect(24, -15, 0, 0))
         sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
-                                     sdl2.SDL_Rect(23, -20, 0, 0))
+                                     sdl2.SDL_Rect(20, -17, 0, 0))
         sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
-                                     sdl2.SDL_Rect(27, -20, 0, 0))
+                                     sdl2.SDL_Rect(24, -17, 0, 0))
         sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
-                                     sdl2.SDL_Rect(23, -22, 0, 0))
+                                     sdl2.SDL_Rect(20, -19, 0, 0))
         sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
-                                     sdl2.SDL_Rect(25, -22, 0, 0))
+                                     sdl2.SDL_Rect(22, -19, 0, 0))
         sdl2.surface.SDL_BlitSurface(text_border_surface, None, surface,
-                                     sdl2.SDL_Rect(27, -22, 0, 0))
+                                     sdl2.SDL_Rect(24, -19, 0, 0))
         
         
         sdl2.surface.SDL_BlitSurface(text_surface, None, surface,
@@ -2750,7 +2754,6 @@ class CharacterManager(collections.abc.Container):
         self.update_ability()
         self.adjust_ability_costs()
         self.update_targeted_sprites()
-        self.update_text()
         self.update_effect_region()
         self.draw_hp_bar()
 
@@ -2813,9 +2816,9 @@ class CharacterManager(collections.abc.Container):
             self.scene.sprite_factory.from_surface(
                 self.scene.get_scaled_surface(
                     self.scene.scene_manager.surfaces["banner"],
-                    width=640,
-                    height=150),
-                free=True), 100, -27)
+                    width=520,
+                    height=160),
+                free=True), 100, -23)
         self.profile_sprite.surface = self.scene.get_scaled_surface(
             self.scene.scene_manager.surfaces[self.source.name + "allyprof"])
         self.check_profile_swaps()
@@ -2853,13 +2856,25 @@ class CharacterManager(collections.abc.Container):
     def target_sprite_click(self, button, _sender):
         play_sound(self.scene.scene_manager.sounds["undo"])
         self.scene.remove_targets(self.received_ability[button.idx])
+        
+    
+    def used_slot_click(self, button, _sender):
+        if self.used_slot.ability != None:
+            self.scene.remove_targets(self.used_slot.ability)
+            self.set_used_slot_to_none()
+
+    def set_used_slot_to_none(self):
+        logging.debug("Set %s's used slot to none", self.source.name)
+        self.used_slot.ability = None
 
     def profile_click(self, _button, _sender):
         if self.scene.selected_ability is not None and self.targeted:
+            
             play_sound(self.scene.scene_manager.sounds["select"])
             self.scene.target_clicked = True
             self.scene.expend_energy(self.scene.selected_ability)
             self.scene.apply_targeting(self)
+            
             self.scene.return_targeting_to_default()
         self.scene.full_update()
 
@@ -2919,30 +2934,41 @@ class CharacterManager(collections.abc.Container):
 
         self.check_ability_swaps()
         self.adjust_targeting_types()
-
+        if self.used_slot.ability != None:
+            logging.debug("%s used slot should show up as %s", self.source.name, self.used_slot.ability.name)
+            surface = self.scene.get_scaled_surface(self.scene.scene_manager.surfaces[self.used_slot.ability.db_name], 80, 80)
+        else:
+            logging.debug("%s used slot should show up as nothing")
+            surface = self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["used_slot"], 80, 80)
+        
+        self.used_slot.surface = surface
+        self.character_region.add_sprite(self.used_slot.border, 118, -2)
+        self.character_region.add_sprite(self.used_slot, 120, 0)
+        
         for i, button in enumerate(self.current_ability_sprites):
             self.scene.add_sprite_with_border(self.character_region, button,
-                                              button.border, 150 + (i * 140),
+                                              button.border, 225 + (i * 90),
                                               0)
-
+            
+            
             if self.scene.selected_ability and button.ability.name == self.scene.selected_ability.name:
                 self.character_region.add_sprite(button.selected_pane,
-                                                 150 + (i * 140), 0)
+                                                 225 + (i * 90), 0)
             else:
                 if not button.ability.can_use(self.scene, self) or self.acted or not self.is_controllable():
                     if button.ability.cooldown_remaining > 0:
                         button.null_pane.surface = self.scene.get_scaled_surface(
-                            self.scene.scene_manager.surfaces["locked"])
+                            self.scene.scene_manager.surfaces["locked"], 80, 80)
                         button.null_pane.surface = self.stamp_cooldown(
                             button.ability.cooldown_remaining,
                             button.null_pane.surface)
                         self.character_region.add_sprite(
-                            button.null_pane, 150 + (i * 140), 0)
+                            button.null_pane, 225 + (i * 90), 0)
                     else:
                         button.null_pane.surface = self.scene.get_scaled_surface(
-                            self.scene.scene_manager.surfaces["locked"])
+                            self.scene.scene_manager.surfaces["locked"], 80, 80)
                         self.character_region.add_sprite(
-                            button.null_pane, 150 + (i * 140), 0)
+                            button.null_pane, 225 + (i * 90), 0)
 
 
 

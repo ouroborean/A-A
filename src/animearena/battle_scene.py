@@ -26,7 +26,7 @@ if typing.TYPE_CHECKING:
     from animearena.scene_manager import SceneManager
 
 FONTSIZE = 16
-COOLDOWN_FONTSIZE = 100
+COOLDOWN_FONTSIZE = 80
 STACK_FONTSIZE = 25
 LARGE_STACK_FONTSIZE = 20
 HUGE_STACK_FONTSIZE = 16
@@ -121,17 +121,17 @@ class ActiveTeamDisplay():
     def __init__(self, scene: engine.Scene):
         self.scene = scene
         self.team_region = self.scene.region.subregion(x=5,
-                                                       y=108,
+                                                       y=150,
                                                        width=670,
                                                        height=750)
         self.character_regions = [
-            self.team_region.subregion(x=0, y=i * 250, width=670, height=230)
+            self.team_region.subregion(x=0, y=i * 170, width=670, height=130)
             for i in range(3)
         ]
         for region in self.character_regions:
             region.add_sprite(
                 self.scene.get_scaled_surface(
-                    self.scene.scene_manager.surfaces["banner"]), 0, 0)
+                    self.scene.scene_manager.surfaces["banner"]), 5, 5)
         self.effect_regions: list[engine.Region] = []
         self.targeting_regions: list[engine.Region] = []
         self.text_regions: list[engine.Region] = []
@@ -170,11 +170,11 @@ class EnemyTeamDisplay():
     def __init__(self, scene: engine.Scene):
         self.scene = scene
         self.enemy_region = self.scene.region.subregion(x=795,
-                                                        y=108,
+                                                        y=150,
                                                         width=130,
                                                         height=750)
         self.enemy_regions = [
-            self.enemy_region.subregion(x=0, y=i * 250, width=130, height=230)
+            self.enemy_region.subregion(x=0, y=i * 170, width=130, height=230)
             for i in range(3)
         ]
 
@@ -2229,14 +2229,14 @@ class BattleScene(engine.Scene):
                     self.ui_factory.from_surface(
                         sdl2.ext.BUTTON,
                         self.get_scaled_surface(self.scene_manager.surfaces[
-                            char_manager.source.main_abilities[j].db_name]))
+                            char_manager.source.main_abilities[j].db_name], 80, 80))
                     for j in range(4)
                 ]
                 for j, sprite in enumerate(char_manager.main_ability_sprites):
                     sprite.selected_pane = self.ui_factory.from_surface(
                         sdl2.ext.BUTTON,
                         self.get_scaled_surface(
-                            self.scene_manager.surfaces["selected"]),
+                            self.scene_manager.surfaces["selected"], 80, 80),
                         free=True)
                     sprite.ability = char_manager.source.main_abilities[j]
                     char_manager.source.main_abilities[
@@ -2244,7 +2244,7 @@ class BattleScene(engine.Scene):
                     sprite.null_pane = self.ui_factory.from_surface(
                         sdl2.ext.BUTTON,
                         self.get_scaled_surface(
-                            self.scene_manager.surfaces["locked"]),
+                            self.scene_manager.surfaces["locked"], 80, 80),
                         free=True)
                     sprite.null_pane.ability = char_manager.source.main_abilities[
                         j]
@@ -2255,28 +2255,28 @@ class BattleScene(engine.Scene):
                     sprite.null_pane.text_border = self.ui_factory.from_color(
                         sdl2.ext.BUTTON, BLACK, (524, 129))
                     sprite.border = self.ui_factory.from_color(
-                        sdl2.ext.BUTTON, BLACK, (104, 104))
+                        sdl2.ext.BUTTON, BLACK, (84, 84))
                     sprite.click += char_manager.set_selected_ability
 
                 char_manager.alt_ability_sprites = [
                     self.ui_factory.from_surface(
                         sdl2.ext.BUTTON,
                         self.get_scaled_surface(self.scene_manager.surfaces[
-                            char_manager.source.alt_abilities[j].db_name]))
+                            char_manager.source.alt_abilities[j].db_name], 80, 80))
                     for j in range(len(char_manager.source.alt_abilities))
                 ]
                 for j, sprite in enumerate(char_manager.alt_ability_sprites):
                     sprite.selected_pane = self.ui_factory.from_surface(
                         sdl2.ext.BUTTON,
                         self.get_scaled_surface(
-                            self.scene_manager.surfaces["selected"]),
+                            self.scene_manager.surfaces["selected"], 80, 80),
                         free=True)
                     sprite.ability = char_manager.source.alt_abilities[j]
                     char_manager.source.alt_abilities[j].cooldown_remaining = 0
                     sprite.null_pane = self.ui_factory.from_surface(
                         sdl2.ext.BUTTON,
                         self.get_scaled_surface(
-                            self.scene_manager.surfaces["locked"]),
+                            self.scene_manager.surfaces["locked"], 80, 80),
                         free=True)
                     sprite.null_pane.ability = char_manager.source.main_abilities[
                         j]
@@ -2287,7 +2287,7 @@ class BattleScene(engine.Scene):
                     sprite.null_pane.text_border = self.ui_factory.from_color(
                         sdl2.ext.BUTTON, BLACK, (524, 129))
                     sprite.border = self.ui_factory.from_color(
-                        sdl2.ext.BUTTON, BLACK, (104, 104))
+                        sdl2.ext.BUTTON, BLACK, (84, 84))
                     sprite.click += char_manager.set_selected_ability
 
                 char_manager.current_ability_sprites = [
@@ -2403,6 +2403,7 @@ class BattleScene(engine.Scene):
         self.acting_character.primary_target = primary_target
         self.selected_ability.user = self.acting_character
         self.acting_character.used_ability = self.selected_ability
+        self.acting_character.used_slot.ability = self.selected_ability
         self.acting_order.append(self.acting_character)
         self.selected_ability = None
         self.acting_character.acted = True
@@ -2457,6 +2458,7 @@ class BattleScene(engine.Scene):
             if manager.received_ability.count(ability):
                 manager.received_ability.remove(ability)
         if ability.user is not None:
+            ability.user.set_used_slot_to_none()
             ability.user.acted = False
             ability.user.used_ability = None
             self.acting_order.remove(ability.user)
