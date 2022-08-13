@@ -121,11 +121,11 @@ class ActiveTeamDisplay():
     def __init__(self, scene: engine.Scene):
         self.scene = scene
         self.team_region = self.scene.region.subregion(x=5,
-                                                       y=150,
+                                                       y=120,
                                                        width=670,
-                                                       height=750)
+                                                       height=390)
         self.character_regions = [
-            self.team_region.subregion(x=0, y=i * 170, width=670, height=130)
+            self.team_region.subregion(x=0, y=i * 150, width=670, height=130)
             for i in range(3)
         ]
         for region in self.character_regions:
@@ -170,11 +170,11 @@ class EnemyTeamDisplay():
     def __init__(self, scene: engine.Scene):
         self.scene = scene
         self.enemy_region = self.scene.region.subregion(x=795,
-                                                        y=150,
+                                                        y=120,
                                                         width=130,
                                                         height=750)
         self.enemy_regions = [
-            self.enemy_region.subregion(x=0, y=i * 170, width=130, height=230)
+            self.enemy_region.subregion(x=0, y=i * 150, width=130, height=230)
             for i in range(3)
         ]
 
@@ -354,8 +354,8 @@ class BattleScene(engine.Scene):
         self.player_region = self.region.subregion(2, 2, 200, 100)
         self.enemy_region = self.region.subregion(698, 2, 200, 100)
         self.game_end_region = self.region.subregion(60, 207, 781, 484)
-        self.surrender_button_region = self.region.subregion(725, 925, 0, 0)
-        self.enemy_info_region = self.region.subregion(5, 860, 670, 135)
+        self.surrender_button_region = self.region.subregion(725, 625, 0, 0)
+        self.enemy_info_region = self.region.subregion(5, 560, 670, 135)
         self.timer_region = self.region.subregion(x=565, y=5, width=120, height=80)
 
     #region On-Click event handlers
@@ -363,6 +363,10 @@ class BattleScene(engine.Scene):
     def enemy_info_profile_click(self, button, sender):
         play_sound(self.scene_manager.sounds["click"])
         self.enemy_detail_ability = None
+        self.draw_enemy_info_region()
+
+    def draw_ability_info(self, ability):
+        self.enemy_detail_ability = ability
         self.draw_enemy_info_region()
 
     def enemy_info_ability_click(self, button, sender):

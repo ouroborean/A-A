@@ -2739,6 +2739,7 @@ class CharacterManager(collections.abc.Container):
         self.targeted = False
         for ability in self.source.current_abilities:
             ability.reset_cooldown()
+        self.set_used_slot_to_none()
         if self.scene.player:
             if enemy:
                 self.update_limited()
@@ -2876,6 +2877,9 @@ class CharacterManager(collections.abc.Container):
             self.scene.apply_targeting(self)
             
             self.scene.return_targeting_to_default()
+        else:
+            self.scene.enemy_detail_ability = None
+            self.scene.enemy_detail_character = self.source
         self.scene.full_update()
 
     def detail_click(self, _button, _sender):
@@ -2891,6 +2895,8 @@ class CharacterManager(collections.abc.Container):
             self.selected_ability = button.ability
             self.selected_button = button
             self.scene.reset_targeting()
+            self.scene.enemy_detail_character = self.source
+            self.scene.enemy_detail_ability = button.ability
             if button.ability.can_use(self.scene, self) and not self.acted:
                 self.scene.selected_ability = button.ability
                 self.scene.acting_character = self
@@ -2935,25 +2941,23 @@ class CharacterManager(collections.abc.Container):
         self.check_ability_swaps()
         self.adjust_targeting_types()
         if self.used_slot.ability != None:
-            logging.debug("%s used slot should show up as %s", self.source.name, self.used_slot.ability.name)
             surface = self.scene.get_scaled_surface(self.scene.scene_manager.surfaces[self.used_slot.ability.db_name], 80, 80)
         else:
-            logging.debug("%s used slot should show up as nothing")
             surface = self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["used_slot"], 80, 80)
         
         self.used_slot.surface = surface
-        self.character_region.add_sprite(self.used_slot.border, 118, -2)
-        self.character_region.add_sprite(self.used_slot, 120, 0)
+        self.character_region.add_sprite(self.used_slot.border, 133, -2)
+        self.character_region.add_sprite(self.used_slot, 135, 0)
         
         for i, button in enumerate(self.current_ability_sprites):
             self.scene.add_sprite_with_border(self.character_region, button,
-                                              button.border, 225 + (i * 90),
+                                              button.border, 240 + (i * 90),
                                               0)
             
             
             if self.scene.selected_ability and button.ability.name == self.scene.selected_ability.name:
                 self.character_region.add_sprite(button.selected_pane,
-                                                 225 + (i * 90), 0)
+                                                 240 + (i * 90), 0)
             else:
                 if not button.ability.can_use(self.scene, self) or self.acted or not self.is_controllable():
                     if button.ability.cooldown_remaining > 0:
@@ -2963,12 +2967,12 @@ class CharacterManager(collections.abc.Container):
                             button.ability.cooldown_remaining,
                             button.null_pane.surface)
                         self.character_region.add_sprite(
-                            button.null_pane, 225 + (i * 90), 0)
+                            button.null_pane, 240 + (i * 90), 0)
                     else:
                         button.null_pane.surface = self.scene.get_scaled_surface(
                             self.scene.scene_manager.surfaces["locked"], 80, 80)
                         self.character_region.add_sprite(
-                            button.null_pane, 225 + (i * 90), 0)
+                            button.null_pane, 240 + (i * 90), 0)
 
 
 

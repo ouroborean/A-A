@@ -164,7 +164,7 @@ class SceneManager:
 
     def start_battle(self, player_team, enemy_team, player, enemy, energy, seed):
         self.play_sound(self.sounds["game_start"])
-        self.change_window_size(900, 1000)
+        self.change_window_size(900, 700)
         self.battle_scene.setup_scene(player_team, enemy_team, player, enemy, energy, seed)
         self.set_scene_to_current(self.battle_scene)
 
