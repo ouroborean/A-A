@@ -132,7 +132,7 @@ class SceneManager:
     def update_mouse_position(self, x: int, y: int):
         self.mouse_x = x
         self.mouse_y = y
-w 
+
     def initialize_scenes(self):
         self.char_select = make_character_select_scene(self)
         self.battle_scene = make_battle_scene(self)

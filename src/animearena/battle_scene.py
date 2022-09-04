@@ -463,14 +463,14 @@ class BattleScene(engine.Scene):
             self.return_targeting_to_default()
             self.full_update()
 
-            if self.round_any_cost == 0:
-                play_sound(self.scene_manager.sounds["turnend"])
-                self.execution_loop()
-                self.turn_end()
-            else:
-                self.window_up = True
-                self.turn_end_region.clear()
-                self.draw_any_cost_expenditure_window()
+            # if self.round_any_cost == 0:
+            #     play_sound(self.scene_manager.sounds["turnend"])
+            #     self.execution_loop()
+            #     self.turn_end()
+            # else:
+            self.window_up = True
+            self.turn_end_region.clear()
+            self.draw_any_cost_expenditure_window()
 
     def exchange_accept_click(self, button, sender):
         self.has_exchanged = True
