@@ -493,7 +493,7 @@ class CharacterManager(collections.abc.Container):
                 eff.user.progress_mission(2, 1)
         if eff.name == "Fire Dragon's Sword Horn":
             if self.final_can_effect("BYPASS"):
-                eff.user.deal_eff_damage(eff.mag, self, eff, DamageType.AFFLICTION)
+                eff.user.deal_eff_damage(eff.mag * 10, self, eff, DamageType.AFFLICTION)
         if eff.name == "Decaying Touch":
             if self.final_can_effect(eff.user.check_bypass_effects()):
                 eff.user.deal_eff_damage((10 * (2**eff.mag)), self, eff, DamageType.AFFLICTION)
