@@ -203,7 +203,7 @@ class ConnectionHandler:
             length = buffer.read_int()
             ava_code = bytes(buffer.read_bytes(length))
     
-        self.scene_manager.login(self.scene_manager.login_scene.username_box.text, wins, losses, medals, mission_data, ava_code)
+        self.scene_manager.login(self.scene_manager.username_raw, wins, losses, medals, mission_data, ava_code)
 
         buffer.clear()
 

@@ -19,6 +19,7 @@ from animearena.color import *
 from playsound import playsound
 import logging
 import math
+import sys
 
 if TYPE_CHECKING:
     from animearena.scene_manager import SceneManager
@@ -97,9 +98,9 @@ class CharacterSelectScene(engine.Scene):
         #region region initialization
         
         
-        self.character_info_region = self.region.subregion(15, 125, 770, 260)
-        self.start_match_region = self.region.subregion(685, 50, 100, 40)
-        self.how_to_region = self.region.subregion(685, 90, 100, 40)
+        self.character_info_region = self.region.subregion(15, 15, 770, 260)
+        self.start_match_region = self.region.subregion(15, 355, 100, 40)
+        self.how_to_region = self.region.subregion(120, 355, 100, 40)
         self.player_profile_region = self.region.subregion(15, 20, 200, 100)
         
         self.character_select_region = self.region.subregion(15, 400, 770, 285)
@@ -664,15 +665,18 @@ class CharacterSelectScene(engine.Scene):
         self.scrolling = True
         button.click_offset = self.get_click_coordinates(button)[1]
 
+    def add_character(self, char):
+        character = get_character_db()[char]
+        character.selected = True
+        self.selected_team.append(character)
+        self.team_display[len(self.selected_team) - 1].character = character
+
     def resolve_drag_release(self):
         
         selected = self.is_dropping_to_selected()
         
         if selected and len(self.selected_team) < 3:
-            character = get_character_db()[self.dragging_character]
-            character.selected = True
-            self.selected_team.append(character)
-            self.team_display[len(self.selected_team) - 1].character = character
+            self.add_character(self.dragging_character)
         
         self.drag_offset = (0, 0)
         self.dragging_picture = False
@@ -856,17 +860,20 @@ class CharacterSelectScene(engine.Scene):
 
     def start_click(self, _button, _sender):
         if not self.clicked_search and self.scene_manager.connected and not self.window_up:
-            play_sound(self.scene_manager.sounds["page"])
-            self.clicked_search = True
-            names = [x.name for x in self.selected_team]
-            image = {"mode": self.player_profile.mode, "size": self.player_profile.size, "pixels": self.player_profile.tobytes()}
-            player_pouch = [self.player_name, self.player_wins, self.player_losses, image["mode"], image["size"], image["pixels"]]
-            self.scene_manager.connection.send_start_package(names, player_pouch)
-            self.window_up = True
-            self.render_search_panel()
+            self.start_searching()
 
     #endregion
 
+    def start_searching(self):
+        play_sound(self.scene_manager.sounds["page"])
+        self.clicked_search = True
+        names = [x.name for x in self.selected_team]
+        image = {"mode": self.player_profile.mode, "size": self.player_profile.size, "pixels": self.player_profile.tobytes()}
+        player_pouch = [self.player_name, self.player_wins, self.player_losses, image["mode"], image["size"], image["pixels"]]
+        self.scene_manager.connection.send_start_package(names, player_pouch)
+        self.window_up = True
+        self.render_search_panel()
+    
     def get_filtered_characters_list(self) -> list[Character]:
         if not self.unlock_filtering:
             filtered_characters = list(get_character_db().values())
@@ -895,6 +902,7 @@ class CharacterSelectScene(engine.Scene):
         
            Called by Scene Manager to move from Login Scene or In-Game Scene to
            Character Select Scene"""
+        logging.debug("Settling in Character Select!")
         self.clicked_search = False
         self.window_up = False
         self.player_name = username
@@ -913,14 +921,19 @@ class CharacterSelectScene(engine.Scene):
         self.player_region_panel = self.sprite_factory.from_color(WHITE, (245, 100))
         sdl2.sdlttf.TTF_SetFontStyle(self.font, sdl2.sdlttf.TTF_STYLE_BOLD)
         self.render_text(self.font, self.player.name, DARK_RED, self.player_region_panel, 80, 2)
-        self.render_text(self.font, "Wins: ", BLACK, self.player_region_panel, 80, 20)
-        self.render_text(self.font, "Losses: ", BLACK, self.player_region_panel, 80, 36)
-        self.render_text(self.font, "Medals: ", BLACK, self.player_region_panel, 80, 52)
+        self.render_text(self.font, "Wins: ", BLACK, self.player_region_panel, 80, 31)
+        self.render_text(self.font, "Losses: ", BLACK, self.player_region_panel, 80, 47)
+        self.render_text(self.font, "Medals: ", BLACK, self.player_region_panel, 80, 63)
+        self.render_text(self.font, "Clan: ", BLACK, self.player_region_panel, 80, 79)
         sdl2.sdlttf.TTF_SetFontStyle(self.font, sdl2.sdlttf.TTF_STYLE_NORMAL)
         
-        self.render_text(self.font, str(self.player.wins), BLACK, self.player_region_panel, 145, 20)
-        self.render_text(self.font, str(self.player.losses), BLACK, self.player_region_panel, 145, 36)
-        self.render_text(self.font, str(self.player.medals), BLACK, self.player_region_panel, 145, 52)
+        self.render_text(self.font, str(self.player.wins), BLACK, self.player_region_panel, 145, 31)
+        self.render_text(self.font, str(self.player.losses), BLACK, self.player_region_panel, 145, 47)
+        self.render_text(self.font, str(self.player.medals), BLACK, self.player_region_panel, 145, 63)
+        self.render_text(self.font, "None", BLACK, self.player_region_panel, 145, 79)
+        
+        
+        
         
         self.full_render()
 

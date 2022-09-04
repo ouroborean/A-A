@@ -10,6 +10,7 @@ from animearena.battle_scene import BattleScene, make_battle_scene
 from animearena.login_scene import LoginScene, make_login_scene
 from animearena.tutorial_scene import TutorialScene, make_tutorial_scene
 from playsound import playsound
+import sys
 
 if typing.TYPE_CHECKING:
     from animearena.client import ConnectionHandler
@@ -131,7 +132,7 @@ class SceneManager:
     def update_mouse_position(self, x: int, y: int):
         self.mouse_x = x
         self.mouse_y = y
-
+w 
     def initialize_scenes(self):
         self.char_select = make_character_select_scene(self)
         self.battle_scene = make_battle_scene(self)
@@ -149,6 +150,12 @@ class SceneManager:
         self.play_sound(self.sounds["login"])
         self.set_scene_to_current(self.char_select)
         self.char_select.settle_player(username, wins, losses, medals, mission_data, ava_code)
+        if len(sys.argv) > 3:
+            self.char_select.add_character(sys.argv[3])
+            self.char_select.add_character(sys.argv[4])
+            self.char_select.add_character(sys.argv[5])
+            self.char_select.start_searching()
+            self.char_select.full_render()
 
     def package_mission_data(self, mission_data) -> str:
         mission_strings = []

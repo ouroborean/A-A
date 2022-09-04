@@ -15,7 +15,7 @@ from animearena.byte_buffer import ByteBuffer
 from animearena.scene_manager import SceneManager
 from pydub import AudioSegment
 from pydub.playback import play
-
+import sys
 
 
 WHITE = sdl2.SDL_Color(255, 255, 255)
@@ -43,7 +43,7 @@ def main():
     
     
     with SceneManager(window) as scene_manager:
-    
+        
         cm = client.ConnectionHandler(scene_manager)
         
         scene_manager.bind_connection(cm)
@@ -69,6 +69,7 @@ async def server_loop(scene_manager: SceneManager):
     VERSION_CHECKED = False
     cancelled = False
     timeouts = 0
+    auto_join = False
     while not scene_manager.connected:
         try:
             #34.125.127.187
@@ -90,6 +91,12 @@ async def server_loop(scene_manager: SceneManager):
         #     print("Checking version")
         #     scene_manager.connection.send_version_request()
         #     VERSION_CHECKED = True
+        if len(sys.argv) > 1 and not auto_join:
+            logging.debug("Auto-joining!")
+            scene_manager.username_raw = sys.argv[1]
+            scene_manager.password_raw = sys.argv[2]
+            scene_manager.connection.request_login_nonce()
+            auto_join = True
         try:
             data = await reader.readuntil(b'\x1f\x1f\x1f')
         except CancelledError:
@@ -114,6 +121,7 @@ async def server_loop(scene_manager: SceneManager):
 async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server_loop_task):
     running = True
     tasktask = asyncio.create_task(server_loop_task)
+
     while running:
         start = sdl2.SDL_GetPerformanceCounter()
         scene_manager.reset_event_trigger()
