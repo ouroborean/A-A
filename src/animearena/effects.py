@@ -69,6 +69,7 @@ class EffectType(enum.IntEnum):
     SPECIFIC_STUN = 51
     COUNTER_USE = 52
 
+CONT_TYPES = [EffectType.CONT_DMG, EffectType.CONT_HEAL, EffectType.CONT_AFF_DMG, EffectType.CONT_PIERCE_DMG, EffectType.CONT_UNIQUE, EffectType.CONT_DEST_DEF]
 
 class Effect:
     eff_type: EffectType
@@ -146,6 +147,9 @@ class Effect:
 
     def tick_duration(self):
         self.duration -= 1
+
+    def continuous(self):
+        return self.eff_type in CONT_TYPES
 
     def alter_mag(self, mod: int, max: int = 0):
         self.mag = self.mag + mod

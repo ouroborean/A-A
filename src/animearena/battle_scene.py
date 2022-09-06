@@ -235,6 +235,7 @@ class BattleScene(engine.Scene):
     enemy: Player
     dying_to_doping: bool
     sharingan_reflecting: bool
+    execution_order: list[int]
     sharingan_reflector: Optional["CharacterManager"]
     sharingan_reflected_effects: list[Effect]
     sharingan_reflected_effect_ticking: bool
@@ -275,6 +276,7 @@ class BattleScene(engine.Scene):
         self.window_closing = False
         self.waiting_for_turn = True
         self.first_turn = True
+        self.execution_order = list()
         self.acting_order = list()
         self.target_clicked = False
         self.sharingan_reflecting = False
@@ -348,10 +350,10 @@ class BattleScene(engine.Scene):
                                                      y=5,
                                                      width=150,
                                                      height=200)
-        self.turn_expend_region = self.region.subregion(x=335,
-                                                        y=5,
-                                                        width=220,
-                                                        height=140)
+        self.turn_expend_region = self.region.subregion(x=250,
+                                                        y=225,
+                                                        width=400,
+                                                        height=250)
         
         self.player_region = self.region.subregion(2, 2, 200, 100)
         self.enemy_region = self.region.subregion(698, 2, 200, 100)
@@ -803,23 +805,23 @@ class BattleScene(engine.Scene):
 
     def draw_any_cost_expenditure_window(self):
         self.turn_expend_region.clear()
-        any_cost_panel = self.sprite_factory.from_color(WHITE, size=(220, 140))
+        any_cost_panel = self.sprite_factory.from_color(WHITE, size=(400, 250))
         self.add_bordered_sprite(self.turn_expend_region, any_cost_panel,
                                  BLACK, 0, 0)
         left_buffer = 20
         top_buffer = 40
         vertical_spacing = 25
-        cost_display = self.create_text_display(
-            self.font,
-            f"Assign {self.round_any_cost} colorless energy",
-            BLACK,
-            WHITE,
-            x=0,
-            y=0,
-            width=210,
-            height=10)
-        self.turn_expend_region.add_sprite(cost_display, x=5, y=6)
-
+        self.render_text(self.font, f"Assign {self.round_any_cost} colorless energy", BLACK, any_cost_panel, 115, 5)
+        self.render_text(self.font, f"Energy Pool", BLACK, any_cost_panel, 55, 30)
+        self.render_text(self.font, f"Physical", BLACK, any_cost_panel, 55, 60)
+        self.render_text(self.font, f"Special", BLACK, any_cost_panel, 55, 85)
+        self.render_text(self.font, f"Mental", BLACK, any_cost_panel, 55, 110)
+        self.render_text(self.font, f"Weapon", BLACK, any_cost_panel, 55, 135)
+        self.render_text(self.font, f"Physical", BLACK, any_cost_panel, 275, 60)
+        self.render_text(self.font, f"Special", BLACK, any_cost_panel, 275, 85)
+        self.render_text(self.font, f"Mental", BLACK, any_cost_panel, 275, 110)
+        self.render_text(self.font, f"Weapon", BLACK, any_cost_panel, 275, 135)
+        self.render_text(self.font, f"Colorless Offered", BLACK, any_cost_panel, 275, 30)
         if self.round_any_cost == 0:
             confirm_button = self.create_text_display(self.font,
                                                       "OK",
@@ -830,7 +832,7 @@ class BattleScene(engine.Scene):
                                                       width=60,
                                                       height=30)
             confirm_button.click += self.confirm_button_click
-            self.turn_expend_region.add_sprite(confirm_button, x=150, y=40)
+            self.turn_expend_region.add_sprite(confirm_button, x=135, y=160)
 
         cancel_button = self.create_text_display(self.font,
                                                  "Cancel",
@@ -841,7 +843,7 @@ class BattleScene(engine.Scene):
                                                  width=60,
                                                  height=30)
         cancel_button.click += self.any_expenditure_cancel_click
-        self.turn_expend_region.add_sprite(cancel_button, x=150, y=90)
+        self.turn_expend_region.add_sprite(cancel_button, x=205, y=160)
 
         energy_rows = [
             self.turn_expend_region.subregion(left_buffer,
@@ -849,18 +851,44 @@ class BattleScene(engine.Scene):
                                               width=150,
                                               height=20)
             for y in itertools.islice(
-                range(top_buffer, 10000, vertical_spacing), 4)
+                range(top_buffer + 20, 10000, vertical_spacing), 4)
         ]
 
         for idx, row in enumerate(energy_rows):
             self.draw_energy_row(row, idx)
+        
+    def draw_execution_order_region(self):
+        self.execution_order.clear()
+        
+        
+        
+        
+    def get_execution_order_base(self, team: str):
+        cont_list = list()
+        cont_lockout = dict()
+        for manager in self.pteam:
+            for eff in manager.source.current_effects:
+                if eff.continuous() and eff.user_id == team and not cont_lockout.setdefault((eff.eff_type, eff.name, eff.user.char_id, eff.duration), False):
+                    cont_list.append(eff)
+                    cont_lockout[(eff.eff_type, eff.name, eff.user.char_id, eff.duration)] = True
+        for manager in self.eteam:
+            for eff in manager.source.current_effects:
+                if eff.continuous() and eff.user_id == team and not cont_lockout.setdefault((eff.eff_type, eff.name, eff.user.char_id, eff.duration), False):
+                    cont_list.append(eff)
+                    cont_lockout[(eff.eff_type, eff.name, eff.user.char_id, eff.duration)] = True
+        for i, eff in enumerate(cont_list):
+            self.execution_order.append(i + 2)
+        for manager in self.acting_order:
+            self.execution_order.append(manager.char_id)
+        logging.debug(self.execution_order)
+        self.execution_order.clear()
 
     def draw_energy_row(self, region: engine.Region, idx: int):
 
-        plus_button_x = 80
-        minus_button_x = 50
-        current_pool_x = 20
-        offered_pool_x = 110
+        plus_button_x = 180
+        minus_button_x = 150
+        current_pool_x = 130
+        offered_pool_x = 210
 
         region.add_sprite_vertical_center(self.sprite_factory.from_surface(
             self.get_scaled_surface(
@@ -897,7 +925,10 @@ class BattleScene(engine.Scene):
             height=10)
         region.add_sprite_vertical_center(current_pool, current_pool_x)
         region.add_sprite_vertical_center(offered_pool, offered_pool_x)
-
+        region.add_sprite_vertical_center(self.sprite_factory.from_surface(
+            self.get_scaled_surface(
+                self.scene_manager.surfaces[Energy(idx).name])),
+                                          x=230)
         region.add_sprite_vertical_center(plus_button, x=plus_button_x)
         region.add_sprite_vertical_center(minus_button, x=minus_button_x)
 
@@ -1016,6 +1047,9 @@ class BattleScene(engine.Scene):
 
 
     def execution_loop(self):
+        
+        self.get_execution_order_base("ally")
+        
         for manager in self.acting_order:
             if manager.acted:
                 self.ability_messages.append(AbilityMessage(manager))
