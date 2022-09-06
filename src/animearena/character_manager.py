@@ -196,7 +196,6 @@ class CharacterManager(collections.abc.Container):
             if ability.name == "Mental Out - Order":
                 ffs_shokuhou = True
                 controlled_character = self.get_controlled_character(self)
-                logging.debug(f"Mental Out Order holder effect list: {self}")
                 stolen_slot = self.get_effect(EffectType.UNIQUE, "Mental Out").mag
                 stolen_ability = controlled_character.source.main_abilities[stolen_slot] if stolen_slot < 4 else controlled_character.source.alt_abilities[stolen_slot - 4]
                 
@@ -2865,7 +2864,6 @@ class CharacterManager(collections.abc.Container):
             self.set_used_slot_to_none()
 
     def set_used_slot_to_none(self):
-        logging.debug("Set %s's used slot to none", self.source.name)
         self.used_slot.ability = None
 
     def profile_click(self, _button, _sender):

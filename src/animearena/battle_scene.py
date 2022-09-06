@@ -277,7 +277,11 @@ class BattleScene(engine.Scene):
         self.waiting_for_turn = True
         self.first_turn = True
         self.execution_order = list()
+        self.dragging_order_button = False
+        self.dragging_button = False
+        self.cont_list = list()
         self.acting_order = list()
+        self.cont_storage = dict()
         self.target_clicked = False
         self.sharingan_reflecting = False
         self.sharingan_reflector = None
@@ -472,6 +476,7 @@ class BattleScene(engine.Scene):
             # else:
             self.window_up = True
             self.turn_end_region.clear()
+            self.get_execution_order_base("ally")
             self.draw_any_cost_expenditure_window()
 
     def exchange_accept_click(self, button, sender):
@@ -833,7 +838,6 @@ class BattleScene(engine.Scene):
                                                       height=30)
             confirm_button.click += self.confirm_button_click
             self.turn_expend_region.add_sprite(confirm_button, x=135, y=160)
-
         cancel_button = self.create_text_display(self.font,
                                                  "Cancel",
                                                  WHITE,
@@ -844,7 +848,6 @@ class BattleScene(engine.Scene):
                                                  height=30)
         cancel_button.click += self.any_expenditure_cancel_click
         self.turn_expend_region.add_sprite(cancel_button, x=205, y=160)
-
         energy_rows = [
             self.turn_expend_region.subregion(left_buffer,
                                               y,
@@ -853,35 +856,97 @@ class BattleScene(engine.Scene):
             for y in itertools.islice(
                 range(top_buffer + 20, 10000, vertical_spacing), 4)
         ]
-
+        
         for idx, row in enumerate(energy_rows):
             self.draw_energy_row(row, idx)
         
+        self.draw_execution_order_region()
+        
     def draw_execution_order_region(self):
-        self.execution_order.clear()
         
+        for i, eff in enumerate(self.execution_order):
+            if self.dragging_order_button and self.dragging_button.index == i:
+                continue
+            if eff < 3:
+                img = self.pteam[eff].used_ability.image
+                source = self.pteam[eff].used_ability
+            else:
+                img = self.cont_list[eff - 3].source.image
+                source = self.cont_list[eff - 3]
+
+            order_button = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(img, 25, 25), free=True)
+            
+            order_button.pressed += self.order_button_press
+            order_button.index = i
+            order_button.source = source
+            self.add_bordered_sprite(self.turn_expend_region, order_button, BLACK, 5 + (i * 33), 215)
+        if self.dragging_order_button:
+            eff = self.execution_order[self.dragging_button.index]
+            if eff < 3:
+                img = self.pteam[eff].used_ability.image
+            else:
+                img = self.cont_list[eff - 3].source.image
+            dragging_button = self.sprite_factory.from_surface(self.get_scaled_surface(img, 25, 25), free=True)
+            self.add_bordered_sprite(self.turn_expend_region, dragging_button, BLACK, self.scene_manager.mouse_x - 12 - self.turn_expend_region.x - 5, 215)
         
+    def check_swapped_order(self):
+        SWAP_POINT = 13
+        MOUSE_X = self.scene_manager.mouse_x - self.turn_expend_region.x - 5
+        #origin point for dragged button is halfway through its original spot
+        ORIGIN_X = self.dragging_button.index * 33 + 5 + 12
+        LEFT_NEIGHBOR_X = ORIGIN_X - SWAP_POINT - 8
+        RIGHT_NEIGHBOR_X = ORIGIN_X + SWAP_POINT
+        # if our current mouse x enters the halfway point of another button, swap them!
+        # things to check for: are we before or after the origin X?
+        #                      is there actually something to swap with in that direction?
         
+        if MOUSE_X > ORIGIN_X and len(self.execution_order) - 1 > self.dragging_button.index:
+            if MOUSE_X > RIGHT_NEIGHBOR_X:
+                swap = self.execution_order[self.dragging_button.index]
+                logging.debug("Swap is %d", swap)
+                self.execution_order[self.dragging_button.index] = self.execution_order[self.dragging_button.index + 1]
+                logging.debug("Current index is %d", self.execution_order[self.dragging_button.index])
+                self.execution_order[self.dragging_button.index + 1] = swap
+                logging.debug("Right index is %d", self.execution_order[self.dragging_button.index + 1])
+                self.dragging_button.index += 1
+        elif MOUSE_X < ORIGIN_X and self.dragging_button.index != 0:
+            if MOUSE_X < LEFT_NEIGHBOR_X:
+                swap = self.execution_order[self.dragging_button.index]
+                self.execution_order[self.dragging_button.index] = self.execution_order[self.dragging_button.index - 1]
+                self.execution_order[self.dragging_button.index - 1] = swap
+                self.dragging_button.index -= 1
+        logging.debug(self.execution_order)
+        
+
+    def order_button_press(self, button, _sender):
+        self.dragging_order_button = True
+        self.dragging_button = button
+        self.draw_any_cost_expenditure_window()
         
     def get_execution_order_base(self, team: str):
-        cont_list = list()
-        cont_lockout = dict()
+        self.cont_list.clear()
+        self.cont_storage.clear()
+        self.execution_order.clear()
         for manager in self.pteam:
             for eff in manager.source.current_effects:
-                if eff.continuous() and eff.user_id == team and not cont_lockout.setdefault((eff.eff_type, eff.name, eff.user.char_id, eff.duration), False):
-                    cont_list.append(eff)
-                    cont_lockout[(eff.eff_type, eff.name, eff.user.char_id, eff.duration)] = True
+                if eff.continuous() and eff.user_id == team:
+                    if not self.cont_storage.setdefault(eff.signature, False):
+                        self.cont_list.append(eff)
+                        self.cont_storage[eff.signature] = [eff,]
+                    else:
+                        self.cont_storage[eff.signature].append(eff)
         for manager in self.eteam:
             for eff in manager.source.current_effects:
-                if eff.continuous() and eff.user_id == team and not cont_lockout.setdefault((eff.eff_type, eff.name, eff.user.char_id, eff.duration), False):
-                    cont_list.append(eff)
-                    cont_lockout[(eff.eff_type, eff.name, eff.user.char_id, eff.duration)] = True
-        for i, eff in enumerate(cont_list):
-            self.execution_order.append(i + 2)
+                if eff.continuous() and eff.user_id == team:
+                    if not self.cont_storage.setdefault(eff.signature, False):
+                        self.cont_list.append(eff)
+                        self.cont_storage[eff.signature] = [eff,]
+                    else:
+                        self.cont_storage[eff.signature].append(eff)
+        for i, eff in enumerate(self.cont_list):
+            self.execution_order.append(i + 3)
         for manager in self.acting_order:
             self.execution_order.append(manager.char_id)
-        logging.debug(self.execution_order)
-        self.execution_order.clear()
 
     def draw_energy_row(self, region: engine.Region, idx: int):
 
@@ -1048,8 +1113,6 @@ class BattleScene(engine.Scene):
 
     def execution_loop(self):
         
-        self.get_execution_order_base("ally")
-        
         for manager in self.acting_order:
             if manager.acted:
                 self.ability_messages.append(AbilityMessage(manager))
@@ -1066,11 +1129,6 @@ class BattleScene(engine.Scene):
             self.eteam[ability.user_id].used_ability = self.eteam[
                 ability.user_id].source.current_abilities[ability.ability_id]
             
-            logging.debug("%s", self.eteam[ability.user_id])
-            logging.debug(f"User's current abilities: ")
-
-            for abi in self.eteam[ability.user_id].source.current_abilities:
-                logging.debug("%s", abi.name)
             
             if ability.primary_id != 69: #lol
                 if ability.primary_id < 3:

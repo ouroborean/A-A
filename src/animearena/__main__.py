@@ -150,6 +150,11 @@ async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server
                     if scene_manager.char_select.dragging_picture:
                         scene_manager.char_select.resolve_drag_release()
                     scene_manager.char_select.dragging_character = ""
+                elif scene_manager.current_scene == scene_manager.battle_scene:
+                    if scene_manager.battle_scene.dragging_order_button:    
+                        scene_manager.battle_scene.dragging_order_button = False
+                        scene_manager.battle_scene.dragging_button = False
+                        scene_manager.battle_scene.draw_any_cost_expenditure_window()
             if event.type == sdl2.SDL_MOUSEMOTION:
                 scene_manager.update_mouse_position(event.motion.x, event.motion.y)
                 if scene_manager.char_select.char_select_pressed:
@@ -160,6 +165,10 @@ async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server
                     scene_manager.char_select.scroll_character_scroll_selection()
                 if scene_manager.char_select.player and scene_manager.char_select.dragging_picture:
                     scene_manager.char_select.render_character_scroll_selection()
+                if scene_manager.battle_scene.dragging_order_button:
+                    scene_manager.battle_scene.check_swapped_order()
+                    scene_manager.battle_scene.draw_any_cost_expenditure_window()
+                    
                 
             if event.type == sdl2.SDL_MOUSEWHEEL:
                 if event.wheel.y > 0:

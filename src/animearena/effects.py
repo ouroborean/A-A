@@ -142,6 +142,10 @@ class Effect:
     def __str__(self) -> str:
         return self.name + "(" + self.eff_type.name + ") <User: " + self.user.id + " " + self.user.source.name + ">"
 
+    @property
+    def signature(self) -> tuple:
+        return (self.eff_type, self.name, self.user.char_id, self.duration)
+
     def get_desc(self) -> str:
         return self.desc(self)
 
