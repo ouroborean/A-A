@@ -421,6 +421,7 @@ class BattleScene(engine.Scene):
         return output
 
     def confirm_button_click(self, _button, _sender):
+        
         self.execution_loop()
 
         for attr, i in self.offered_pool.items():
@@ -444,6 +445,7 @@ class BattleScene(engine.Scene):
         self.draw_any_cost_expenditure_window()
 
     def any_expenditure_cancel_click(self, _button, _sender):
+        self.execution_order.clear()
         for attr, energy in self.offered_pool.items():
             if energy > 0 and attr != Energy.RANDOM:
                 self.round_any_cost += energy
@@ -927,22 +929,22 @@ class BattleScene(engine.Scene):
         self.cont_list.clear()
         self.cont_storage.clear()
         self.execution_order.clear()
-        for manager in self.pteam:
+        for i, manager in enumerate(self.pteam):
             for eff in manager.source.current_effects:
                 if eff.continuous() and eff.user_id == team:
                     if not self.cont_storage.setdefault(eff.signature, False):
                         self.cont_list.append(eff)
-                        self.cont_storage[eff.signature] = [eff,]
+                        self.cont_storage[eff.signature] = [i, ]
                     else:
-                        self.cont_storage[eff.signature].append(eff)
-        for manager in self.eteam:
+                        self.cont_storage[eff.signature].append(i)
+        for i, manager in enumerate(self.eteam):
             for eff in manager.source.current_effects:
                 if eff.continuous() and eff.user_id == team:
                     if not self.cont_storage.setdefault(eff.signature, False):
                         self.cont_list.append(eff)
-                        self.cont_storage[eff.signature] = [eff,]
+                        self.cont_storage[eff.signature] = [i + 3,]
                     else:
-                        self.cont_storage[eff.signature].append(eff)
+                        self.cont_storage[eff.signature].append(i + 3)
         for i, eff in enumerate(self.cont_list):
             self.execution_order.append(i + 3)
         for manager in self.acting_order:
@@ -1021,7 +1023,7 @@ class BattleScene(engine.Scene):
         pass
 
     def handle_reconnection_catchup(self, first_turn: bool,
-                                    stored_turns: list[list["AbilityMessage"]],
+                                    stored_turns: list[list["AbilityMessage"]], execution_order: list[list[int]],
                                     energy_pools: list[list[int]], all_random_expenditure: list[list[int]], time_remaining: int):
 
         self.catching_up = True
@@ -1039,13 +1041,15 @@ class BattleScene(engine.Scene):
         else:
             self.waiting_for_turn = True
             if first_turn:
-                self.player_catchup_execution(stored_turns, energy_pools, all_random_expenditure, time_remaining)
+                self.player_catchup_execution(stored_turns, execution_order, energy_pools, all_random_expenditure, time_remaining)
             else:
-                self.enemy_catchup_execution(stored_turns, energy_pools, all_random_expenditure, time_remaining)
+                self.enemy_catchup_execution(stored_turns, execution_order, energy_pools, all_random_expenditure, time_remaining)
 
-    def player_catchup_execution(self, stored_turns: list[list["AbilityMessage"]], energy_pools: list[list[int]], all_random_expenditure: list[list[int]], time_remaining: int):
+    def player_catchup_execution(self, stored_turns: list[list["AbilityMessage"]], execution_order: list[list[int]], energy_pools: list[list[int]], all_random_expenditure: list[list[int]], time_remaining: int):
         current_turn = stored_turns[0]
         stored_turns = stored_turns[1:]
+        current_execution_order = execution_order[0]
+        execution_order = execution_order[1:]
         current_random_expenditure = all_random_expenditure[0]
         all_random_expenditure = all_random_expenditure[1:]
 
@@ -1067,10 +1071,27 @@ class BattleScene(engine.Scene):
                 self.pteam[ability.user_id].current_targets.append(
                     self.eteam[num])
 
-            self.pteam[ability.user_id].execute_ability()
-            for i in range(4):
-                self.player_display.team.energy_pool[i] -= self.pteam[ability.user_id].used_ability.cost[i]
-                self.player_display.team.energy_pool[4] -= self.pteam[ability.user_id].used_ability.cost[i]
+        self.get_execution_order_base("ally")
+        
+        self.get_execution_order_base("enemy")
+        for action in execution_order:
+            
+            if action < 3:
+                if self.pteam[action].acted:
+                    self.pteam[action].execute_ability()
+                    self.pteam[action].acted = False
+                    self.pteam[action].used_ability = False
+                    self.pteam[action].current_targets.clear()
+                    self.pteam[action].primary_target = None
+                    for i in range(4):
+                        self.player_display.team.energy_pool[i] -= self.pteam[action].used_ability.cost[i]
+                        self.player_display.team.energy_pool[4] -= self.pteam[action].used_ability.cost[i]
+            elif action > 2:
+                self.resolve_ticking_ability(self.cont_list[action])
+        
+        
+        
+        
 
         for i, energy in enumerate(current_random_expenditure):
             self.player_display.team.energy_pool[i] -= energy
@@ -1082,27 +1103,28 @@ class BattleScene(engine.Scene):
 
         #TODO if stored_turns still has turns left, activate enemy_catchup_execution, else set player state to waiting
         if stored_turns:
-            self.enemy_catchup_execution(stored_turns, energy_pools, all_random_expenditure, time_remaining)
+            self.enemy_catchup_execution(stored_turns, execution_order, energy_pools, all_random_expenditure, time_remaining)
         else:
             self.catching_up = False
 
 
 
-    def enemy_catchup_execution(self, stored_turns: list[list["AbilityMessage"]], energy_pools: list[list[int]], all_random_expenditure: list[list[int]], time_remaining: int):
+    def enemy_catchup_execution(self, stored_turns: list[list["AbilityMessage"]], execution_order: list[list[int]], energy_pools: list[list[int]], all_random_expenditure: list[list[int]], time_remaining: int):
         current_turn = stored_turns[0]
         stored_turns = stored_turns[1:]
         this_turn_pool = energy_pools[0]
         energy_pools = energy_pools[1:]
-        
+        current_execution_order = execution_order[0]
+        execution_order = execution_order[1:]
     
         all_random_expenditure = all_random_expenditure[1:]
         #TODO Execute all abilities in current_turn
-        self.enemy_execution_loop(current_turn, this_turn_pool)
+        self.enemy_execution_loop(current_turn, current_execution_order, this_turn_pool)
 
         #TODO if stored_turns still has turns left, and activate player_catchup_execution,
         #else set player state to active
         if stored_turns:
-            self.player_catchup_execution(stored_turns, energy_pools, all_random_expenditure, time_remaining)
+            self.player_catchup_execution(stored_turns, execution_order, energy_pools, all_random_expenditure, time_remaining)
         else:
             self.timer = self.start_timer(time_remaining)
             self.waiting_for_turn = False
@@ -1113,22 +1135,24 @@ class BattleScene(engine.Scene):
 
     def execution_loop(self):
         
-        for manager in self.acting_order:
-            if manager.acted:
-                self.ability_messages.append(AbilityMessage(manager))
-                manager.execute_ability()
-        self.acting_order.clear()
+        for action in self.execution_order:
+            if action < 3:
+                if self.pteam[action].acted:
+                    #build ability message
+                    self.ability_messages.append(AbilityMessage(self.pteam[action]))
+                    self.pteam[action].execute_ability()
+            elif action > 2:
+                self.resolve_ticking_ability(self.cont_list[action], "ally")
 
-    def enemy_execution_loop(self, executed_abilities: list["AbilityMessage"],
+    def enemy_execution_loop(self, executed_abilities: list["AbilityMessage"], execution_order: list[int],
                              potential_energy: list[int]):
 
-        
+        logging.debug("Started enemy execution loop")
         for ability in executed_abilities:
-            
             
             self.eteam[ability.user_id].used_ability = self.eteam[
                 ability.user_id].source.current_abilities[ability.ability_id]
-            
+            self.eteam[ability.user_id].acted = True
             
             if ability.primary_id != 69: #lol
                 if ability.primary_id < 3:
@@ -1143,14 +1167,20 @@ class BattleScene(engine.Scene):
             for num in ability.enemy_targets:
                 self.eteam[ability.user_id].current_targets.append(
                     self.pteam[num])
-
-            self.eteam[ability.user_id].free_execute_ability(
-                self.eteam, self.pteam)
-            self.eteam[ability.user_id].used_ability = None
-            self.eteam[ability.user_id].current_targets.clear()
-
-        self.resolve_ticking_ability("enemy")
-
+        self.get_execution_order_base("enemy")
+        for action in execution_order:
+            
+            if action < 3:
+                if self.eteam[action].acted:
+                    #build ability message
+                    self.eteam[action].free_execute_ability(self.eteam, self.pteam)
+                    self.eteam[action].acted = False
+                    self.eteam[action].used_ability = False
+                    self.eteam[action].current_targets.clear()
+                    self.eteam[action].primary_target = None
+            elif action > 2:
+                self.resolve_ticking_ability(self.cont_list[action])
+                
         self.tick_effect_duration(enemy_tick=True)
         for character in self.eteam:
             character.check_ability_swaps(ffs_shokuhou=True)
@@ -1199,108 +1229,155 @@ class BattleScene(engine.Scene):
     def is_allied_character(self, character: "CharacterManager"):
         return character in self.player_display.team.character_managers
 
-    def resolve_ticking_ability(self, team_id: str):
-        """Checks all Character Managers for continuous effects.
+    def resolve_ticking_ability(self, eff):
+        team_id = eff.user.id
         
-        All continuous effects that belong to the player whose turn
-        is currently ending are triggered and resolved."""
-        for manager in self.player_display.team.character_managers:
-            gen = (eff for eff in manager.source.current_effects
-                if eff.eff_type == EffectType.CONT_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-            for eff in gen:
-                if eff.check_waiting() and self.is_allied_effect(
-                        eff, team_id) and (eff.mag >= 20
-                                        or not manager.deflecting()):
-                    eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.NORMAL)
-            gen = (eff for eff in manager.source.current_effects
-                if eff.eff_type == EffectType.CONT_PIERCE_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-            for eff in gen:
-                if eff.check_waiting() and self.is_allied_effect(
-                        eff, team_id) and (eff.mag >= 20
-                                        or not manager.deflecting()):
-                    eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.PIERCING)
-            gen = (eff for eff in manager.source.current_effects
-                if eff.eff_type == EffectType.CONT_AFF_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-            for eff in gen:
-                if eff.check_waiting() and self.is_allied_effect(
-                        eff, team_id) and (eff.mag >= 20
-                                        or not manager.deflecting()):
-                    if eff.name == "Doping Rampage":
-                        self.dying_to_doping = True
-                    eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.AFFLICTION)
-            gen = (eff for eff in manager.source.current_effects
-                if eff.eff_type == EffectType.CONT_HEAL and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-            for eff in gen:
-                if eff.check_waiting() and self.is_allied_effect(eff, team_id):
-                    eff.user.give_eff_healing(eff.mag, manager, eff)
-            gen = (eff for eff in manager.source.current_effects
-                if eff.eff_type == EffectType.CONT_DEST_DEF and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-            for eff in gen:
-                if eff.check_waiting() and self.is_allied_effect(eff, team_id):
-                    if manager.has_effect(EffectType.DEST_DEF, eff.name):
-                        manager.get_effect(EffectType.DEST_DEF,
-                                        eff.name).alter_dest_def(eff.mag)
-                    else:
-                        manager.add_effect(
-                            Effect(
-                                eff.source, EffectType.DEST_DEF, eff.user,
-                                280000, lambda eff:
-                                f"This character has {eff.mag} destructible defense.",
-                                eff.mag))
-            gen = (eff for eff in manager.source.current_effects
-                if eff.eff_type == EffectType.CONT_UNIQUE and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-            for eff in gen:
-                if eff.check_waiting() and self.is_allied_effect(eff, team_id):
-                    manager.check_unique_cont(eff, team_id)
+        if team_id == "ally":
+            pteam = self.pteam
+            eteam = self.eteam
+        elif team_id == "enemy":
+            eteam = self.pteam
+            pteam = self.eteam
+        
+        for tar in self.cont_storage[eff.signature]:
+            if tar > 2:
+                target = pteam[tar]
+            else:
+                target = eteam[tar]
 
-        for manager in self.enemy_display.team.character_managers:
-            gen = (eff for eff in manager.source.current_effects
-                if eff.eff_type == EffectType.CONT_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-            for eff in gen:
-                if eff.check_waiting() and self.is_allied_effect(
-                        eff, team_id) and (eff.mag >= 20
-                                        or not manager.deflecting()):
-                    eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.NORMAL)
-            gen = (eff for eff in manager.source.current_effects
-                if eff.eff_type == EffectType.CONT_PIERCE_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-            for eff in gen:
-                if eff.check_waiting() and self.is_allied_effect(
-                        eff, team_id) and (eff.mag >= 20
-                                        or not manager.deflecting()):
-                    eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.PIERCING)
-            gen = (eff for eff in manager.source.current_effects
-                if eff.eff_type == EffectType.CONT_AFF_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-            for eff in gen:
-                if eff.check_waiting() and self.is_allied_effect(
-                        eff, team_id) and (eff.mag >= 20
-                                        or not manager.deflecting()):
+            if eff.eff_type == EffectType.CONT_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
+                if eff.check_waiting() and self.is_allied_effect(eff, team_id) and (eff.mag >= 20 or not target.deflecting()):
+                    eff.user.deal_eff_damage(eff.mag, target, eff, DamageType.NORMAL)
+            elif eff.eff_type == EffectType.CONT_PIERCE_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
+                if eff.check_waiting() and self.is_allied_effect(eff, team_id) and (eff.mag >= 20 or not target.deflecting()):
+                    eff.user.deal_eff_damage(eff.mag, target, eff, DamageType.PIERCING)
+            elif eff.eff_type == EffectType.CONT_AFF_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
+                if eff.check_waiting() and self.is_allied_effect(eff, team_id) and (eff.mag >= 20 or not target.deflecting()):
                     if eff.name == "Doping Rampage":
                         self.dying_to_doping = True
-                    eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.AFFLICTION)
-            gen = (eff for eff in manager.source.current_effects
-                if eff.eff_type == EffectType.CONT_HEAL and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-            for eff in gen:
+                    eff.user.deal_eff_damage(eff.mag, target, eff, DamageType.AFFLICTION)
+            elif eff.eff_type == EffectType.CONT_HEAL and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
                 if eff.check_waiting() and self.is_allied_effect(eff, team_id):
-                    eff.user.give_eff_healing(eff.mag, manager, eff)
-            gen = (eff for eff in manager.source.current_effects
-                if eff.eff_type == EffectType.CONT_DEST_DEF and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-            for eff in gen:
+                    eff.user.give_eff_healing(eff.mag, target, eff)
+            elif eff.eff_type == EffectType.CONT_DEST_DEF and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
                 if eff.check_waiting() and self.is_allied_effect(eff, team_id):
-                    if manager.has_effect(EffectType.DEST_DEF, eff.name):
-                        manager.get_effect(EffectType.DEST_DEF,
+                    if target.has_effect(EffectType.DEST_DEF, eff.name):
+                        target.get_effect(EffectType.DEST_DEF,
                                         eff.name).alter_dest_def(eff.mag)
                     else:
-                        manager.add_effect(
+                        target.add_effect(
                             Effect(
                                 eff.source, EffectType.DEST_DEF, eff.user,
                                 280000, lambda eff:
                                 f"This character has {eff.mag} destructible defense.",
                                 eff.mag))
-            gen = (eff for eff in manager.source.current_effects
-                if eff.eff_type == EffectType.CONT_UNIQUE and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-            for eff in gen:
+            elif eff.eff_type == EffectType.CONT_UNIQUE and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
                 if eff.check_waiting() and self.is_allied_effect(eff, team_id):
-                    manager.check_unique_cont(eff, team_id)
+                    target.check_unique_cont(eff, team_id)
+        
+        
+    # def resolve_ticking_ability(self, team_id: str):
+    #     """Checks all Character Managers for continuous effects.
+        
+    #     All continuous effects that belong to the player whose turn
+    #     is currently ending are triggered and resolved."""
+    #     for manager in self.player_display.team.character_managers:
+    #         gen = (eff for eff in manager.source.current_effects
+    #             if eff.eff_type == EffectType.CONT_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
+    #         for eff in gen:
+    #             if eff.check_waiting() and self.is_allied_effect(
+    #                     eff, team_id) and (eff.mag >= 20
+    #                                     or not manager.deflecting()):
+    #                 eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.NORMAL)
+    #         gen = (eff for eff in manager.source.current_effects
+    #             if eff.eff_type == EffectType.CONT_PIERCE_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
+    #         for eff in gen:
+    #             if eff.check_waiting() and self.is_allied_effect(
+    #                     eff, team_id) and (eff.mag >= 20
+    #                                     or not manager.deflecting()):
+    #                 eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.PIERCING)
+    #         gen = (eff for eff in manager.source.current_effects
+    #             if eff.eff_type == EffectType.CONT_AFF_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
+    #         for eff in gen:
+    #             if eff.check_waiting() and self.is_allied_effect(
+    #                     eff, team_id) and (eff.mag >= 20
+    #                                     or not manager.deflecting()):
+    #                 if eff.name == "Doping Rampage":
+    #                     self.dying_to_doping = True
+    #                 eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.AFFLICTION)
+    #         gen = (eff for eff in manager.source.current_effects
+    #             if eff.eff_type == EffectType.CONT_HEAL and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
+    #         for eff in gen:
+    #             if eff.check_waiting() and self.is_allied_effect(eff, team_id):
+    #                 eff.user.give_eff_healing(eff.mag, manager, eff)
+    #         gen = (eff for eff in manager.source.current_effects
+    #             if eff.eff_type == EffectType.CONT_DEST_DEF and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
+    #         for eff in gen:
+    #             if eff.check_waiting() and self.is_allied_effect(eff, team_id):
+    #                 if manager.has_effect(EffectType.DEST_DEF, eff.name):
+    #                     manager.get_effect(EffectType.DEST_DEF,
+    #                                     eff.name).alter_dest_def(eff.mag)
+    #                 else:
+    #                     manager.add_effect(
+    #                         Effect(
+    #                             eff.source, EffectType.DEST_DEF, eff.user,
+    #                             280000, lambda eff:
+    #                             f"This character has {eff.mag} destructible defense.",
+    #                             eff.mag))
+    #         gen = (eff for eff in manager.source.current_effects
+    #             if eff.eff_type == EffectType.CONT_UNIQUE and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
+    #         for eff in gen:
+    #             if eff.check_waiting() and self.is_allied_effect(eff, team_id):
+    #                 manager.check_unique_cont(eff, team_id)
+
+    #     for manager in self.enemy_display.team.character_managers:
+    #         gen = (eff for eff in manager.source.current_effects
+    #             if eff.eff_type == EffectType.CONT_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
+    #         for eff in gen:
+    #             if eff.check_waiting() and self.is_allied_effect(
+    #                     eff, team_id) and (eff.mag >= 20
+    #                                     or not manager.deflecting()):
+    #                 eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.NORMAL)
+    #         gen = (eff for eff in manager.source.current_effects
+    #             if eff.eff_type == EffectType.CONT_PIERCE_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
+    #         for eff in gen:
+    #             if eff.check_waiting() and self.is_allied_effect(
+    #                     eff, team_id) and (eff.mag >= 20
+    #                                     or not manager.deflecting()):
+    #                 eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.PIERCING)
+    #         gen = (eff for eff in manager.source.current_effects
+    #             if eff.eff_type == EffectType.CONT_AFF_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
+    #         for eff in gen:
+    #             if eff.check_waiting() and self.is_allied_effect(
+    #                     eff, team_id) and (eff.mag >= 20
+    #                                     or not manager.deflecting()):
+    #                 if eff.name == "Doping Rampage":
+    #                     self.dying_to_doping = True
+    #                 eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.AFFLICTION)
+    #         gen = (eff for eff in manager.source.current_effects
+    #             if eff.eff_type == EffectType.CONT_HEAL and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
+    #         for eff in gen:
+    #             if eff.check_waiting() and self.is_allied_effect(eff, team_id):
+    #                 eff.user.give_eff_healing(eff.mag, manager, eff)
+    #         gen = (eff for eff in manager.source.current_effects
+    #             if eff.eff_type == EffectType.CONT_DEST_DEF and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
+    #         for eff in gen:
+    #             if eff.check_waiting() and self.is_allied_effect(eff, team_id):
+    #                 if manager.has_effect(EffectType.DEST_DEF, eff.name):
+    #                     manager.get_effect(EffectType.DEST_DEF,
+    #                                     eff.name).alter_dest_def(eff.mag)
+    #                 else:
+    #                     manager.add_effect(
+    #                         Effect(
+    #                             eff.source, EffectType.DEST_DEF, eff.user,
+    #                             280000, lambda eff:
+    #                             f"This character has {eff.mag} destructible defense.",
+    #                             eff.mag))
+    #         gen = (eff for eff in manager.source.current_effects
+    #             if eff.eff_type == EffectType.CONT_UNIQUE and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
+    #         for eff in gen:
+    #             if eff.check_waiting() and self.is_allied_effect(eff, team_id):
+    #                 manager.check_unique_cont(eff, team_id)
 
     def handle_timeout(self):
         #TODO
@@ -1346,7 +1423,6 @@ class BattleScene(engine.Scene):
         self.sharingan_reflecting = False
         self.sharingan_reflector = None
 
-        self.resolve_ticking_ability("ally")
 
         # Kuroko invulnerability check #
         for manager in self.player_display.team.character_managers:
@@ -1447,10 +1523,11 @@ class BattleScene(engine.Scene):
         if not self.catching_up:
             if not timeout:
                 self.scene_manager.connection.send_match_communication(
-                    self.ability_messages, self.random_spent)
+                    self.ability_messages, self.execution_order, self.random_spent)
             self.ability_messages.clear()
             self.random_spent = [0, 0, 0, 0]
-        
+        self.execution_order.clear()
+        self.acting_order.clear()
         if game_lost:
             self.lose_game()
         if game_won and not game_lost:

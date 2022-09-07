@@ -9,6 +9,7 @@ from animearena.byte_buffer import ByteBuffer
 from animearena.character import Character
 from typing import Callable
 import typing
+import logging
 from animearena.battle_scene import AbilityMessage
 import hashlib
 if typing.TYPE_CHECKING:
@@ -244,7 +245,11 @@ class ConnectionHandler:
             for j in range(enemy_targets):
                 executed_ability.add_to_enemy_targets(buffer.read_int())
             executed_abilities.append(executed_ability)
-        
+        execution_order = list()
+        execution_order_count = buffer.read_int()
+        for i in range(execution_order_count):
+            execution_order.append(buffer.read_int())
+        logging.debug(execution_order)
         for i in range(4):
             buffer.read_int()
         
@@ -255,7 +260,7 @@ class ConnectionHandler:
 
         
         
-        self.scene_manager.battle_scene.enemy_execution_loop(executed_abilities, potential_energy)
+        self.scene_manager.battle_scene.enemy_execution_loop(executed_abilities, execution_order, potential_energy)
         buffer.clear()
 
     def send_registration(self, username: str, password: str):
@@ -329,7 +334,7 @@ class ConnectionHandler:
             self.waiting_for_opponent = True
         buffer.clear()
     
-    def send_match_communication(self, ability_messages: list[AbilityMessage], random_spent: list[int]):
+    def send_match_communication(self, ability_messages: list[AbilityMessage], execution_order: list[int], random_spent: list[int]):
         buffer = ByteBuffer()
         buffer.write_int(1)
         buffer.write_int(len(ability_messages))
@@ -343,6 +348,9 @@ class ConnectionHandler:
             buffer.write_int(len(message.enemy_targets))
             for enemy in message.enemy_targets:
                 buffer.write_int(enemy)
+        buffer.write_int(len(execution_order))
+        for message in execution_order:
+            buffer.write_int(message)
         for i in random_spent:
             buffer.write_int(i)
         
@@ -382,6 +390,7 @@ class ConnectionHandler:
 
         turn_count = buffer.read_int()
         all_turns = list()
+        all_execution = list()
         all_random_expenditure = list()
         for _ in range(turn_count):
             used_ability_count = buffer.read_int()
@@ -398,12 +407,17 @@ class ConnectionHandler:
                 for _ in range(enemy_targets):
                     executed_ability.add_to_enemy_targets(buffer.read_int())
                 executed_abilities.append(executed_ability)
+            execution_order = list()
+            execution_order_count = buffer.read_int()
+            for _ in range(execution_order_count):
+                execution_order.append(buffer.read_int())
             random_spent = list()
             for _ in range(4):
                 random_spent.append(buffer.read_int())
             
             all_random_expenditure.append(random_spent)    
             all_turns.append(executed_abilities)
+            all_execution.append(execution_order)
 
         pool_count = buffer.read_int()
         energy_pools = list()
@@ -436,7 +450,7 @@ class ConnectionHandler:
             manager.update()
 
         
-        self.scene_manager.battle_scene.handle_reconnection_catchup(first_turn, all_turns, energy_pools, all_random_expenditure, time_remaining)
+        self.scene_manager.battle_scene.handle_reconnection_catchup(first_turn, all_turns, all_execution, energy_pools, all_random_expenditure, time_remaining)
 
     def send_match_statistics(self, characters, won):
         buffer = ByteBuffer()
