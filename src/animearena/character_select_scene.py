@@ -896,6 +896,12 @@ class CharacterSelectScene(engine.Scene):
                     filtered_characters = [char for char in filtered_characters if char.uses_energy(i)]
         return filtered_characters
     
+    def auto_queue(self):
+        self.add_character(sys.argv[3])
+        self.add_character(sys.argv[4])
+        self.add_character(sys.argv[5])
+        self.start_searching()
+        self.full_render()
 
     def settle_player(self, username: str, wins: int, losses: int, medals: int, mission_data: str, ava_code = None, mission_complete: dict = {}):
         """Extracts and apportions player data into the character select scene.

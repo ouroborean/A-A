@@ -365,7 +365,7 @@ class ConnectionHandler:
         seed = buffer.read_int()
         # get player team names
         player_character_names = [buffer.read_string().strip() for i in range(3)]
-
+        self.scene_manager.auto_queue = False
 
         # read enemy player package
 

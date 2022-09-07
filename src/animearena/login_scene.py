@@ -1,11 +1,12 @@
 from pathlib import Path
 import importlib.resources
 import os
-
+import sys
 import sdl2
 import sdl2.ext
 import sdl2.surface
 import sdl2.sdlttf
+import logging
 from playsound import playsound
 from animearena import engine
 from animearena import resource_manager
@@ -199,7 +200,12 @@ class LoginScene(engine.Scene):
         self.username_entry = False
         self.password_entry = True
         self.full_render()
-        
+    
+    def auto_login(self):
+        self.scene_manager.username_raw = sys.argv[1]
+        self.scene_manager.password_raw = sys.argv[2]
+        self.scene_manager.connection.request_login_nonce()
+    
 
 def make_login_scene(scene_manager) -> LoginScene:
 

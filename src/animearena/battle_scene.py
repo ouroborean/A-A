@@ -1052,8 +1052,9 @@ class BattleScene(engine.Scene):
         execution_order = execution_order[1:]
         current_random_expenditure = all_random_expenditure[0]
         all_random_expenditure = all_random_expenditure[1:]
-
         for ability in current_turn:
+            
+            self.pteam[ability.user_id].acted = True
             self.pteam[ability.user_id].used_ability = self.pteam[
                 ability.user_id].source.current_abilities[ability.ability_id]
 
@@ -1073,21 +1074,20 @@ class BattleScene(engine.Scene):
 
         self.get_execution_order_base("ally")
         
-        self.get_execution_order_base("enemy")
-        for action in execution_order:
+        for action in current_execution_order:
             
             if action < 3:
                 if self.pteam[action].acted:
                     self.pteam[action].execute_ability()
                     self.pteam[action].acted = False
-                    self.pteam[action].used_ability = False
                     self.pteam[action].current_targets.clear()
                     self.pteam[action].primary_target = None
                     for i in range(4):
                         self.player_display.team.energy_pool[i] -= self.pteam[action].used_ability.cost[i]
                         self.player_display.team.energy_pool[4] -= self.pteam[action].used_ability.cost[i]
+                    self.pteam[action].used_ability = None
             elif action > 2:
-                self.resolve_ticking_ability(self.cont_list[action])
+                self.resolve_ticking_ability(self.cont_list[action - 3])
         
         
         
@@ -1142,7 +1142,7 @@ class BattleScene(engine.Scene):
                     self.ability_messages.append(AbilityMessage(self.pteam[action]))
                     self.pteam[action].execute_ability()
             elif action > 2:
-                self.resolve_ticking_ability(self.cont_list[action], "ally")
+                self.resolve_ticking_ability(self.cont_list[action - 3])
 
     def enemy_execution_loop(self, executed_abilities: list["AbilityMessage"], execution_order: list[int],
                              potential_energy: list[int]):
@@ -1175,11 +1175,11 @@ class BattleScene(engine.Scene):
                     #build ability message
                     self.eteam[action].free_execute_ability(self.eteam, self.pteam)
                     self.eteam[action].acted = False
-                    self.eteam[action].used_ability = False
+                    self.eteam[action].used_ability = None
                     self.eteam[action].current_targets.clear()
                     self.eteam[action].primary_target = None
             elif action > 2:
-                self.resolve_ticking_ability(self.cont_list[action])
+                self.resolve_ticking_ability(self.cont_list[action - 3])
                 
         self.tick_effect_duration(enemy_tick=True)
         for character in self.eteam:

@@ -44,6 +44,11 @@ def main():
     
     with SceneManager(window) as scene_manager:
         
+        if len(sys.argv) > 1:
+            scene_manager.auto_login = True
+        if len(sys.argv) > 3:
+            scene_manager.auto_queue = True
+        
         cm = client.ConnectionHandler(scene_manager)
         
         scene_manager.bind_connection(cm)
@@ -91,12 +96,7 @@ async def server_loop(scene_manager: SceneManager):
         #     print("Checking version")
         #     scene_manager.connection.send_version_request()
         #     VERSION_CHECKED = True
-        if len(sys.argv) > 1 and not auto_join:
-            logging.debug("Auto-joining!")
-            scene_manager.username_raw = sys.argv[1]
-            scene_manager.password_raw = sys.argv[2]
-            scene_manager.connection.request_login_nonce()
-            auto_join = True
+        
         try:
             data = await reader.readuntil(b'\x1f\x1f\x1f')
         except CancelledError:
@@ -191,6 +191,16 @@ async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server
             scene_manager.current_scene.window_up = False
         scene_manager.spriterenderer.render(scene_manager.current_scene.renderables())
         window.refresh()
+        
+        if scene_manager.connected:
+            if scene_manager.auto_queue and scene_manager.current_scene == scene_manager.char_select:
+                scene_manager.auto_queue = False
+                scene_manager.char_select.auto_queue()
+            if scene_manager.auto_login and scene_manager.current_scene == scene_manager.login_scene:
+                scene_manager.auto_login = False
+                scene_manager.login_scene.auto_login()
+            
+        
         done = sdl2.SDL_GetPerformanceCounter()
         elapsed_time = (done - start) / float(sdl2.SDL_GetPerformanceFrequency())
         scene_manager.frame_count += 1

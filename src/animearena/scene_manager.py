@@ -51,6 +51,8 @@ class SceneManager:
         self.uiprocessor = sdl2.ext.UIProcessor()
         self.mouse_x = 0
         self.mouse_y = 0
+        self.auto_login = False
+        self.auto_queue = False
         if window:
             self.window = window
             self.factory = sdl2.ext.SpriteFactory(sdl2.ext.SOFTWARE, free=False)
@@ -142,6 +144,7 @@ class SceneManager:
     def set_scene_to_current(self, scene: "Scene"):
         self.current_scene = scene
         self.spriterenderer.render(self.current_scene.renderables())
+        
 
     def bind_connection(self, connection):
         self.connection = connection
@@ -150,12 +153,6 @@ class SceneManager:
         self.play_sound(self.sounds["login"])
         self.set_scene_to_current(self.char_select)
         self.char_select.settle_player(username, wins, losses, medals, mission_data, ava_code)
-        if len(sys.argv) > 3:
-            self.char_select.add_character(sys.argv[3])
-            self.char_select.add_character(sys.argv[4])
-            self.char_select.add_character(sys.argv[5])
-            self.char_select.start_searching()
-            self.char_select.full_render()
 
     def package_mission_data(self, mission_data) -> str:
         mission_strings = []
