@@ -68,7 +68,7 @@ def main():
         return 0
 
 
-target_fps = contextvars.ContextVar('target_fps', default=60)
+target_fps = contextvars.ContextVar('target_fps', default=30)
 
 async def server_loop(scene_manager: SceneManager):
     VERSION_CHECKED = False
@@ -181,8 +181,7 @@ async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server
                     break
         scene_manager.battle_scene.target_clicked = False
         if scene_manager.current_scene == scene_manager.battle_scene:
-            if not scene_manager.battle_scene.waiting_for_turn:
-                scene_manager.battle_scene.draw_timer_region()
+            scene_manager.battle_scene.draw_timer_region()
             scene_manager.battle_scene.check_for_hp_bar_changes()
             scene_manager.battle_scene.get_hovered_button()
             scene_manager.battle_scene.show_hover_text()
@@ -204,7 +203,7 @@ async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server
         done = sdl2.SDL_GetPerformanceCounter()
         elapsed_time = (done - start) / float(sdl2.SDL_GetPerformanceFrequency())
         scene_manager.frame_count += 1
-        if scene_manager.frame_count > 60:
+        if scene_manager.frame_count > 30:
             scene_manager.frame_count = 0
         sleep_duration = max((1.0 / target_fps.get()) - elapsed_time, 0)
         await asyncio.sleep(sleep_duration)

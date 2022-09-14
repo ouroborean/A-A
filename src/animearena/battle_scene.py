@@ -365,7 +365,7 @@ class BattleScene(engine.Scene):
         self.enemy_info_region = self.region.subregion(5, 578, 670, 120)
         self.hover_effect_region = self.region.subregion(0, 0, 0, 0)
         self.game_end_region = self.region.subregion(60, 207, 781, 484)
-        self.timer_region = self.region.subregion(x=565, y=5, width=120, height=80)
+        self.timer_region = self.region.subregion(x=269, y=95, width=362, height=12)
 
     #region On-Click event handlers
 
@@ -477,7 +477,6 @@ class BattleScene(engine.Scene):
             #     self.turn_end()
             # else:
             self.window_up = True
-            self.turn_end_region.clear()
             self.get_execution_order_base("ally")
             self.draw_any_cost_expenditure_window()
 
@@ -622,14 +621,12 @@ class BattleScene(engine.Scene):
 
     def draw_timer_region(self):
         self.timer_region.clear()
+        bar_height = self.timer_region.size()[1] - 2
+        bar_width = self.timer_region.size()[0] - 2
+        self.timer_region.add_sprite(self.sprite_factory.from_color(BLACK, size=(self.timer_region.size())), 0, 0)
+        self.timer_region.add_sprite(self.sprite_factory.from_color(WHITE, size=(bar_width, bar_height)), 1, 1)
         if self.timer:
-            time_left = str(self.timer.time_left)
-            timer_offset = 3 if len(time_left) == 2 else 32
-        else:
-            time_left = "--"
-            timer_offset = 8
-        timer_sprite = self.create_text_display(self.timer_font, time_left, BLACK, WHITE, timer_offset, -20, 120, 80)
-        self.add_bordered_sprite(self.timer_region, timer_sprite, BLACK, 0, 0)
+            self.timer_region.add_sprite(self.sprite_factory.from_color(RED, size=(self.timer.time_left * 4, bar_height)), 1, 1)
 
     def draw_enemy_info_region(self):
         self.enemy_info_region.clear()
@@ -806,7 +803,7 @@ class BattleScene(engine.Scene):
         else:
             self.add_bordered_sprite(self.turn_end_region, self.turn_label,
                                      WHITE, 0, 55)
-            self.draw_timer_region()
+        self.draw_timer_region()
 
 
 
@@ -1101,12 +1098,12 @@ class BattleScene(engine.Scene):
 
 
         self.turn_end()
-
         #TODO if stored_turns still has turns left, activate enemy_catchup_execution, else set player state to waiting
         if stored_turns:
             self.enemy_catchup_execution(stored_turns, execution_order, energy_pools, all_random_expenditure, time_remaining)
         else:
             self.catching_up = False
+            self.timer = self.start_timer(time_remaining)
 
 
 
@@ -1512,6 +1509,8 @@ class BattleScene(engine.Scene):
 
         #endregion
 
+        self.timer = self.start_timer()
+        
         self.full_update()
 
 
@@ -2529,8 +2528,9 @@ class BattleScene(engine.Scene):
 
         if self.moving_first:
             self.first_turn = False
-            self.timer = self.start_timer()
-
+        
+        self.timer = self.start_timer()
+        self.draw_timer_region()
         if player:
             self.update_energy_region()
 
