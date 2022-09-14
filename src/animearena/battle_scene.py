@@ -183,9 +183,9 @@ class EnemyTeamDisplay():
         self.targeting_regions: list[engine.Region] = []
         self.hp_bar_regions: list[engine.Region] = []
         for region in self.enemy_regions:
-            self.effect_regions.append(region.subregion(-30, 100, 0, 25))
+            self.effect_regions.append(region.subregion(-32, 100, 0, 25))
             self.targeting_regions.append(
-                region.subregion(x=-30, y=0, width=25, height=100))
+                region.subregion(x=-32, y=0, width=25, height=100))
             self.hp_bar_regions.append(region.subregion(0, 100, 100, 20))
 
     def assign_team(self, team: Team):
@@ -934,7 +934,7 @@ class BattleScene(engine.Scene):
                 if eff.continuous() and eff.user_id == team:
                     if not self.cont_storage.setdefault(eff.signature, False):
                         self.cont_list.append(eff)
-                        self.cont_storage[eff.signature] = [i, ]
+                        self.cont_storage[eff.signature] = [i]
                     else:
                         self.cont_storage[eff.signature].append(i)
         for i, manager in enumerate(self.eteam):
@@ -942,13 +942,14 @@ class BattleScene(engine.Scene):
                 if eff.continuous() and eff.user_id == team:
                     if not self.cont_storage.setdefault(eff.signature, False):
                         self.cont_list.append(eff)
-                        self.cont_storage[eff.signature] = [i + 3,]
+                        self.cont_storage[eff.signature] = [i + 3]
                     else:
                         self.cont_storage[eff.signature].append(i + 3)
         for i, eff in enumerate(self.cont_list):
             self.execution_order.append(i + 3)
         for manager in self.acting_order:
             self.execution_order.append(manager.char_id)
+        logging.debug(self.cont_storage)
 
     def draw_energy_row(self, region: engine.Region, idx: int):
 
@@ -1229,52 +1230,47 @@ class BattleScene(engine.Scene):
     def is_allied_character(self, character: "CharacterManager"):
         return character in self.player_display.team.character_managers
 
-    def resolve_ticking_ability(self, eff):
+    def resolve_ticking_ability(self, eff: Effect):
         team_id = eff.user.id
         
-        if team_id == "ally":
-            pteam = self.pteam
-            eteam = self.eteam
-        elif team_id == "enemy":
-            eteam = self.pteam
-            pteam = self.eteam
         
         for tar in self.cont_storage[eff.signature]:
-            if tar > 2:
-                target = pteam[tar]
+            if tar < 3:
+                target = self.pteam[tar]
             else:
-                target = eteam[tar]
-
-            if eff.eff_type == EffectType.CONT_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
-                if eff.check_waiting() and self.is_allied_effect(eff, team_id) and (eff.mag >= 20 or not target.deflecting()):
-                    eff.user.deal_eff_damage(eff.mag, target, eff, DamageType.NORMAL)
-            elif eff.eff_type == EffectType.CONT_PIERCE_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
-                if eff.check_waiting() and self.is_allied_effect(eff, team_id) and (eff.mag >= 20 or not target.deflecting()):
-                    eff.user.deal_eff_damage(eff.mag, target, eff, DamageType.PIERCING)
-            elif eff.eff_type == EffectType.CONT_AFF_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
-                if eff.check_waiting() and self.is_allied_effect(eff, team_id) and (eff.mag >= 20 or not target.deflecting()):
-                    if eff.name == "Doping Rampage":
-                        self.dying_to_doping = True
-                    eff.user.deal_eff_damage(eff.mag, target, eff, DamageType.AFFLICTION)
-            elif eff.eff_type == EffectType.CONT_HEAL and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
-                if eff.check_waiting() and self.is_allied_effect(eff, team_id):
-                    eff.user.give_eff_healing(eff.mag, target, eff)
-            elif eff.eff_type == EffectType.CONT_DEST_DEF and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
-                if eff.check_waiting() and self.is_allied_effect(eff, team_id):
-                    if target.has_effect(EffectType.DEST_DEF, eff.name):
-                        target.get_effect(EffectType.DEST_DEF,
-                                        eff.name).alter_dest_def(eff.mag)
-                    else:
-                        target.add_effect(
-                            Effect(
-                                eff.source, EffectType.DEST_DEF, eff.user,
-                                280000, lambda eff:
-                                f"This character has {eff.mag} destructible defense.",
-                                eff.mag))
-            elif eff.eff_type == EffectType.CONT_UNIQUE and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
-                if eff.check_waiting() and self.is_allied_effect(eff, team_id):
-                    target.check_unique_cont(eff, team_id)
-        
+                target = self.eteam[tar - 3]
+            logging.debug("Executing %s on %s", eff.name, target.source.name)
+            if target.contains_sig(eff):
+                if eff.eff_type == EffectType.CONT_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
+                    if eff.check_waiting() and self.is_allied_effect(eff, team_id) and (eff.mag >= 20 or not target.deflecting()):
+                        eff.user.deal_eff_damage(eff.mag, target, eff, DamageType.NORMAL)
+                elif eff.eff_type == EffectType.CONT_PIERCE_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
+                    if eff.check_waiting() and self.is_allied_effect(eff, team_id) and (eff.mag >= 20 or not target.deflecting()):
+                        eff.user.deal_eff_damage(eff.mag, target, eff, DamageType.PIERCING)
+                elif eff.eff_type == EffectType.CONT_AFF_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
+                    if eff.check_waiting() and self.is_allied_effect(eff, team_id) and (eff.mag >= 20 or not target.deflecting()):
+                        if eff.name == "Doping Rampage":
+                            self.dying_to_doping = True
+                        eff.user.deal_eff_damage(eff.mag, target, eff, DamageType.AFFLICTION)
+                elif eff.eff_type == EffectType.CONT_HEAL and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
+                    if eff.check_waiting() and self.is_allied_effect(eff, team_id):
+                        eff.user.give_eff_healing(eff.mag, target, eff)
+                elif eff.eff_type == EffectType.CONT_DEST_DEF and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
+                    if eff.check_waiting() and self.is_allied_effect(eff, team_id):
+                        if target.has_effect(EffectType.DEST_DEF, eff.name):
+                            target.get_effect(EffectType.DEST_DEF,
+                                            eff.name).alter_dest_def(eff.mag)
+                        else:
+                            target.add_effect(
+                                Effect(
+                                    eff.source, EffectType.DEST_DEF, eff.user,
+                                    280000, lambda eff:
+                                    f"This character has {eff.mag} destructible defense.",
+                                    eff.mag))
+                elif eff.eff_type == EffectType.CONT_UNIQUE and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
+                    if eff.check_waiting() and self.is_allied_effect(eff, team_id):
+                        target.check_unique_cont(eff, team_id)
+            
         
     # def resolve_ticking_ability(self, team_id: str):
     #     """Checks all Character Managers for continuous effects.

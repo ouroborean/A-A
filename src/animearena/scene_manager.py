@@ -115,6 +115,10 @@ class SceneManager:
         self.surfaces["how_to"] = get_image_from_path("how_to.png")
         self.surfaces["scroll_wheel"] = get_image_from_path("scroll_wheel.png")
         self.surfaces["used_slot"] = get_image_from_path("used_ability.png")
+        self.surfaces["profile_frame"] = get_image_from_path("portrait_template.png")
+        self.surfaces["stun_icon"] = get_image_from_path("stun_icon.png")
+        self.surfaces["invuln_icon"] = get_image_from_path("invuln_icon.png")
+        self.surfaces["dead_icon"] = get_image_from_path("dead_icon.png")
         self.connected = False
 
     def __enter__(self):

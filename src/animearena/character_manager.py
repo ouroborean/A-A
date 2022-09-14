@@ -81,6 +81,12 @@ class CharacterManager(collections.abc.Container):
                 return True
         return False
 
+    def contains_sig(self, effect) -> bool:
+        for eff in self.source.current_effects:
+            if eff.signature == effect.signature:
+                return True
+        return False
+
     def __str__(self) -> str:
         list_of_effects = f"{self.source.name} ID: {self.id}"
         for eff in self.source.current_effects:
@@ -2694,20 +2700,20 @@ class CharacterManager(collections.abc.Container):
         self.source.current_hp += increment
         if self.source.current_hp == 200:
             hp_bar = self.scene.sprite_factory.from_color(GREEN,
-                                                          size=(100, 20))
+                                                          size=(100, 16))
         elif self.source.current_hp == 0:
-            hp_bar = self.scene.sprite_factory.from_color(RED, size=(100, 20))
+            hp_bar = self.scene.sprite_factory.from_color(RED, size=(100, 16))
         else:
             hp_bar = self.scene.sprite_factory.from_color(BLACK,
-                                                          size=(100, 20))
+                                                          size=(100, 16))
             green_bar = self.scene.sprite_factory.from_color(
-                GREEN, size=(self.source.current_hp // 2, 20))
+                GREEN, size=(self.source.current_hp // 2, 16))
             sdl2.surface.SDL_BlitSurface(green_bar.surface, None,
                                          hp_bar.surface,
                                          sdl2.SDL_Rect(0, 0, 0, 0))
             if self.source.current_hp <= 200:
                 red_bar = self.scene.sprite_factory.from_color(
-                    RED, size=((200 - self.source.current_hp) // 2, 20))
+                    RED, size=((200 - self.source.current_hp) // 2, 16))
                 sdl2.surface.SDL_BlitSurface(
                     red_bar.surface, None, hp_bar.surface,
                     sdl2.SDL_Rect((self.source.current_hp // 2)  + 1, 0, 0, 0))
@@ -2722,8 +2728,8 @@ class CharacterManager(collections.abc.Container):
             hp_text_x = 46
 
         sdl2.surface.SDL_BlitSurface(hp_text, None, hp_bar.surface,
-                                     sdl2.SDL_Rect(hp_text_x, 0, 0, 0))
-        self.scene.add_bordered_sprite(self.hp_bar_region, hp_bar, BLACK, 0, 0)
+                                     sdl2.SDL_Rect(hp_text_x, -3, 0, 0))
+        self.hp_bar_region.add_sprite(hp_bar, 0, 7)
 
     def refresh_character(self, enemy=False):
         if self.source.hp <= 0:
@@ -2822,24 +2828,42 @@ class CharacterManager(collections.abc.Container):
         self.profile_sprite.surface = self.scene.get_scaled_surface(
             self.scene.scene_manager.surfaces[self.source.name + "allyprof"])
         self.check_profile_swaps()
-        
-        
-        self.scene.add_sprite_with_border(self.character_region,
-                                          self.profile_sprite,
-                                          self.profile_border, x, y)
+        profile_frame = self.scene.sprite_factory.from_surface(self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["profile_frame"]), free=True)
+        self.character_region.add_sprite(profile_frame, -4, -4)
+        self.character_region.add_sprite(self.profile_sprite, 0, 0)
         if self.targeted:
             self.character_region.add_sprite(self.selected_filter, 0, 0)
+        if self.is_stunned():
+            stun_icon = self.scene.sprite_factory.from_surface(self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["stun_icon"]), free=True)
+            self.character_region.add_sprite(stun_icon, 69, 130)
+        if self.check_invuln():
+            invuln_icon = self.scene.sprite_factory.from_surface(self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["invuln_icon"]), free=True)
+            self.character_region.add_sprite(invuln_icon, 55, 131)
+        if self.source.dead:
+            dead_icon = self.scene.sprite_factory.from_surface(self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["dead_icon"]), free=True)
+            self.character_region.add_sprite(dead_icon, 84, 131)
 
     def update_enemy_profile(self, x: int = 0, y: int = 0):
 
         self.profile_sprite.surface = self.scene.get_scaled_surface(
             self.scene.scene_manager.surfaces[self.source.name + "enemyprof"])
         self.check_enemy_profile_swaps()
-
-        self.scene.add_bordered_sprite(self.character_region,
-                                       self.profile_sprite, BLACK, x, y)
+        profile_frame = self.scene.sprite_factory.from_surface(self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["profile_frame"]), free=True)
+        
+        self.character_region.add_sprite(profile_frame, -4, -4)
+        self.character_region.add_sprite(self.profile_sprite, 0, 0)
+        
         if self.targeted:
             self.character_region.add_sprite(self.selected_filter, 0, 0)
+        if self.is_stunned():
+            stun_icon = self.scene.sprite_factory.from_surface(self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["stun_icon"]), free=True)
+            self.character_region.add_sprite(stun_icon, 69, 130)
+        if self.check_invuln():
+            invuln_icon = self.scene.sprite_factory.from_surface(self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["invuln_icon"]), free=True)
+            self.character_region.add_sprite(invuln_icon, 55, 131)
+        if self.source.dead:
+            dead_icon = self.scene.sprite_factory.from_surface(self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["dead_icon"]), free=True)
+            self.character_region.add_sprite(dead_icon, 84, 131)
 
     def update_targeted_sprites(self):
         vertical_offset = 12
