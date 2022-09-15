@@ -322,11 +322,15 @@ class CharacterSelectScene(engine.Scene):
         if self.display_character.alt_abilities:
             self.character_info_region.add_sprite(self.alt_arrow, 670, 35)
 
-        self.add_sprite_with_border(self.character_info_region, self.detail_target.char_select_desc, self.info_display_border, 180, 110)
+
+        detail_panel = self.border_sprite(self.sprite_factory.from_color(MENU_TRANSPARENT, (477, 132)), AQUA, 2)
         
 
         if type(self.detail_target) == Ability:
             self.show_ability_details(self.detail_target)
+            
+        
+        self.character_info_region.add_sprite(detail_panel, 180, 110)
 
     def render_alt_character_info(self):
         self.character_info_region.clear()
@@ -361,10 +365,13 @@ class CharacterSelectScene(engine.Scene):
         else:
             text = self.detail_target.desc
 
-        self.add_sprite_with_border(self.character_info_region, self.detail_target.char_select_desc, self.info_display_border, 180, 110)
-
+        detail_panel = self.border_sprite(self.sprite_factory.from_color(MENU_TRANSPARENT, (477, 132)), AQUA, 2)
+        
         if type(self.detail_target) == Ability:
             self.show_ability_details(self.detail_target)
+            
+        self.character_info_region.add_sprite(detail_panel, 180, 110)
+        
 
     def show_ability_details(self, ability: Ability):
         if not self.window_up:
@@ -464,10 +471,10 @@ class CharacterSelectScene(engine.Scene):
     
     def scroll_character_scroll_selection(self):
         self.character_scroll_selection_region.clear()
-        background = self.sprite_factory.from_color(DARK_GRAY, self.character_scroll_selection_region.size())
-        scroll_bar = self.sprite_factory.from_color(WHITE, self.scroll_bar_region.size())
-        self.character_scroll_selection_region.add_sprite(self.character_select_border, -2, -2)
-        self.character_scroll_selection_region.add_sprite(background, 0, 0)
+        background = self.sprite_factory.from_color(MENU_TRANSPARENT, (self.character_scroll_selection_region.size()[0], self.character_scroll_selection_region.size()[1] + 8))
+        background = self.border_sprite(background, AQUA, 2)
+        scroll_bar = self.sprite_factory.from_color(DULL_AQUA, self.scroll_bar_region.size())
+        self.character_scroll_selection_region.add_sprite(background, 0, -4)
         self.scroll_bar_region.add_sprite(scroll_bar, 0, 0)
         self.render_filter_options()
         self.render_team_display()
@@ -556,10 +563,10 @@ class CharacterSelectScene(engine.Scene):
     
     def render_character_scroll_selection(self):
         self.character_scroll_selection_region.clear()
-        background = self.sprite_factory.from_color(DARK_GRAY, self.character_scroll_selection_region.size())
-        scroll_bar = self.sprite_factory.from_color(WHITE, self.scroll_bar_region.size())
-        self.character_scroll_selection_region.add_sprite(self.character_select_border, -2, -2)
-        self.character_scroll_selection_region.add_sprite(background, 0, 0)
+        background = self.sprite_factory.from_color(MENU_TRANSPARENT, (self.character_scroll_selection_region.size()[0], self.character_scroll_selection_region.size()[1] + 8))
+        background = self.border_sprite(background, AQUA, 2)
+        scroll_bar = self.sprite_factory.from_color(DULL_AQUA, self.scroll_bar_region.size())
+        self.character_scroll_selection_region.add_sprite(background, 0, -4)
         self.scroll_bar_region.add_sprite(scroll_bar, 0, 0)
         self.render_team_display()
         self.render_filter_options()
@@ -851,13 +858,8 @@ class CharacterSelectScene(engine.Scene):
   
 
     def init_char_select_desc(self, button):
-        if not button.character.char_select_desc:
-            button.character.char_select_desc = self.create_text_display(self.font, button.character.desc, BLACK, WHITE, 5, 0, 475, 130)
-            for ability in button.character.main_abilities:
-                ability.char_select_desc = self.create_text_display(self.font, ability.name + ": " + ability.desc, BLACK, WHITE, 5, 0, 475, 130)
-            for ability in button.character.alt_abilities:
-                ability.char_select_desc = self.create_text_display(self.font, ability.name + ": " + ability.desc, BLACK, WHITE, 5, 0, 475, 130)
-
+        pass
+    
     def start_click(self, _button, _sender):
         if not self.clicked_search and self.scene_manager.connected and not self.window_up:
             self.start_searching()

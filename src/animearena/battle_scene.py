@@ -2136,11 +2136,11 @@ class BattleScene(engine.Scene):
         mental_count = "x " + f"{self.player_display.team.energy_pool[Energy.MENTAL]}"
         weapon_count = "x " + f"{self.player_display.team.energy_pool[Energy.WEAPON]}"
         total_count = "x " + f"{self.player_display.team.energy_pool[Energy.RANDOM]}"
-        energy_panel = self.render_bordered_text(self.font, physical_count, WHITE, BLACK, energy_panel, 20, 3, 1)
-        energy_panel = self.render_bordered_text(self.font, special_count, WHITE, BLACK, energy_panel, 78, 3, 1)
-        energy_panel = self.render_bordered_text(self.font, mental_count, WHITE, BLACK, energy_panel, 136, 3, 1)
-        energy_panel = self.render_bordered_text(self.font, weapon_count, WHITE, BLACK, energy_panel, 194, 3, 1)
-        energy_panel = self.render_bordered_text(self.font, total_count, WHITE, BLACK, energy_panel, 252, 3, 1)
+        energy_panel = self.render_bordered_text(self.font, physical_count, WHITE, BLACK, energy_panel, 35, 4, 1)
+        energy_panel = self.render_bordered_text(self.font, special_count, WHITE, BLACK, energy_panel, 93, 4, 1)
+        energy_panel = self.render_bordered_text(self.font, mental_count, WHITE, BLACK, energy_panel, 151, 4, 1)
+        energy_panel = self.render_bordered_text(self.font, weapon_count, WHITE, BLACK, energy_panel, 209, 4, 1)
+        energy_panel = self.render_bordered_text(self.font, total_count, WHITE, BLACK, energy_panel, 267, 4, 1)
         
         can_exchange = False
         for i in range(4):
@@ -2151,27 +2151,27 @@ class BattleScene(engine.Scene):
         
         self.energy_region.add_sprite(self.sprite_factory.from_surface(
             self.get_scaled_surface(self.scene_manager.surfaces["PHYSICAL"], 13, 13)),
-                                      x=3,
+                                      x=18,
                                       y=9)
 
         self.energy_region.add_sprite(self.sprite_factory.from_surface(
             self.get_scaled_surface(self.scene_manager.surfaces["SPECIAL"], 13, 13)),
-                                      x=61,
+                                      x=76,
                                       y=9)
 
         self.energy_region.add_sprite(self.sprite_factory.from_surface(
             self.get_scaled_surface(self.scene_manager.surfaces["MENTAL"], 13, 13)),
-                                      x=119,
+                                      x=134,
                                       y=9)
 
         self.energy_region.add_sprite(self.sprite_factory.from_surface(
             self.get_scaled_surface(self.scene_manager.surfaces["WEAPON"], 13, 13)),
-                                      x=177,
+                                      x=192,
                                       y=9)
         
         self.energy_region.add_sprite(self.sprite_factory.from_surface(
             self.get_scaled_surface(self.scene_manager.surfaces["RANDOM"], 13, 13)),
-                                      x=235,
+                                      x=250,
                                       y=9)
         
         # if can_exchange and not self.has_exchanged and not self.waiting_for_turn:

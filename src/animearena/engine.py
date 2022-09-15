@@ -18,7 +18,7 @@ import sdl2.sdlttf
 import sdl2.surface
 from sdl2 import endian
 from pathlib import Path
-import animearena.text_formatter
+from animearena.text_formatter import get_lines, get_font_height
 def get_image_from_path(file_name: str) -> Image:
     with importlib.resources.path('animearena.resources', file_name) as path:
         return Image.open(path)
@@ -69,27 +69,53 @@ class Scene:
     def eventables(self) -> Iterator[sdl2.ext.Sprite]:
         return self.region.eventables()
 
-    def render_text(self, font, text, color, target, x, y):
-        text = sdl2.sdlttf.TTF_RenderText_Blended(font, str.encode(text), color)
-        sdl2.surface.SDL_BlitSurface(text, None, target.surface, sdl2.SDL_Rect(x, y))
-        sdl2.SDL_FreeSurface(text)
+    def render_text(self, font, text, color, target, x, y, flow = False, target_width = 0, fontsize = 0):
+        if not flow:
+            text_surface = sdl2.sdlttf.TTF_RenderText_Blended(font, str.encode(text), color)
+            sdl2.surface.SDL_BlitSurface(text_surface, None, target.surface, sdl2.SDL_Rect(x, y))
+            sdl2.SDL_FreeSurface(text_surface)
+        else:
+            lines = get_lines(text, target_width, fontsize)
+            line_height = get_font_height(fontsize)
+            for i, line in enumerate(lines):
+                text_surface = sdl2.sdlttf.TTF_RenderText_Blended(font, str.encode(line), color)
+                sdl2.surface.SDL_BlitSurface(text_surface, None, target.surface, sdl2.SDL_Rect(x, y + (i * line_height)))
+                sdl2.SDL_FreeSurface(text_surface)
         return target
     
-    def render_bordered_text(self, font, text, color, border_color, target, x, y, thickness):
-        text_surf = sdl2.sdlttf.TTF_RenderText_Blended(font, str.encode(text), border_color)
-        sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x-thickness, y-thickness))
-        sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x,           y-thickness))
-        sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x+thickness, y-thickness))
-        sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x-thickness, y))
-        sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x+thickness, y))
-        sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x-thickness, y+thickness))
-        sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x,           y+thickness))
-        sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x+thickness, y+thickness))
-        sdl2.SDL_FreeSurface(text_surf)
-        
-        text_surf = sdl2.sdlttf.TTF_RenderText_Blended(font, str.encode(text), color)
-        sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x, y))
-        
+    def render_bordered_text(self, font, text, color, border_color, target, x, y, thickness, flow = False, target_width = 0, fontsize = 0):
+        if not flow:
+            text_surf = sdl2.sdlttf.TTF_RenderText_Blended(font, str.encode(text), border_color)
+            sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x-thickness, y-thickness))
+            sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x,           y-thickness))
+            sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x+thickness, y-thickness))
+            sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x-thickness, y))
+            sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x+thickness, y))
+            sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x-thickness, y+thickness))
+            sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x,           y+thickness))
+            sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x+thickness, y+thickness))
+            sdl2.SDL_FreeSurface(text_surf)
+            
+            text_surf = sdl2.sdlttf.TTF_RenderText_Blended(font, str.encode(text), color)
+            sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x, y))
+        else:
+            lines = get_lines(text, target_width, fontsize)
+            line_height = get_font_height(fontsize)
+            for i, line in enumerate(lines):
+                mod_y = y + (i * line_height)
+                text_surf = sdl2.sdlttf.TTF_RenderText_Blended(font, str.encode(line), border_color)
+                sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x-thickness, mod_y-thickness))
+                sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x,           mod_y-thickness))
+                sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x+thickness, mod_y-thickness))
+                sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x-thickness, mod_y))
+                sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x+thickness, mod_y))
+                sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x-thickness, mod_y+thickness))
+                sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x,           mod_y+thickness))
+                sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x+thickness, mod_y+thickness))
+                sdl2.SDL_FreeSurface(text_surf)
+                
+                text_surf = sdl2.sdlttf.TTF_RenderText_Blended(font, str.encode(line), color)
+                sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x, mod_y))
         
         
         sdl2.SDL_FreeSurface(text_surf)
@@ -222,7 +248,7 @@ class Scene:
 
         # get list of lines from full string based on box width
         # lines = textwrap.wrap(text, chars_per_line)
-        lines = animearena.text_formatter.get_lines(text, max_width)
+        lines = get_lines(text, max_width, 16)
 
         # if height is on auto, then set it to a function of the margin plus
         # the space required for all lines
@@ -266,7 +292,7 @@ class Scene:
 
         # get list of lines from full string based on box width
         # lines = textwrap.wrap(text, chars_per_line)
-        lines = animearena.text_formatter.get_lines(text, max_width)
+        lines = get_lines(text, max_width, 16)
 
         # if height is on auto, then set it to a function of the margin plus
         # the space required for all lines
