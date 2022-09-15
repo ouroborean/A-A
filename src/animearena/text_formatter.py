@@ -34,7 +34,7 @@ def get_font_height(fontsize):
         load_fontsize(fontsize)
     font = loaded_fonts[fontsize]
     height = font.getsize("G")[1]
-    height += int(height * 0.3)
+    height += int(height * 0.15)
     return height
 
 def get_lines(input: str, max_width: int, fontsize: int) -> list[str]:

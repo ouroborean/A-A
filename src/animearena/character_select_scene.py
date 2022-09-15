@@ -133,6 +133,7 @@ class CharacterSelectScene(engine.Scene):
             self.get_scaled_surface(self.scene_manager.surfaces["right_arrow"]))
         self.right_button.click += self.right_click
         self.how_to_button = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["how_to"], 100, 40))
+        # self.how_to_button.click += self.tutorial_click
         self.how_to_button.click += self.tutorial_click
         self.character_sprites = {}
         for k, v in get_character_db().items():
@@ -233,6 +234,9 @@ class CharacterSelectScene(engine.Scene):
         self.render_search_panel()
         gc.collect()
 
+    def memory_test(self, _button, _sender):
+        self.full_render()
+    
     def render_tutorial_button(self):
         self.how_to_region.clear()
         self.how_to_region.add_sprite(self.how_to_button, 0, 0)
@@ -316,24 +320,41 @@ class CharacterSelectScene(engine.Scene):
             ability.surface = self.get_scaled_surface(self.scene_manager.surfaces[self.display_character.main_abilities[i].db_name])
             ability.ability = self.display_character.main_abilities[i]
             ability.free = True
-            self.add_sprite_with_border(self.character_info_region, ability, ability.border_box, x=55 + ((i + 1) * 125),
+            if ability.ability == self.detail_target:
+                self.add_bordered_sprite(self.character_info_region, ability, ELECTRIC_BLUE, x=55 + ((i + 1) * 125), y=5)
+            else:
+                self.add_bordered_sprite(self.character_info_region, ability, BLACK, x=55 + ((i + 1) * 125),
                                                   y=5)
 
         if self.display_character.alt_abilities:
             self.character_info_region.add_sprite(self.alt_arrow, 670, 35)
+            
 
-
-        detail_panel = self.border_sprite(self.sprite_factory.from_color(MENU_TRANSPARENT, (477, 132)), AQUA, 2)
-        
+        detail_panel = self.border_sprite(self.sprite_factory.from_color(MENU_TRANSPARENT, (479, 148)), AQUA, 2)
 
         if type(self.detail_target) == Ability:
-            self.show_ability_details(self.detail_target)
-            
+            text = self.detail_target.name + ": " + self.detail_target.desc
+            detail_panel = self.render_bordered_text(self.font, f"CD: {self.detail_target.cooldown}", WHITE, BLACK, detail_panel, 432, 121, 1)
+            if self.detail_target.total_cost > 0:
+                total_energy = 0
+                for k, v in self.detail_target.cost.items():
+                    for i in range(v):
+                        sdl2.surface.SDL_BlitSurface(self.get_scaled_surface(self.scene_manager.surfaces[k.name], 18, 18), None, detail_panel.surface,
+                            sdl2.SDL_Rect(7 + (total_energy * 21), 125))
+                        total_energy += 1
+            else:
+                detail_panel = self.render_bordered_text(self.font, "No Cost", WHITE, BLACK, detail_panel, 7, 121)
+        else:
+            text = self.detail_target.desc
+
         
-        self.character_info_region.add_sprite(detail_panel, 180, 110)
+        detail_panel = self.render_bordered_text(self.font, text, WHITE, BLACK, detail_panel, 5, 5, 1, flow=True, target_width = 465, fontsize=16)
+
+        self.character_info_region.add_sprite(detail_panel, 178, 110)
 
     def render_alt_character_info(self):
         self.character_info_region.clear()
+        logging.debug("Rendering Alt Info with a detail target type of %s", type(self.detail_target))
         self.alt_character_info_prof.surface = self.get_scaled_surface(self.scene_manager.surfaces[self.display_character.name + "banner"])
         self.alt_character_info_prof.character = self.display_character
         self.alt_character_info_prof.free = True
@@ -351,7 +372,10 @@ class CharacterSelectScene(engine.Scene):
             self.alt_ability_sprites[i].surface = self.get_scaled_surface(self.scene_manager.surfaces[ability.db_name])
             self.alt_ability_sprites[i].free = True
             self.alt_ability_sprites[i].ability = ability
-            self.add_sprite_with_border(self.character_info_region, self.alt_ability_sprites[i], self.alt_ability_sprites[i].border_box, x=55 + ((i + 1) * 125),
+            if ability.ability == self.detail_target:
+                self.add_bordered_sprite(self.character_info_region, ability, ELECTRIC_BLUE, x=55 + ((i + 1) * 125), y=5)
+            else:
+                self.add_bordered_sprite(self.character_info_region, ability, BLACK, x=55 + ((i + 1) * 125),
                                                   y=5)
 
         main_arrow = self.ui_factory.from_surface(
@@ -360,36 +384,34 @@ class CharacterSelectScene(engine.Scene):
         main_arrow.click += self.main_arrow_click
         self.character_info_region.add_sprite(main_arrow, 670, 35)
 
+
+
+        detail_panel = self.border_sprite(self.sprite_factory.from_color(MENU_TRANSPARENT, (479, 148)), AQUA, 2)
+
         if type(self.detail_target) == Ability:
             text = self.detail_target.name + ": " + self.detail_target.desc
+            detail_panel = self.render_bordered_text(self.font, f"CD: {self.detail_target.cooldown}", WHITE, BLACK, detail_panel, 432, 121, 1)
+            if self.detail_target.total_cost > 0:
+                total_energy = 0
+                for k, v in self.detail_target.cost.items():
+                    for i in range(v):
+                        sdl2.surface.SDL_BlitSurface(self.get_scaled_surface(self.scene_manager.surfaces[k.name], 18, 18), None, detail_panel.surface,
+                            sdl2.SDL_Rect(7 + (total_energy * 21), 125))
+                        total_energy += 1
+            else:
+                detail_panel = self.render_bordered_text(self.font, "No Cost", WHITE, BLACK, detail_panel, 7, 121)
         else:
             text = self.detail_target.desc
 
-        detail_panel = self.border_sprite(self.sprite_factory.from_color(MENU_TRANSPARENT, (477, 132)), AQUA, 2)
         
-        if type(self.detail_target) == Ability:
-            self.show_ability_details(self.detail_target)
+        detail_panel = self.render_bordered_text(self.font, text, WHITE, BLACK, detail_panel, 5, 5, 1, flow=True, target_width = 465, fontsize=16)
+        
             
-        self.character_info_region.add_sprite(detail_panel, 180, 110)
+        self.character_info_region.add_sprite(detail_panel, 178, 110)
         
 
-    def show_ability_details(self, ability: Ability):
-        if not self.window_up:
-            self.render_energy_cost(ability)
-            self.render_cooldown(ability)
 
-    def render_energy_cost(self, ability: Ability):
-        total_energy = 0
-        if ability.total_cost > 0:
-            for k, v in ability.cost.items():
-                for i in range(v):
-                    self.character_info_region.add_sprite(
-                        self.sprite_factory.from_surface(
-                            self.get_scaled_surface(self.scene_manager.surfaces[k.name], 18, 18)),
-                        185 + (total_energy * 21), 235)
-                    total_energy += 1
-        else:
-            self.character_info_region.add_sprite(self.create_text_display(self.font, "No Cost", BLACK, WHITE, 0, 0, 80, 4), 185, 234)
+        
 
     def render_cooldown(self, ability: Ability):
         cooldown_panel = self.create_text_display(self.font,
@@ -784,11 +806,13 @@ class CharacterSelectScene(engine.Scene):
     def alt_arrow_click(self, _button, _sender):
         if not self.window_up:
             play_sound(self.scene_manager.sounds["page"])
+            self.detail_target = self.display_character.alt_abilities[0]
             self.render_alt_character_info()
 
     def main_arrow_click(self, _button, _sender):
         if not self.window_up:
             play_sound(self.scene_manager.sounds["page"])
+            self.detail_target = self.display_character.main_abilities[0]
             self.render_main_character_info()
 
     def ability_click(self, button, _sender):
@@ -796,14 +820,12 @@ class CharacterSelectScene(engine.Scene):
             play_sound(self.scene_manager.sounds["click"])
             self.detail_target = button.ability
             self.render_main_character_info()
-            self.show_ability_details(button.ability)
 
     def alt_ability_click(self, button, _sender):
         if not self.window_up:
             play_sound(self.scene_manager.sounds["click"])
             self.detail_target = button.ability
             self.render_alt_character_info()
-            self.show_ability_details(button.ability)
 
     def character_alt_click(self, button, _sender):
         if not self.window_up:

@@ -16,7 +16,7 @@ from animearena.scene_manager import SceneManager
 from pydub import AudioSegment
 from pydub.playback import play
 import sys
-
+import gc
 
 WHITE = sdl2.SDL_Color(255, 255, 255)
 
@@ -25,7 +25,7 @@ CURRENT_TIMEOUTS = 0
 
 def main():
     """Main game entry point."""
-    
+    gc.enable()
 
     logging.basicConfig(level=logging.DEBUG,
                         format="%(levelname)s:%(relativeCreated)d:%(module)s:%(message)s")
@@ -206,6 +206,7 @@ async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server
         if scene_manager.frame_count > 30:
             scene_manager.frame_count = 0
         sleep_duration = max((1.0 / target_fps.get()) - elapsed_time, 0)
+        gc.collect()
         await asyncio.sleep(sleep_duration)
     logging.debug("Broke game loop!")
 

@@ -98,6 +98,7 @@ class Scene:
             
             text_surf = sdl2.sdlttf.TTF_RenderText_Blended(font, str.encode(text), color)
             sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x, y))
+            sdl2.SDL_FreeSurface(text_surf)
         else:
             lines = get_lines(text, target_width, fontsize)
             line_height = get_font_height(fontsize)
@@ -116,9 +117,8 @@ class Scene:
                 
                 text_surf = sdl2.sdlttf.TTF_RenderText_Blended(font, str.encode(line), color)
                 sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x, mod_y))
+                sdl2.SDL_FreeSurface(text_surf)
         
-        
-        sdl2.SDL_FreeSurface(text_surf)
         return target
     
     def border_sprite(self, sprite, color, thickness):
