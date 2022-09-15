@@ -8,6 +8,7 @@ import textwrap
 from animearena import engine
 from animearena.character import Character, get_character_db
 from animearena.ability import Ability, Target, DamageType, rename_i_reject
+from animearena.color import TRANSPARENT
 from animearena.energy import Energy
 from animearena.effects import Effect, EffectType
 from animearena.player import Player
@@ -21,6 +22,7 @@ import logging
 from animearena.mission_handler import MissionHandler
 from animearena.turn_timer import TurnTimer
 from animearena.resource_manager import init_font
+from animearena.color import *
 import random
 if typing.TYPE_CHECKING:
     from animearena.scene_manager import SceneManager
@@ -37,14 +39,7 @@ def play_sound(file_name: str):
     #     playsound(str(path), False)
     pass
 
-BLUE = sdl2.SDL_Color(0, 0, 255)
-RED = sdl2.SDL_Color(255, 0, 0)
-GREEN = sdl2.SDL_Color(50, 190, 50)
-PURPLE = sdl2.SDL_Color(255, 60, 255)
-AQUA = sdl2.SDL_Color(30, 190, 210)
-BLACK = sdl2.SDL_Color(0, 0, 0)
-WHITE = sdl2.SDL_Color(255, 255, 255)
-TRANSPARENT = sdl2.SDL_Color(255, 255, 255, 255)
+
 
 class AbilityMessage:
 
@@ -340,16 +335,19 @@ class BattleScene(engine.Scene):
         self.enemy_panel = self.sprite_factory.from_color(WHITE, (200, 100))
         self.enemy_panel_border = self.sprite_factory.from_color(
             BLACK, (204, 104))
-        self.waiting_label = self.create_text_display(self.font,
-                                                      "Waiting for opponent",
-                                                      WHITE, BLACK, 4, 4, 160)
-        self.turn_label = self.create_text_display(self.font,
-                                                   "It's your turn!", WHITE,
-                                                   BLACK, 22, 4, 150)
-        self.energy_region = self.region.subregion(x=206,
-                                                   y=5,
-                                                   width=150,
-                                                   height=53)
+        
+        label_background = self.sprite_factory.from_color(MENU_TRANSPARENT, (150, 50))
+        self.waiting_label = self.render_bordered_text(self.font, "OPPONENT'S TURN", WHITE, BLACK, label_background, 10, 14, 1)
+        self.waiting_label = self.border_sprite(self.waiting_label, AQUA, 2)
+        label_background = self.ui_factory.from_color(sdl2.ext.BUTTON, MENU_TRANSPARENT, (150, 50))
+        self.turn_label = self.render_bordered_text(self.font, "PRESS WHEN READY", WHITE, BLACK, label_background, 6, 14, 1)
+        self.turn_label = self.border_sprite(self.turn_label, AQUA, 2)
+        self.turn_label.click += self.turn_end_button_click
+        
+        self.energy_region = self.region.subregion(x=300,
+                                                   y=60,
+                                                   width=300,
+                                                   height=30)
         self.turn_end_region = self.region.subregion(x=375,
                                                      y=5,
                                                      width=150,
@@ -359,8 +357,8 @@ class BattleScene(engine.Scene):
                                                         width=400,
                                                         height=250)
         
-        self.player_region = self.region.subregion(2, 2, 200, 100)
-        self.enemy_region = self.region.subregion(698, 2, 200, 100)
+        self.player_region = self.region.subregion(2, 2, 100, 100)
+        self.enemy_region = self.region.subregion(793, 2, 100, 100)
         self.surrender_button_region = self.region.subregion(725, 625, 0, 0)
         self.enemy_info_region = self.region.subregion(5, 578, 670, 120)
         self.hover_effect_region = self.region.subregion(0, 0, 0, 0)
@@ -625,7 +623,7 @@ class BattleScene(engine.Scene):
         bar_width = self.timer_region.size()[0] - 2
         self.timer_region.add_sprite(self.sprite_factory.from_color(BLACK, size=(self.timer_region.size())), 0, 0)
         self.timer_region.add_sprite(self.sprite_factory.from_color(WHITE, size=(bar_width, bar_height)), 1, 1)
-        if self.timer:
+        if self.timer and self.timer.time_left > 0:
             self.timer_region.add_sprite(self.sprite_factory.from_color(RED, size=(self.timer.time_left * 4, bar_height)), 1, 1)
 
     def draw_enemy_info_region(self):
@@ -750,59 +748,54 @@ class BattleScene(engine.Scene):
     def draw_player_region(self):
         self.player_region.clear()
         if self.player:
-            self.add_sprite_with_border(self.player_region, self.player_panel,
-                                        self.player_panel_border, 0, 0)
             player_ava = self.sprite_factory.from_surface(
                 self.get_scaled_surface(self.player.avatar))
-            self.add_bordered_sprite(self.player_region, player_ava, BLACK, 0,
-                                     0)
-            username_label = self.create_text_display(self.font,
-                                                      self.player.name, BLACK,
-                                                      WHITE, 0, 0, 90)
-            win_label = self.create_text_display(self.font,
-                                                 f"Wins: {self.player.wins}",
-                                                 BLACK, WHITE, 0, 0, 90)
-            loss_label = self.create_text_display(
-                self.font, f"Losses: {self.player.losses}", BLACK, WHITE, 0, 0,
-                90)
-
-            self.player_region.add_sprite(username_label, x=104, y=5)
-            self.player_region.add_sprite(win_label, x=104, y=30)
-            self.player_region.add_sprite(loss_label, x=104, y=55)
+            self.add_bordered_sprite(self.player_region, player_ava, BLACK, 5,
+                                     5)
+            transparent_box = self.sprite_factory.from_color(TRANSPARENT, (200, 50))
+            name_panel = self.render_bordered_text(self.stack_font, self.player.name, RED, BLACK, transparent_box, 0, 0, thickness=2)
+            self.player_region.add_sprite(name_panel, 110, 0)
+            if not self.player.clan:
+                transparent_box = self.sprite_factory.from_color(TRANSPARENT, (200, 50))
+                clan_panel = self.render_bordered_text(self.font, "Clanless", WHITE, BLACK, transparent_box, 0, 0, thickness=1)
+                self.player_region.add_sprite(clan_panel, 110, 38)
+            else:
+                pass
+            transparent_box = self.sprite_factory.from_color(TRANSPARENT, (200, 50))
+            title_panel = self.render_bordered_text(self.font, self.player.title, WHITE, BLACK, transparent_box, 0, 0, thickness=1)
+            self.player_region.add_sprite(title_panel, 110, 58)
 
     def draw_enemy_region(self):
         self.enemy_region.clear()
         if self.enemy:
-            self.add_sprite_with_border(self.enemy_region, self.enemy_panel,
-                                        self.enemy_panel_border, 0, 0)
             enemy_ava = self.sprite_factory.from_surface(
                 self.get_scaled_surface(self.enemy.avatar))
-            self.add_bordered_sprite(self.enemy_region, enemy_ava, BLACK, 100,
-                                     0)
-
-            username_label = self.create_text_display(self.font,
-                                                      self.enemy.name, BLACK,
-                                                      WHITE, 0, 0, 90)
-            win_label = self.create_text_display(self.font,
-                                                 f"Wins: {self.enemy.wins}",
-                                                 BLACK, WHITE, 0, 0, 90)
-            loss_label = self.create_text_display(
-                self.font, f"Losses: {self.enemy.losses}", BLACK, WHITE, 0, 0,
-                90)
-
-            self.enemy_region.add_sprite(username_label, x=4, y=5)
-            self.enemy_region.add_sprite(win_label, x=4, y=30)
-            self.enemy_region.add_sprite(loss_label, x=4, y=55)
+            self.add_bordered_sprite(self.enemy_region, enemy_ava, BLACK, 0,
+                                     5)
+            name_width = int(len(self.enemy.name) * 11.2) + 5
+            transparent_box = self.sprite_factory.from_color(TRANSPARENT, (name_width, 50))
+            name_panel = self.render_bordered_text(self.stack_font, self.enemy.name, RED, BLACK, transparent_box, 0, 0, thickness=2)
+            self.enemy_region.add_sprite(name_panel, -name_width, 0)
+            if not self.enemy.clan:
+                transparent_box = self.sprite_factory.from_color(TRANSPARENT, (200, 50))
+                clan_panel = self.render_bordered_text(self.font, "Clanless", WHITE, BLACK, transparent_box, 0, 0, thickness=1)
+                clan_width = int(len("Clanless") * 7.3) + 5
+                self.enemy_region.add_sprite(clan_panel, -clan_width, 38)
+            else:
+                pass
+            transparent_box = self.sprite_factory.from_color(TRANSPARENT, (200, 50))
+            title_panel = self.render_bordered_text(self.font, self.enemy.title, WHITE, BLACK, transparent_box, 0, 0, thickness=1)
+            title_width = int(len(self.enemy.title) * 7.3) + 5
+            self.enemy_region.add_sprite(title_panel, -title_width, 58)
+            
 
     def draw_turn_end_region(self):
         self.turn_end_region.clear()
-        self.turn_end_region.add_sprite(self.turn_end_button, 0, 0)
+        
         if self.waiting_for_turn:
-            self.add_bordered_sprite(self.turn_end_region, self.waiting_label,
-                                     WHITE, -5, 55)
+            self.turn_end_region.add_sprite(self.waiting_label, 0, 0)
         else:
-            self.add_bordered_sprite(self.turn_end_region, self.turn_label,
-                                     WHITE, 0, 55)
+            self.turn_end_region.add_sprite(self.turn_label, 0, 0)
         self.draw_timer_region()
 
 
@@ -2133,102 +2126,66 @@ class BattleScene(engine.Scene):
 
     def show_energy_display(self):
         self.energy_region.clear()
-        self.add_bordered_sprite(
-            self.energy_region,
-            self.sprite_factory.from_color(BLACK, self.energy_region.size()),
-            WHITE, 0, 0)
-        self.energy_region.add_sprite(self.sprite_factory.from_surface(
-            self.get_scaled_surface(self.scene_manager.surfaces["PHYSICAL"])),
-                                      x=5,
-                                      y=8)
-
-        PHYSICAL_counter = self.create_text_display(
-            self.font,
-            "x " + f"{self.player_display.team.energy_pool[Energy.PHYSICAL]}",
-            WHITE,
-            BLACK,
-            x=0,
-            y=0,
-            width=30,
-            height=4)
-        self.energy_region.add_sprite(PHYSICAL_counter, x=17, y=0)
-
-        self.energy_region.add_sprite(self.sprite_factory.from_surface(
-            self.get_scaled_surface(self.scene_manager.surfaces["SPECIAL"])),
-                                      x=60,
-                                      y=8)
-
-        SPECIAL_counter = self.create_text_display(
-            self.font,
-            "x " + f"{self.player_display.team.energy_pool[Energy.SPECIAL]}",
-            WHITE,
-            BLACK,
-            x=0,
-            y=0,
-            width=30,
-            height=4)
-        self.energy_region.add_sprite(SPECIAL_counter, x=72, y=0)
-
-        self.energy_region.add_sprite(self.sprite_factory.from_surface(
-            self.get_scaled_surface(self.scene_manager.surfaces["MENTAL"])),
-                                      x=5,
-                                      y=32)
-
-        MENTAL_counter = self.create_text_display(
-            self.font,
-            "x " + f"{self.player_display.team.energy_pool[Energy.MENTAL]}",
-            WHITE,
-            BLACK,
-            x=0,
-            y=0,
-            width=30,
-            height=4)
-        self.energy_region.add_sprite(MENTAL_counter, x=17, y=25)
-
-        self.energy_region.add_sprite(self.sprite_factory.from_surface(
-            self.get_scaled_surface(self.scene_manager.surfaces["WEAPON"])),
-                                      x=60,
-                                      y=32)
-
-        WEAPON_counter = self.create_text_display(
-            self.font,
-            "x " + f"{self.player_display.team.energy_pool[Energy.WEAPON]}",
-            WHITE,
-            BLACK,
-            x=0,
-            y=0,
-            width=30,
-            height=4)
-        self.energy_region.add_sprite(WEAPON_counter, x=72, y=25)
-
-        total_counter = self.create_text_display(
-            self.font,
-            "T x " + f"{self.player_display.team.energy_pool[Energy.RANDOM]}",
-            WHITE,
-            BLACK,
-            x=0,
-            y=0,
-            width=47,
-            height=4)
-        self.energy_region.add_sprite(total_counter, x=102, y=12)
-
+        
+        energy_panel = self.border_sprite(self.sprite_factory.from_color(MENU_TRANSPARENT, self.energy_region.size()), AQUA, 2)
+        
+        
+        
+        physical_count = "x " + f"{self.player_display.team.energy_pool[Energy.PHYSICAL]}"
+        special_count = "x " + f"{self.player_display.team.energy_pool[Energy.SPECIAL]}"
+        mental_count = "x " + f"{self.player_display.team.energy_pool[Energy.MENTAL]}"
+        weapon_count = "x " + f"{self.player_display.team.energy_pool[Energy.WEAPON]}"
+        total_count = "x " + f"{self.player_display.team.energy_pool[Energy.RANDOM]}"
+        energy_panel = self.render_bordered_text(self.font, physical_count, WHITE, BLACK, energy_panel, 20, 3, 1)
+        energy_panel = self.render_bordered_text(self.font, special_count, WHITE, BLACK, energy_panel, 78, 3, 1)
+        energy_panel = self.render_bordered_text(self.font, mental_count, WHITE, BLACK, energy_panel, 136, 3, 1)
+        energy_panel = self.render_bordered_text(self.font, weapon_count, WHITE, BLACK, energy_panel, 194, 3, 1)
+        energy_panel = self.render_bordered_text(self.font, total_count, WHITE, BLACK, energy_panel, 252, 3, 1)
+        
         can_exchange = False
         for i in range(4):
             if self.player_display.team.energy_pool[Energy(i)] >= 2:
                 can_exchange = True
 
-        if can_exchange and not self.has_exchanged and not self.waiting_for_turn:
-            exchange_button = self.create_text_display(self.font,
-                                                       "EXCHANGE",
-                                                       WHITE,
-                                                       BLACK,
-                                                       x=10,
-                                                       y=6,
-                                                       width=92,
-                                                       height=20)
-            exchange_button.click += self.exchange_button_click
-            self.add_bordered_sprite(self.energy_region, exchange_button,
-                                     WHITE, 29, 55)
+        self.energy_region.add_sprite(energy_panel, 0, 0)
+        
+        self.energy_region.add_sprite(self.sprite_factory.from_surface(
+            self.get_scaled_surface(self.scene_manager.surfaces["PHYSICAL"], 13, 13)),
+                                      x=3,
+                                      y=9)
+
+        self.energy_region.add_sprite(self.sprite_factory.from_surface(
+            self.get_scaled_surface(self.scene_manager.surfaces["SPECIAL"], 13, 13)),
+                                      x=61,
+                                      y=9)
+
+        self.energy_region.add_sprite(self.sprite_factory.from_surface(
+            self.get_scaled_surface(self.scene_manager.surfaces["MENTAL"], 13, 13)),
+                                      x=119,
+                                      y=9)
+
+        self.energy_region.add_sprite(self.sprite_factory.from_surface(
+            self.get_scaled_surface(self.scene_manager.surfaces["WEAPON"], 13, 13)),
+                                      x=177,
+                                      y=9)
+        
+        self.energy_region.add_sprite(self.sprite_factory.from_surface(
+            self.get_scaled_surface(self.scene_manager.surfaces["RANDOM"], 13, 13)),
+                                      x=235,
+                                      y=9)
+        
+        # if can_exchange and not self.has_exchanged and not self.waiting_for_turn:
+        #     exchange_button = self.create_text_display(self.font,
+        #                                                "EXCHANGE",
+        #                                                WHITE,
+        #                                                BLACK,
+        #                                                x=10,
+        #                                                y=6,
+        #                                                width=92,
+        #                                                height=20)
+        #     exchange_button.click += self.exchange_button_click
+        #     self.add_bordered_sprite(self.energy_region, exchange_button,
+        #                              WHITE, 29, 55)
 
     def show_energy_exchange(self):
         self.window_up = True

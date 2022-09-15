@@ -11,6 +11,8 @@ class Player:
         self.avatar = avatar
         self.medals = medals
         self.mission_data = mission_data
+        self.clan = None
+        self.title = "Beta Tester"
         if mission_data:
             self.missions = self.get_current_mission_progress(mission_data)
             if not missions_complete:

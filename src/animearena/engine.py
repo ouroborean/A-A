@@ -74,6 +74,42 @@ class Scene:
         sdl2.surface.SDL_BlitSurface(text, None, target.surface, sdl2.SDL_Rect(x, y))
         sdl2.SDL_FreeSurface(text)
         return target
+    
+    def render_bordered_text(self, font, text, color, border_color, target, x, y, thickness):
+        text_surf = sdl2.sdlttf.TTF_RenderText_Blended(font, str.encode(text), border_color)
+        sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x-thickness, y-thickness))
+        sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x,           y-thickness))
+        sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x+thickness, y-thickness))
+        sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x-thickness, y))
+        sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x+thickness, y))
+        sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x-thickness, y+thickness))
+        sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x,           y+thickness))
+        sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x+thickness, y+thickness))
+        sdl2.SDL_FreeSurface(text_surf)
+        
+        text_surf = sdl2.sdlttf.TTF_RenderText_Blended(font, str.encode(text), color)
+        sdl2.surface.SDL_BlitSurface(text_surf, None, target.surface, sdl2.SDL_Rect(x, y))
+        
+        
+        
+        sdl2.SDL_FreeSurface(text_surf)
+        return target
+    
+    def border_sprite(self, sprite, color, thickness):
+        
+        target_surface = sprite.surface
+        height = target_surface.h
+        width = target_surface.w
+        horizontal_border = self.sprite_factory.from_color(color, (width, thickness))
+        vertical_border = self.sprite_factory.from_color(color, (thickness, height))
+        
+        sdl2.surface.SDL_BlitSurface(horizontal_border.surface, None, sprite.surface, sdl2.SDL_Rect(0, 0))
+        sdl2.surface.SDL_BlitSurface(horizontal_border.surface, None, sprite.surface, sdl2.SDL_Rect(0, height - thickness))
+        sdl2.surface.SDL_BlitSurface(vertical_border.surface, None, sprite.surface, sdl2.SDL_Rect(0, 0))
+        sdl2.surface.SDL_BlitSurface(vertical_border.surface, None, sprite.surface, sdl2.SDL_Rect(width - thickness, 0))
+        
+        return sprite
+        
 
     def get_scaled_surface(self, img, width: int = 0, height: int = 0, flipped=False) -> sdl2.SDL_Surface:
         image = img
@@ -162,6 +198,8 @@ class Scene:
         for row, line in enumerate(lines):
             sdl2.surface.SDL_BlitSurface(sdl2.sdlttf.TTF_RenderText_Blended(font, str.encode(line), text_color), None, display.surface,
                                          sdl2.SDL_Rect(x, y + (row * 15), 0, 0))
+    
+    
 
     def create_text_display(  # pylint: disable=too-many-arguments
             self,
