@@ -23,6 +23,7 @@ from animearena.mission_handler import MissionHandler
 from animearena.turn_timer import TurnTimer
 from animearena.resource_manager import init_font
 from animearena.color import *
+from animearena.text_formatter import get_font_height, get_lines
 import random
 if typing.TYPE_CHECKING:
     from animearena.scene_manager import SceneManager
@@ -323,11 +324,9 @@ class BattleScene(engine.Scene):
                                     height=50),
             free=True)
         self.turn_end_button.click += self.turn_end_button_click
-        self.surrender_button = self.ui_factory.from_surface(
-            sdl2.ext.BUTTON,
-            self.get_scaled_surface(self.scene_manager.surfaces["quit"],
-                                    width=150,
-                                    height=50))
+        self.surrender_button = self.ui_factory.from_color(sdl2.ext.BUTTON, MENU_TRANSPARENT, (150, 50))
+        self.surrender_button = self.render_bordered_text(self.font, "SURRENDER", WHITE, BLACK, self.surrender_button, 34, 13, 1)
+        self.surrender_button = self.border_sprite(self.surrender_button, AQUA, 2)
         self.surrender_button.click += self.click_surrender_button
         self.player_panel = self.sprite_factory.from_color(WHITE, (200, 100))
         self.player_panel_border = self.sprite_factory.from_color(
@@ -634,15 +633,22 @@ class BattleScene(engine.Scene):
                     self.enemy_detail_character.alt_abilities)
             width = 10 + 90 + (65 * ability_count)
             enemy_info_panel = self.sprite_factory.from_color(
-                WHITE, (width, 120))
-            self.add_bordered_sprite(self.enemy_info_region, enemy_info_panel,
-                                     BLACK, 0, 0)
+                MENU_TRANSPARENT, (width, 120))
+            enemy_info_panel = self.border_sprite(enemy_info_panel, AQUA, 2)
+            self.enemy_info_region.add_sprite(enemy_info_panel, 0, 0)
         elif self.enemy_detail_character and self.enemy_detail_ability:
             enemy_info_panel = self.sprite_factory.from_color(
-                WHITE, (670, 120))
-            self.add_bordered_sprite(self.enemy_info_region, enemy_info_panel,
-                                     BLACK, 0, 0)
+                MENU_TRANSPARENT, (670, 120))
+            enemy_info_panel = self.border_sprite(enemy_info_panel, AQUA, 2)
+            
+            ability_description = self.enemy_detail_ability.name + ": " + self.enemy_detail_ability.desc
+            #width 500
+            height = get_font_height(16) * len(get_lines(ability_description, 500, 16))
+            enemy_info_panel = self.render_bordered_text(self.font, ability_description, WHITE, BLACK, enemy_info_panel, 165, (120 - height) // 2, 1, flow=True, target_width=500, fontsize=16)
+            enemy_info_panel = self.add_ability_details_to_enemy_info(self.enemy_detail_ability, enemy_info_panel)
+            self.enemy_info_region.add_sprite(enemy_info_panel, 0, 0)
 
+            
         if self.enemy_detail_character and not self.enemy_detail_ability:
             profile_sprite = self.ui_factory.from_surface(
                 sdl2.ext.BUTTON,
@@ -703,43 +709,22 @@ class BattleScene(engine.Scene):
                 free=True)
             self.add_bordered_sprite(self.enemy_info_region, ability_sprite,
                                      BLACK, 100, 30)
-            self.add_ability_details_to_enemy_info(self.enemy_detail_ability)
-            ability_description = self.create_text_display(
-                self.font, self.enemy_detail_ability.name + ": " +
-                self.enemy_detail_ability.desc, BLACK, WHITE, 0, 0, 500)
+            
 
-            self.enemy_info_region.add_sprite(
-                ability_description, 165,
-                (120 - ability_description.size[1]) // 2)
-
-    def add_ability_details_to_enemy_info(self, ability: Ability):
+    def add_ability_details_to_enemy_info(self, ability: Ability, panel):
         if ability.total_base_cost > 0:
-            energy_display_region = self.enemy_info_region.subregion(
-                x=105, y=15, width=(4 + 10) * ability.total_cost, height=10)
             cost_to_display: list[Energy] = sorted(ability.cost_iter())
-            energy_squares = [
-                energy_display_region.subregion(x, y=0, width=10, height=10)
-                for x in itertools.islice(range(0, 1000, 10 +
-                                                4), ability.total_cost)
-            ]
-            for cost, energy_square in zip(cost_to_display, energy_squares):
-                energy_surface = self.scene_manager.surfaces[cost.name]
-                energy_sprite = self.sprite_factory.from_surface(
-                    self.get_scaled_surface(energy_surface), free=True)
-                energy_square.add_sprite(energy_sprite, x=0, y=0)
+            for i, energy in enumerate(cost_to_display):
+                energy_image = self.get_scaled_surface(self.scene_manager.surfaces[energy.name], 13, 13)
+                sdl2.SDL_BlitSurface(energy_image, None, panel.surface, sdl2.SDL_Rect(105 + (i * 17), 12))
+                sdl2.SDL_FreeSurface(energy_image)
+
         else:
-            energy_display_region = self.enemy_info_region.subregion(x=105, y=15, width = 14, height=10)
-            energy_display_region.add_sprite(self.create_text_display(self.font, "No Cost", BLACK, WHITE, 0, 0, 80, 4), 0, -6)
-        cooldown_text_sprite = self.create_text_display(self.font,
-                                                        "CD: " +
-                                                        str(ability.cooldown),
-                                                        BLACK,
-                                                        WHITE,
-                                                        x=0,
-                                                        y=0,
-                                                        width=48,
-                                                        height=6)
-        self.enemy_info_region.add_sprite(cooldown_text_sprite, 105, 95)
+            panel = self.render_bordered_text(self.font, "No Cost", WHITE, BLACK, panel, 105, 12, 1)
+        
+        panel = self.render_bordered_text(self.font, "CD: " + str(ability.cooldown), WHITE, BLACK, panel, 105, 95, 1)
+        
+        return panel
 
     def draw_surrender_region(self):
         self.surrender_button_region.clear()
@@ -758,12 +743,12 @@ class BattleScene(engine.Scene):
             if not self.player.clan:
                 transparent_box = self.sprite_factory.from_color(TRANSPARENT, (200, 50))
                 clan_panel = self.render_bordered_text(self.font, "Clanless", WHITE, BLACK, transparent_box, 0, 0, thickness=1)
-                self.player_region.add_sprite(clan_panel, 110, 38)
+                self.player_region.add_sprite(clan_panel, 110, 58)
             else:
                 pass
             transparent_box = self.sprite_factory.from_color(TRANSPARENT, (200, 50))
             title_panel = self.render_bordered_text(self.font, self.player.title, WHITE, BLACK, transparent_box, 0, 0, thickness=1)
-            self.player_region.add_sprite(title_panel, 110, 58)
+            self.player_region.add_sprite(title_panel, 110, 38)
 
     def draw_enemy_region(self):
         self.enemy_region.clear()
@@ -780,13 +765,13 @@ class BattleScene(engine.Scene):
                 transparent_box = self.sprite_factory.from_color(TRANSPARENT, (200, 50))
                 clan_panel = self.render_bordered_text(self.font, "Clanless", WHITE, BLACK, transparent_box, 0, 0, thickness=1)
                 clan_width = int(len("Clanless") * 7.3) + 5
-                self.enemy_region.add_sprite(clan_panel, -clan_width, 38)
+                self.enemy_region.add_sprite(clan_panel, -clan_width, 58)
             else:
                 pass
             transparent_box = self.sprite_factory.from_color(TRANSPARENT, (200, 50))
             title_panel = self.render_bordered_text(self.font, self.enemy.title, WHITE, BLACK, transparent_box, 0, 0, thickness=1)
             title_width = int(len(self.enemy.title) * 7.3) + 5
-            self.enemy_region.add_sprite(title_panel, -title_width, 58)
+            self.enemy_region.add_sprite(title_panel, -title_width, 38)
             
 
     def draw_turn_end_region(self):

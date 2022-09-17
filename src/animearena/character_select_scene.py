@@ -132,9 +132,14 @@ class CharacterSelectScene(engine.Scene):
             sdl2.ext.BUTTON,
             self.get_scaled_surface(self.scene_manager.surfaces["right_arrow"]))
         self.right_button.click += self.right_click
-        self.how_to_button = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["how_to"], 100, 40))
-        # self.how_to_button.click += self.tutorial_click
+        self.how_to_button = self.ui_factory.from_color(sdl2.ext.BUTTON, MENU_TRANSPARENT, (100, 40))
+        self.how_to_button = self.render_bordered_text(self.font, "Tutorial", WHITE, BLACK, self.how_to_button, 22, 9, 1)
+        self.how_to_button = self.border_sprite(self.how_to_button, AQUA, 2)
         self.how_to_button.click += self.tutorial_click
+        self.start_button = self.ui_factory.from_color(sdl2.ext.BUTTON, MENU_TRANSPARENT, (100, 40))
+        self.start_button = self.render_bordered_text(self.font, "Quick Match", WHITE, BLACK, self.start_button, 9, 9, 1)
+        self.start_button = self.border_sprite(self.start_button, AQUA, 2)
+        self.start_button.click += self.start_click
         self.character_sprites = {}
         for k, v in get_character_db().items():
             sprite = self.ui_factory.from_surface(
@@ -148,8 +153,7 @@ class CharacterSelectScene(engine.Scene):
             sprite.filter_cover.character = v
             sprite.character = v
             self.character_sprites[k] = sprite
-        self.start_button = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["start"], 100, 40), free=True)
-        self.start_button.click += self.start_click
+        
         self.character_info_prof = self.ui_factory.from_color(
             sdl2.ext.BUTTON,
             BLACK, (175, 250))
@@ -179,7 +183,15 @@ class CharacterSelectScene(engine.Scene):
             sprite.border_box = self.sprite_factory.from_color(BLACK, (79, 79))
         self.info_text_panel = self.create_text_display(self.font, "", BLACK,
                                                    WHITE, 5, 0, 475, 130)
-        self.player_region_panel = self.sprite_factory.from_color(WHITE, (245, 100))
+        
+        self.upload_button = self.ui_factory.from_color(sdl2.ext.BUTTON, DULL_AQUA, (79, 40))
+        self.upload_button = self.render_bordered_text(self.font, "Upload Avatar", WHITE, BLACK, self.upload_button, 13, 0, 1, flow=True, target_width = 70, fontsize=16)
+        self.upload_button = self.border_sprite(self.upload_button, ELECTRIC_BLUE, 2)
+        self.upload_button.click += self.avatar_upload_click
+        
+        self.player_region_panel = self.sprite_factory.from_color(MENU_TRANSPARENT, (245, 123))
+        self.player_region_panel = self.border_sprite(self.player_region_panel, AQUA, 2)
+        
         self.lock_icon = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["lock_icon"], width=30, height=30))
         self.lock_icon.click += self.lock_filter_click
         self.lock_border = self.sprite_factory.from_color(RED, (34, 34))
@@ -285,8 +297,7 @@ class CharacterSelectScene(engine.Scene):
     def render_player_profile(self):
         self.player_profile_region.clear()
 
-        
-        self.add_sprite_with_border(self.player_profile_region, self.player_region_panel, self.player_region_border, 0, 0)
+        self.player_profile_region.add_sprite(self.player_region_panel, -4, -4)
         
 
         self.player_profile_lock.acquire()
@@ -296,38 +307,46 @@ class CharacterSelectScene(engine.Scene):
         self.avatar.surface = self.get_scaled_surface(self.player_profile, 75, 75)
         
         self.add_sprite_with_border(self.player_profile_region, self.avatar, self.avatar.border_box, 0, 0)
-        upload_button = self.create_text_display(self.font, "Upload Avatar", WHITE, BLACK, 12, 1, 75)
-        upload_button.click += self.avatar_upload_click
-        self.add_sprite_with_border(self.player_profile_region, upload_button, self.avatar_upload_border, 0, 79)
+        
+        self.player_profile_region.add_sprite(self.upload_button, -2, 77)
         self.player_profile_lock.release()
 
     def render_main_character_info(self):
         
         self.character_info_region.clear()
+        
+        info_panel = self.sprite_factory.from_color(MENU_TRANSPARENT, (770, 270))
+        info_panel = self.border_sprite(info_panel, AQUA, 2)
+        self.character_info_region.add_sprite(info_panel, 0, -5)
+        
         self.character_info_prof.surface = self.get_scaled_surface(self.scene_manager.surfaces[self.display_character.name + "banner"])
         self.character_info_prof.free = True
         self.character_info_prof.character = self.display_character
-        self.add_sprite_with_border(self.character_info_region, self.character_info_prof, self.banner_border, 0, 5)
+        self.add_sprite_with_border(self.character_info_region, self.character_info_prof, self.banner_border, 10, 5)
         if self.player.missions[self.character_info_prof.character.name][5]:
-            mission_button = self.create_text_display(self.font, "Missions", WHITE, BLACK, 10, 3, 80)
+            mission_button = self.ui_factory.from_color(sdl2.ext.BUTTON, DULL_AQUA, (80, 40))
+            mission_button = self.render_bordered_text(self.font, "Missions", WHITE, BLACK, mission_button, 10, 9, 1)
+            mission_button = self.border_sprite(mission_button, AQUA, 2)
             mission_button.click += self.mission_click
-            self.add_bordered_sprite(self.character_info_region, mission_button, WHITE, 47, 225)
+            self.character_info_region.add_sprite(mission_button, 675, 215)
         else:
-            unlock_button = self.create_text_display(self.font, "Unlock", WHITE, BLACK, 16, 3, 80)
-            unlock_button.click += self.unlock_click
-            self.add_bordered_sprite(self.character_info_region, unlock_button, WHITE, 47, 225)
+            unlock_button = self.ui_factory.from_color(sdl2.ext.BUTTON, DULL_AQUA, (80, 40))
+            unlock_button = self.render_bordered_text(self.font, "Missions", WHITE, BLACK, unlock_button, 10, 9, 1)
+            unlock_button = self.border_sprite(unlock_button, AQUA, 2)
+            unlock_button.click += self.mission_click
+            self.character_info_region.add_sprite(unlock_button, 675, 175)
         for i, ability in enumerate(self.main_ability_sprites):
             ability.surface = self.get_scaled_surface(self.scene_manager.surfaces[self.display_character.main_abilities[i].db_name])
             ability.ability = self.display_character.main_abilities[i]
             ability.free = True
             if ability.ability == self.detail_target:
-                self.add_bordered_sprite(self.character_info_region, ability, ELECTRIC_BLUE, x=55 + ((i + 1) * 125), y=5)
+                self.add_bordered_sprite(self.character_info_region, ability, ELECTRIC_BLUE, x=65 + ((i + 1) * 125), y=5)
             else:
-                self.add_bordered_sprite(self.character_info_region, ability, BLACK, x=55 + ((i + 1) * 125),
+                self.add_bordered_sprite(self.character_info_region, ability, BLACK, x=65 + ((i + 1) * 125),
                                                   y=5)
 
         if self.display_character.alt_abilities:
-            self.character_info_region.add_sprite(self.alt_arrow, 670, 35)
+            self.character_info_region.add_sprite(self.alt_arrow, 680, 35)
             
 
         detail_panel = self.border_sprite(self.sprite_factory.from_color(MENU_TRANSPARENT, (479, 148)), AQUA, 2)
@@ -350,39 +369,47 @@ class CharacterSelectScene(engine.Scene):
         
         detail_panel = self.render_bordered_text(self.font, text, WHITE, BLACK, detail_panel, 5, 5, 1, flow=True, target_width = 465, fontsize=16)
 
-        self.character_info_region.add_sprite(detail_panel, 178, 110)
+        self.character_info_region.add_sprite(detail_panel, 188, 110)
 
     def render_alt_character_info(self):
         self.character_info_region.clear()
-        logging.debug("Rendering Alt Info with a detail target type of %s", type(self.detail_target))
+        
+        info_panel = self.sprite_factory.from_color(MENU_TRANSPARENT, (770, 270))
+        info_panel = self.border_sprite(info_panel, AQUA, 2)
+        self.character_info_region.add_sprite(info_panel, 0, -5)
+        
         self.alt_character_info_prof.surface = self.get_scaled_surface(self.scene_manager.surfaces[self.display_character.name + "banner"])
         self.alt_character_info_prof.character = self.display_character
         self.alt_character_info_prof.free = True
-        self.add_sprite_with_border(self.character_info_region, self.alt_character_info_prof, self.banner_border, 0, 5)
+        self.add_sprite_with_border(self.character_info_region, self.alt_character_info_prof, self.banner_border, 10, 5)
         if self.player.missions[self.character_info_prof.character.name][5]:
-            mission_button = self.create_text_display(self.font, "Missions", WHITE, BLACK, 10, 3, 80)
+            mission_button = self.ui_factory.from_color(sdl2.ext.BUTTON, DULL_AQUA, (80, 40))
+            mission_button = self.render_bordered_text(self.font, "Missions", WHITE, BLACK, mission_button, 10, 9, 1)
+            mission_button = self.border_sprite(mission_button, AQUA, 2)
             mission_button.click += self.mission_click
-            self.add_bordered_sprite(self.character_info_region, mission_button, WHITE, 47, 225)
+            self.character_info_region.add_sprite(mission_button, 675, 215)
         else:
-            unlock_button = self.create_text_display(self.font, "Unlock", WHITE, BLACK, 16, 3, 80)
-            unlock_button.click += self.unlock_click
-            self.add_bordered_sprite(self.character_info_region, unlock_button, WHITE, 47, 225)
+            unlock_button = self.ui_factory.from_color(sdl2.ext.BUTTON, DULL_AQUA, (80, 40))
+            unlock_button = self.render_bordered_text(self.font, "Missions", WHITE, BLACK, unlock_button, 10, 9, 1)
+            unlock_button = self.border_sprite(unlock_button, AQUA, 2)
+            unlock_button.click += self.mission_click
+            self.character_info_region.add_sprite(unlock_button, 675, 175)
         
         for i, ability in enumerate(self.display_character.alt_abilities):
             self.alt_ability_sprites[i].surface = self.get_scaled_surface(self.scene_manager.surfaces[ability.db_name])
             self.alt_ability_sprites[i].free = True
             self.alt_ability_sprites[i].ability = ability
-            if ability.ability == self.detail_target:
-                self.add_bordered_sprite(self.character_info_region, ability, ELECTRIC_BLUE, x=55 + ((i + 1) * 125), y=5)
+            if self.alt_ability_sprites[i].ability == self.detail_target:
+                self.add_bordered_sprite(self.character_info_region, self.alt_ability_sprites[i], ELECTRIC_BLUE, x=65 + ((i + 1) * 125), y=5)
             else:
-                self.add_bordered_sprite(self.character_info_region, ability, BLACK, x=55 + ((i + 1) * 125),
+                self.add_bordered_sprite(self.character_info_region, self.alt_ability_sprites[i], BLACK, x=65 + ((i + 1) * 125),
                                                   y=5)
 
         main_arrow = self.ui_factory.from_surface(
             sdl2.ext.BUTTON,
             self.get_scaled_surface(self.scene_manager.surfaces["left_arrow"], width = 50, height = 50), free=True)
         main_arrow.click += self.main_arrow_click
-        self.character_info_region.add_sprite(main_arrow, 670, 35)
+        self.character_info_region.add_sprite(main_arrow, 680, 35)
 
 
 
@@ -407,7 +434,7 @@ class CharacterSelectScene(engine.Scene):
         detail_panel = self.render_bordered_text(self.font, text, WHITE, BLACK, detail_panel, 5, 5, 1, flow=True, target_width = 465, fontsize=16)
         
             
-        self.character_info_region.add_sprite(detail_panel, 178, 110)
+        self.character_info_region.add_sprite(detail_panel, 188, 110)
         
 
 
@@ -491,11 +518,13 @@ class CharacterSelectScene(engine.Scene):
         if self.dragging_picture:
             self.add_sprite_with_border(self.character_select_region, self.character_sprites[self.dragging_character], self.character_sprites[self.dragging_character].border_box, self.scene_manager.mouse_x - self.drag_offset[0] - self.character_select_region.x, self.scene_manager.mouse_y - self.drag_offset[1] - self.character_select_region.y)
     
+    
     def scroll_character_scroll_selection(self):
         self.character_scroll_selection_region.clear()
         background = self.sprite_factory.from_color(MENU_TRANSPARENT, (self.character_scroll_selection_region.size()[0], self.character_scroll_selection_region.size()[1] + 8))
         background = self.border_sprite(background, AQUA, 2)
-        scroll_bar = self.sprite_factory.from_color(DULL_AQUA, self.scroll_bar_region.size())
+        scroll_bar = self.ui_factory.from_color(sdl2.ext.BUTTON, DULL_AQUA, self.scroll_bar_region.size())
+        scroll_bar.pressed += self.click_scroll_bar
         self.character_scroll_selection_region.add_sprite(background, 0, -4)
         self.scroll_bar_region.add_sprite(scroll_bar, 0, 0)
         self.render_filter_options()
@@ -587,7 +616,8 @@ class CharacterSelectScene(engine.Scene):
         self.character_scroll_selection_region.clear()
         background = self.sprite_factory.from_color(MENU_TRANSPARENT, (self.character_scroll_selection_region.size()[0], self.character_scroll_selection_region.size()[1] + 8))
         background = self.border_sprite(background, AQUA, 2)
-        scroll_bar = self.sprite_factory.from_color(DULL_AQUA, self.scroll_bar_region.size())
+        scroll_bar = self.ui_factory.from_color(sdl2.ext.BUTTON, DULL_AQUA, self.scroll_bar_region.size())
+        scroll_bar.pressed += self.click_scroll_bar
         self.character_scroll_selection_region.add_sprite(background, 0, -4)
         self.scroll_bar_region.add_sprite(scroll_bar, 0, 0)
         self.render_team_display()
@@ -675,6 +705,7 @@ class CharacterSelectScene(engine.Scene):
         elif self.scroll_bar_y < 0:
                 self.scroll_bar_y = 0
         self.scroll_character_scroll_selection()
+        
 
     def char_select_press(self, button, _sender):
         if hasattr(button, "character") and button.character and not self.window_up:
@@ -689,6 +720,16 @@ class CharacterSelectScene(engine.Scene):
             self.removing_from_team = True
             self.drag_offset = self.get_click_coordinates(button)
             self.dragging_character = button.character.name
+
+    def click_scroll_bar(self, button, sender):
+        click_y = self.scene_manager.mouse_y - button.y
+        if click_y < 11:
+            click_y = 11
+        elif click_y > 269:
+            click_y = 269
+        self.scroll_bar_y = click_y - 11
+        self.scroll_character_scroll_selection()
+        self.click_scroll(self.scroll_button, sender)
 
     def click_scroll(self, button, _sender):
         self.scrolling = True
@@ -948,19 +989,18 @@ class CharacterSelectScene(engine.Scene):
             self.player_profile = Image.frombytes(mode = new_image["mode"], size = new_image["size"], data=new_image["pixels"])
         
         self.player = Player(self.player_name, self.player_wins, self.player_losses, self.player_profile, mission_data, self.player_medals, missions_complete=mission_complete)
-        self.player_region_panel = self.sprite_factory.from_color(WHITE, (245, 100))
-        sdl2.sdlttf.TTF_SetFontStyle(self.font, sdl2.sdlttf.TTF_STYLE_BOLD)
-        self.render_text(self.font, self.player.name, DARK_RED, self.player_region_panel, 80, 2)
-        self.render_text(self.font, "Wins: ", BLACK, self.player_region_panel, 80, 31)
-        self.render_text(self.font, "Losses: ", BLACK, self.player_region_panel, 80, 47)
-        self.render_text(self.font, "Medals: ", BLACK, self.player_region_panel, 80, 63)
-        self.render_text(self.font, "Clan: ", BLACK, self.player_region_panel, 80, 79)
-        sdl2.sdlttf.TTF_SetFontStyle(self.font, sdl2.sdlttf.TTF_STYLE_NORMAL)
         
-        self.render_text(self.font, str(self.player.wins), BLACK, self.player_region_panel, 145, 31)
-        self.render_text(self.font, str(self.player.losses), BLACK, self.player_region_panel, 145, 47)
-        self.render_text(self.font, str(self.player.medals), BLACK, self.player_region_panel, 145, 63)
-        self.render_text(self.font, "None", BLACK, self.player_region_panel, 145, 79)
+        self.render_bordered_text(self.font, self.player.name, RED, BLACK, self.player_region_panel, 84, 2, 1)
+        self.render_bordered_text(self.font, self.player.title, WHITE, BLACK, self.player_region_panel, 84, 21, 1)
+        self.render_bordered_text(self.font, "Wins: ", WHITE, BLACK, self.player_region_panel, 84, 51, 1)
+        self.render_bordered_text(self.font, "Losses: ", WHITE, BLACK, self.player_region_panel, 84, 67, 1)
+        self.render_bordered_text(self.font, "Medals: ", WHITE, BLACK, self.player_region_panel, 84, 83, 1)
+        self.render_bordered_text(self.font, "Clan: ", WHITE, BLACK, self.player_region_panel, 84, 99, 1)
+        
+        self.render_bordered_text(self.font, str(self.player.wins), WHITE, BLACK, self.player_region_panel, 149, 51, 1)
+        self.render_bordered_text(self.font, str(self.player.losses), WHITE, BLACK, self.player_region_panel, 149, 67, 1)
+        self.render_bordered_text(self.font, str(self.player.medals), WHITE, BLACK, self.player_region_panel, 149, 83, 1)
+        self.render_bordered_text(self.font, "None", WHITE, BLACK, self.player_region_panel, 149, 99, 1)
         
         
         
