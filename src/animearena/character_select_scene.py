@@ -128,9 +128,11 @@ class CharacterSelectScene(engine.Scene):
             sdl2.ext.BUTTON,
             self.get_scaled_surface(self.scene_manager.surfaces["left_arrow"]))
         self.left_button.click += self.left_click
-        self.right_button = self.ui_factory.from_surface(
+        self.right_button = self.ui_factory.from_color(
             sdl2.ext.BUTTON,
-            self.get_scaled_surface(self.scene_manager.surfaces["right_arrow"]))
+            MENU_TRANSPARENT, (79, 79))
+        sdl2.SDL_BlitSurface(self.get_scaled_surface(self.scene_manager.surfaces["right_arrow"]), None, self.right_button.surface, sdl2.SDL_Rect(7, 7))
+        self.right_button = self.border_sprite(self.right_button, AQUA, 2)
         self.right_button.click += self.right_click
         self.how_to_button = self.ui_factory.from_color(sdl2.ext.BUTTON, MENU_TRANSPARENT, (100, 40))
         self.how_to_button = self.render_bordered_text(self.font, "Tutorial", WHITE, BLACK, self.how_to_button, 22, 9, 1)
@@ -170,10 +172,20 @@ class CharacterSelectScene(engine.Scene):
         for sprite in self.alt_ability_sprites:
             sprite.click += self.alt_ability_click
             sprite.border_box = self.sprite_factory.from_color(BLACK, (104, 104))
-        self.alt_arrow = self.ui_factory.from_surface(
-                sdl2.ext.BUTTON,
-                self.get_scaled_surface(self.scene_manager.surfaces["right_arrow"], width = 50, height = 50), free=True)
+        self.alt_arrow = self.ui_factory.from_color(
+            sdl2.ext.BUTTON,
+            MENU_TRANSPARENT, (79, 79))
+        sdl2.SDL_BlitSurface(self.get_scaled_surface(self.scene_manager.surfaces["right_arrow"]), None, self.alt_arrow.surface, sdl2.SDL_Rect(-8, 7))
+        self.alt_arrow = self.border_sprite(self.alt_arrow, AQUA, 2)
         self.alt_arrow.click += self.alt_arrow_click
+        
+        self.main_arrow = self.ui_factory.from_color(
+            sdl2.ext.BUTTON,
+            MENU_TRANSPARENT, (79, 79))
+        sdl2.SDL_BlitSurface(self.get_scaled_surface(self.scene_manager.surfaces["left_arrow"]), None, self.main_arrow.surface, sdl2.SDL_Rect(20, 7))
+        self.main_arrow = self.border_sprite(self.main_arrow, AQUA, 2)
+        self.main_arrow.click += self.main_arrow_click
+        
         self.avatar = self.sprite_factory.from_surface(self.get_scaled_surface(self.player_profile, 75, 75), free=True)
         self.avatar.border_box = self.sprite_factory.from_color(BLACK, (79, 79))
         self.team_display = [self.ui_factory.from_color(sdl2.ext.BUTTON, BLACK, (75,75)) for i in range(3)]
@@ -184,7 +196,7 @@ class CharacterSelectScene(engine.Scene):
         self.info_text_panel = self.create_text_display(self.font, "", BLACK,
                                                    WHITE, 5, 0, 475, 130)
         
-        self.upload_button = self.ui_factory.from_color(sdl2.ext.BUTTON, DULL_AQUA, (79, 40))
+        self.upload_button = self.ui_factory.from_color(sdl2.ext.BUTTON, MENU_TRANSPARENT, (79, 40))
         self.upload_button = self.render_bordered_text(self.font, "Upload Avatar", WHITE, BLACK, self.upload_button, 13, 0, 1, flow=True, target_width = 70, fontsize=16)
         self.upload_button = self.border_sprite(self.upload_button, ELECTRIC_BLUE, 2)
         self.upload_button.click += self.avatar_upload_click
@@ -346,7 +358,7 @@ class CharacterSelectScene(engine.Scene):
                                                   y=5)
 
         if self.display_character.alt_abilities:
-            self.character_info_region.add_sprite(self.alt_arrow, 680, 35)
+            self.character_info_region.add_sprite(self.alt_arrow, 680, 27)
             
 
         detail_panel = self.border_sprite(self.sprite_factory.from_color(MENU_TRANSPARENT, (479, 148)), AQUA, 2)
@@ -405,11 +417,8 @@ class CharacterSelectScene(engine.Scene):
                 self.add_bordered_sprite(self.character_info_region, self.alt_ability_sprites[i], BLACK, x=65 + ((i + 1) * 125),
                                                   y=5)
 
-        main_arrow = self.ui_factory.from_surface(
-            sdl2.ext.BUTTON,
-            self.get_scaled_surface(self.scene_manager.surfaces["left_arrow"], width = 50, height = 50), free=True)
-        main_arrow.click += self.main_arrow_click
-        self.character_info_region.add_sprite(main_arrow, 680, 35)
+        
+        self.character_info_region.add_sprite(self.main_arrow, 680, 27)
 
 
 

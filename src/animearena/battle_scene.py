@@ -218,7 +218,6 @@ class BattleScene(engine.Scene):
     ally_energy_pool: dict[Energy, int]
     enemy_energy_pool: dict[Energy, int]
     offered_pool: dict[Energy, int]
-    current_button: Optional[sdl2.ext.SoftwareSprite]
     round_any_cost: int
     waiting_for_turn: bool
     window_up: bool
@@ -559,8 +558,8 @@ class BattleScene(engine.Scene):
                 effect_y += effect.size[1] - 5
 
     def get_effect_lines(
-            self, effect_list: list[Effect]) -> list[sdl2.ext.SoftwareSprite]:
-        output: list[sdl2.ext.SoftwareSprite] = []
+            self, effect_list: list[Effect]):
+        output = list()
 
         output.append(
             self.create_text_display(self.font, effect_list[0].name, BLUE,
