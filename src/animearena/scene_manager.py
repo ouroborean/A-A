@@ -119,6 +119,7 @@ class SceneManager:
         self.surfaces["stun_icon"] = get_image_from_path("stun_icon.png")
         self.surfaces["invuln_icon"] = get_image_from_path("invuln_icon.png")
         self.surfaces["dead_icon"] = get_image_from_path("dead_icon.png")
+        self.surfaces["exchange_icon"] = get_image_from_path("exchange_icon.png")
         self.connected = False
 
     def __enter__(self):

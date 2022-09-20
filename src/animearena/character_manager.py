@@ -3,6 +3,7 @@ import sdl2.ext
 import typing
 import itertools
 from animearena import engine, character
+from animearena.color import DARK_GREEN, MENU_TRANSPARENT
 from animearena.effects import Effect, EffectType
 from animearena.ability import Ability, Target, one, two, three, DamageType
 from animearena.ability_type import AbilityType
@@ -1605,8 +1606,8 @@ class CharacterManager(collections.abc.Container):
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.DEF_NEGATE)
         for _ in gen:
-            return True
-        return False
+            return False
+        return True
 
     def check_for_dmg_reduction(self) -> int:
         dr = 0
@@ -2829,6 +2830,31 @@ class CharacterManager(collections.abc.Container):
             self.scene.scene_manager.surfaces[self.source.name + "allyprof"])
         self.check_profile_swaps()
         profile_frame = self.scene.sprite_factory.from_surface(self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["profile_frame"]), free=True)
+        
+        if self.can_defend() and self.check_for_dmg_reduction() > 0:
+            dr = self.check_for_dmg_reduction()
+            dr_color = DARK_GREEN
+        elif self.check_for_dmg_reduction() < 0:
+            dr = self.check_for_dmg_reduction()
+            dr_color = RED
+        elif not self.can_defend():
+            dr = 0
+            dr_color = RED
+        else:
+            dr = 0
+            dr_color = BLACK
+        
+        
+        profile_frame = self.scene.render_bordered_text(self.scene.font, "DR:", WHITE, dr_color, profile_frame, 5, 131, 1)
+        
+        
+        if dr < 0:
+            dr_x = 25
+        else:
+            dr_x = 31
+        profile_frame = self.scene.render_bordered_text(self.scene.font, str(dr), WHITE, dr_color, profile_frame, dr_x, 131, 1)
+
+        
         self.character_region.add_sprite(profile_frame, -4, -4)
         self.character_region.add_sprite(self.profile_sprite, 0, 0)
         if self.targeted:
@@ -2850,6 +2876,27 @@ class CharacterManager(collections.abc.Container):
         self.check_enemy_profile_swaps()
         profile_frame = self.scene.sprite_factory.from_surface(self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["profile_frame"]), free=True)
         
+        if self.can_defend() and self.check_for_dmg_reduction() > 0:
+            dr = self.check_for_dmg_reduction()
+            dr_color = DARK_GREEN
+        elif self.check_for_dmg_reduction() < 0:
+            dr = self.check_for_dmg_reduction()
+            dr_color = RED
+        elif not self.can_defend():
+            dr = 0
+            dr_color = RED
+        else:
+            dr = 0
+            dr_color = BLACK
+        
+        profile_frame = self.scene.render_bordered_text(self.scene.font, "DR:", WHITE, dr_color, profile_frame, 5, 131, 1)
+        
+        if dr < 0:
+            dr_x = 25
+        else:
+            dr_x = 31
+        profile_frame = self.scene.render_bordered_text(self.scene.font, str(dr), WHITE, dr_color, profile_frame, dr_x, 131, 1)
+
         self.character_region.add_sprite(profile_frame, -4, -4)
         self.character_region.add_sprite(self.profile_sprite, 0, 0)
         

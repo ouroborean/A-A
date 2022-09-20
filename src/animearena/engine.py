@@ -135,7 +135,19 @@ class Scene:
         sdl2.surface.SDL_BlitSurface(vertical_border.surface, None, sprite.surface, sdl2.SDL_Rect(width - thickness, 0))
         
         return sprite
+    
+    def blit_surface(self, target, surface, dest):
         
+        sdl2.surface.SDL_BlitSurface(surface, None, target.surface, sdl2.SDL_Rect(*dest))
+        
+        return target
+    
+    def add_horizontal_line(self, sprite, color, thickness, length, destination):
+        
+        line = self.sprite_factory.from_color(color, (length, thickness))
+        sdl2.surface.SDL_BlitSurface(line.surface, None, sprite.surface, sdl2.SDL_Rect(*destination))
+        
+        return sprite
 
     def get_scaled_surface(self, img, width: int = 0, height: int = 0, flipped=False) -> sdl2.SDL_Surface:
         image = img

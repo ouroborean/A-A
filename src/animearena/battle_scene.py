@@ -23,7 +23,7 @@ from animearena.mission_handler import MissionHandler
 from animearena.turn_timer import TurnTimer
 from animearena.resource_manager import init_font
 from animearena.color import *
-from animearena.text_formatter import get_font_height, get_lines
+from animearena.text_formatter import get_font_height, get_lines, get_string_width
 import random
 if typing.TYPE_CHECKING:
     from animearena.scene_manager import SceneManager
@@ -342,10 +342,7 @@ class BattleScene(engine.Scene):
         self.turn_label = self.border_sprite(self.turn_label, AQUA, 2)
         self.turn_label.click += self.turn_end_button_click
         
-        self.energy_region = self.region.subregion(x=300,
-                                                   y=60,
-                                                   width=300,
-                                                   height=30)
+        
         self.turn_end_region = self.region.subregion(x=375,
                                                      y=5,
                                                      width=150,
@@ -362,6 +359,10 @@ class BattleScene(engine.Scene):
         self.hover_effect_region = self.region.subregion(0, 0, 0, 0)
         self.game_end_region = self.region.subregion(60, 207, 781, 484)
         self.timer_region = self.region.subregion(x=269, y=95, width=362, height=12)
+        self.energy_region = self.region.subregion(x=300,
+                                                   y=60,
+                                                   width=300,
+                                                   height=30)
 
     #region On-Click event handlers
 
@@ -522,60 +523,60 @@ class BattleScene(engine.Scene):
         self.hover_effect_region.clear()
         if self.current_button is not None:
 
-            max_line_width = 270
-            base_height = 50
-            additional_height = 0
+            panel_width = 270
+            if 10 + get_string_width(16, self.current_button.effects[0].name) > panel_width:
+                panel_width += (10 + get_string_width(16, self.current_button.effects[0].name) - panel_width)
+            effect_spacing = 6
+            line_height = get_font_height(16)
+            base_height = 15 + line_height
+            height = base_height
             for effect in self.current_button.effects:
-                additional_height += len(textwrap.wrap(effect.get_desc(), 35))
+                height += effect_spacing
+                height += line_height
+                height += (line_height * len(get_lines(effect.get_desc(), 260, 16)))
+                
+            line_height = get_font_height(16)
             hover_panel_sprite = self.sprite_factory.from_color(
-                WHITE,
-                size=(max_line_width, base_height + (additional_height * 18) +
-                      (len(self.current_button.effects) * 20)))
+                MENU,
+                size=(panel_width, height))
             mouse_x, mouse_y = engine.get_mouse_position()
             self.hover_effect_region.x = mouse_x - hover_panel_sprite.size[
                 0] if self.current_button.is_enemy else mouse_x
             if self.current_button.y > 600:
-                self.hover_effect_region.y = mouse_y - (
-                    base_height + (additional_height * 18) +
-                    (len(self.current_button.effects) * 20))
+                self.hover_effect_region.y = mouse_y - base_height
             else:
                 self.hover_effect_region.y = mouse_y
-            self.add_bordered_sprite(self.hover_effect_region,
-                                     hover_panel_sprite, BLACK, 0, 0)
-            effect_lines = self.get_effect_lines(self.current_button.effects)
-            self.hover_effect_region.add_sprite(effect_lines[0], 5, 5)
-            effect_lines.remove(effect_lines[0])
-            effect_y = 26
-            is_duration = False
+            hover_panel_sprite = self.border_sprite(hover_panel_sprite, AQUA, 2)
+            
+            
+            hover_panel_sprite = self.draw_effect_lines(self.current_button.effects, hover_panel_sprite)
+            self.hover_effect_region.add_sprite(hover_panel_sprite, 0, 0)
 
-            for effect in effect_lines:
-                is_duration = not is_duration
-                if is_duration:
-                    effect_x = 265 - effect.size[0]
-                else:
-                    effect_x = 0
-                self.hover_effect_region.add_sprite(effect, effect_x, effect_y)
-                effect_y += effect.size[1] - 5
+    def draw_effect_lines(self, effect_list: list[Effect], panel):
 
-    def get_effect_lines(
-            self, effect_list: list[Effect]):
-        output = list()
-
-        output.append(
-            self.create_text_display(self.font, effect_list[0].name, BLUE,
-                                     WHITE, 0, 0, 260))
-
+        panel = self.render_bordered_text(self.font, effect_list[0].name, AQUA, BLACK, panel, 5, 5, 1, flow=True, target_width=panel.size[0] - 10, fontsize=16)
+        
+        y_offset = 5
+        line_height = get_font_height(16)
+        lines = 1
+        effect_spacing = 6
+        current_y = y_offset + effect_spacing
+        
+        
+        
         for i, effect in enumerate(effect_list):
-            output.append(
-                self.create_text_display(
-                    self.font, self.get_duration_string(effect.duration), RED,
-                    WHITE, 0, 0,
-                    len(self.get_duration_string(effect.duration) * 8)))
-            output.append(
-                self.create_text_display(self.font, effect.get_desc(), BLACK,
-                                         WHITE, 5, 0, 270))
+            
+            panel = self.add_horizontal_line(panel, AQUA, 2, panel.size[0], (0, current_y + (effect_spacing * i) + (line_height * lines) - 2))
+            
+            duration_width = get_string_width(16, self.get_duration_string(effect.duration))
+            panel = self.render_bordered_text(self.font, self.get_duration_string(effect.duration), RED, BLACK, panel, 260 - duration_width, current_y + (effect_spacing * i) + (line_height * lines), 1)
+            lines += 1
+            for line in get_lines(effect.get_desc(), panel.size[0] - 10, 16):
+                panel = self.render_bordered_text(self.font, line, WHITE, BLACK, panel, 5, current_y + (effect_spacing * i) + (lines * line_height), 1)
+                lines += 1
+            
 
-        return output
+        return panel
 
     def get_duration_string(self, duration: int) -> str:
         if (duration // 2) > 10000:
@@ -619,10 +620,10 @@ class BattleScene(engine.Scene):
         self.timer_region.clear()
         bar_height = self.timer_region.size()[1] - 2
         bar_width = self.timer_region.size()[0] - 2
-        self.timer_region.add_sprite(self.sprite_factory.from_color(BLACK, size=(self.timer_region.size())), 0, 0)
-        self.timer_region.add_sprite(self.sprite_factory.from_color(WHITE, size=(bar_width, bar_height)), 1, 1)
+        self.timer_region.add_sprite(self.sprite_factory.from_color(AQUA, size=(self.timer_region.size())), 0, 0)
+        self.timer_region.add_sprite(self.sprite_factory.from_color(MENU_TRANSPARENT, size=(bar_width, bar_height)), 1, 1)
         if self.timer and self.timer.time_left > 0:
-            self.timer_region.add_sprite(self.sprite_factory.from_color(RED, size=(self.timer.time_left * 4, bar_height)), 1, 1)
+            self.timer_region.add_sprite(self.sprite_factory.from_color(DULL_AQUA, size=(self.timer.time_left * 4, bar_height)), 1, 1)
 
     def draw_enemy_info_region(self):
         self.enemy_info_region.clear()
@@ -786,55 +787,35 @@ class BattleScene(engine.Scene):
 
     def draw_any_cost_expenditure_window(self):
         self.turn_expend_region.clear()
-        any_cost_panel = self.sprite_factory.from_color(WHITE, size=(400, 250))
-        self.add_bordered_sprite(self.turn_expend_region, any_cost_panel,
-                                 BLACK, 0, 0)
-        left_buffer = 20
-        top_buffer = 40
-        vertical_spacing = 25
-        self.render_text(self.font, f"Assign {self.round_any_cost} colorless energy", BLACK, any_cost_panel, 115, 5)
-        self.render_text(self.font, f"Energy Pool", BLACK, any_cost_panel, 55, 30)
-        self.render_text(self.font, f"Physical", BLACK, any_cost_panel, 55, 60)
-        self.render_text(self.font, f"Special", BLACK, any_cost_panel, 55, 85)
-        self.render_text(self.font, f"Mental", BLACK, any_cost_panel, 55, 110)
-        self.render_text(self.font, f"Weapon", BLACK, any_cost_panel, 55, 135)
-        self.render_text(self.font, f"Physical", BLACK, any_cost_panel, 275, 60)
-        self.render_text(self.font, f"Special", BLACK, any_cost_panel, 275, 85)
-        self.render_text(self.font, f"Mental", BLACK, any_cost_panel, 275, 110)
-        self.render_text(self.font, f"Weapon", BLACK, any_cost_panel, 275, 135)
-        self.render_text(self.font, f"Colorless Offered", BLACK, any_cost_panel, 275, 30)
-        if self.round_any_cost == 0:
-            confirm_button = self.create_text_display(self.font,
-                                                      "OK",
-                                                      WHITE,
-                                                      BLACK,
-                                                      x=20,
-                                                      y=10,
-                                                      width=60,
-                                                      height=30)
-            confirm_button.click += self.confirm_button_click
-            self.turn_expend_region.add_sprite(confirm_button, x=135, y=160)
-        cancel_button = self.create_text_display(self.font,
-                                                 "Cancel",
-                                                 WHITE,
-                                                 BLACK,
-                                                 x=6,
-                                                 y=10,
-                                                 width=60,
-                                                 height=30)
-        cancel_button.click += self.any_expenditure_cancel_click
-        self.turn_expend_region.add_sprite(cancel_button, x=205, y=160)
-        energy_rows = [
-            self.turn_expend_region.subregion(left_buffer,
-                                              y,
-                                              width=150,
-                                              height=20)
-            for y in itertools.islice(
-                range(top_buffer + 20, 10000, vertical_spacing), 4)
-        ]
+        any_cost_panel = self.sprite_factory.from_color(MENU, size=(400, 250))
+        any_cost_panel = self.border_sprite(any_cost_panel, AQUA, 2)
+        self.turn_expend_region.add_sprite(any_cost_panel, 0, 0)
         
-        for idx, row in enumerate(energy_rows):
-            self.draw_energy_row(row, idx)
+        self.render_bordered_text(self.font, f"Assign {self.round_any_cost} colorless energy", WHITE, BLACK, any_cost_panel, 115, 5, 1)
+        self.render_bordered_text(self.font, f"Energy Pool", WHITE, BLACK, any_cost_panel, 20, 30, 1)
+        self.render_bordered_text(self.font, f"Physical", WHITE, BLACK, any_cost_panel, 20, 60, 1)
+        self.render_bordered_text(self.font, f"Special", WHITE, BLACK, any_cost_panel, 20, 85, 1)
+        self.render_bordered_text(self.font, f"Mental", WHITE, BLACK, any_cost_panel, 20, 110, 1)
+        self.render_bordered_text(self.font, f"Weapon", WHITE, BLACK, any_cost_panel, 20, 135, 1)
+        self.render_bordered_text(self.font, f"Physical", WHITE, BLACK, any_cost_panel, 275, 60, 1)
+        self.render_bordered_text(self.font, f"Special", WHITE, BLACK, any_cost_panel, 275, 85, 1)
+        self.render_bordered_text(self.font, f"Mental", WHITE, BLACK, any_cost_panel, 275, 110, 1)
+        self.render_bordered_text(self.font, f"Weapon", WHITE, BLACK, any_cost_panel, 275, 135, 1)
+        self.render_bordered_text(self.font, f"Colorless Offered", WHITE, BLACK, any_cost_panel, 275, 30, 1)
+        if self.round_any_cost == 0:
+            confirm_button = self.ui_factory.from_color(sdl2.ext.BUTTON, DULL_AQUA, (60, 30))
+            confirm_button = self.border_sprite(confirm_button, AQUA, 2)
+            confirm_button = self.render_bordered_text(self.font, "OK", WHITE, BLACK, confirm_button, 20, 4, 1)
+            confirm_button.click += self.confirm_button_click
+            self.turn_expend_region.add_sprite(confirm_button, x=135, y=165)
+        
+        cancel_button = self.ui_factory.from_color(sdl2.ext.BUTTON, DULL_AQUA, (60, 30))
+        cancel_button = self.border_sprite(cancel_button, AQUA, 2)
+        cancel_button = self.render_bordered_text(self.font, "Cancel", WHITE, BLACK, cancel_button, 8, 3, 1)
+        cancel_button.click += self.any_expenditure_cancel_click
+        self.turn_expend_region.add_sprite(cancel_button, x=205, y=165)
+        
+        any_cost_panel = self.draw_energy_rows(any_cost_panel)
         
         self.draw_execution_order_region()
         
@@ -925,54 +906,39 @@ class BattleScene(engine.Scene):
             self.execution_order.append(manager.char_id)
         logging.debug(self.cont_storage)
 
-    def draw_energy_row(self, region: engine.Region, idx: int):
+    def draw_energy_rows(self, panel):
 
         plus_button_x = 180
         minus_button_x = 150
         current_pool_x = 130
         offered_pool_x = 210
+        left_buffer = 20
+        top_buffer = 60
+        vertical_spacing = 25
+        
+        for i in range(4):
+            self.turn_expend_region.add_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[Energy(i).name])), 110, top_buffer + (i * vertical_spacing) + 7)
+            
+            plus_button = self.ui_factory.from_surface(
+                sdl2.ext.BUTTON,
+                self.get_scaled_surface(self.scene_manager.surfaces["add"]))
+            plus_button.energy = Energy(i)
+            plus_button.click += self.plus_button_click
+            minus_button = self.ui_factory.from_surface(
+                sdl2.ext.BUTTON,
+                self.get_scaled_surface(self.scene_manager.surfaces["remove"]))
+            minus_button.energy = Energy(i)
+            minus_button.click += self.minus_button_click
 
-        region.add_sprite_vertical_center(self.sprite_factory.from_surface(
-            self.get_scaled_surface(
-                self.scene_manager.surfaces[Energy(idx).name])),
-                                          x=0)
-        plus_button = self.ui_factory.from_surface(
-            sdl2.ext.BUTTON,
-            self.get_scaled_surface(self.scene_manager.surfaces["add"]))
-        plus_button.energy = Energy(idx)
-        plus_button.click += self.plus_button_click
-        minus_button = self.ui_factory.from_surface(
-            sdl2.ext.BUTTON,
-            self.get_scaled_surface(self.scene_manager.surfaces["remove"]))
-        minus_button.energy = Energy(idx)
-        minus_button.click += self.minus_button_click
+            self.turn_expend_region.add_sprite(plus_button, plus_button_x, top_buffer + (i * vertical_spacing) + 3)
+            self.turn_expend_region.add_sprite(minus_button, minus_button_x, top_buffer + (i * vertical_spacing) + 3)
+            
+            
+            panel = self.render_bordered_text(self.font, f"{self.player_display.team.energy_pool[Energy(i)]}", WHITE, BLACK, panel, current_pool_x, top_buffer + (i * vertical_spacing), 1)
+            panel = self.render_bordered_text(self.font, f"{self.offered_pool[Energy(i)]}", WHITE, BLACK, panel, offered_pool_x, top_buffer + (i * vertical_spacing), 1)
+            
+            self.turn_expend_region.add_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[Energy(i).name])), 230, top_buffer + (i * vertical_spacing) + 7)
 
-        current_pool = self.create_text_display(
-            self.font,
-            f"{self.player_display.team.energy_pool[Energy(idx)]}",
-            BLACK,
-            WHITE,
-            x=0,
-            y=1,
-            width=16,
-            height=10)
-        offered_pool = self.create_text_display(
-            self.font,
-            f"{self.offered_pool[Energy(idx)]}",
-            BLACK,
-            WHITE,
-            x=0,
-            y=2,
-            width=16,
-            height=10)
-        region.add_sprite_vertical_center(current_pool, current_pool_x)
-        region.add_sprite_vertical_center(offered_pool, offered_pool_x)
-        region.add_sprite_vertical_center(self.sprite_factory.from_surface(
-            self.get_scaled_surface(
-                self.scene_manager.surfaces[Energy(idx).name])),
-                                          x=230)
-        region.add_sprite_vertical_center(plus_button, x=plus_button_x)
-        region.add_sprite_vertical_center(minus_button, x=minus_button_x)
 
     def draw_effect_hover(self):
         self.hover_effect_region.clear()
@@ -2103,10 +2069,11 @@ class BattleScene(engine.Scene):
     
 
     def update_energy_region(self):
+        self.show_energy_display()
         if self.exchanging_energy:
             self.show_energy_exchange()
-        else:
-            self.show_energy_display()
+        
+        
 
     def show_energy_display(self):
         self.energy_region.clear()
@@ -2132,7 +2099,6 @@ class BattleScene(engine.Scene):
                 can_exchange = True
 
         self.energy_region.add_sprite(energy_panel, 0, 0)
-        
         self.energy_region.add_sprite(self.sprite_factory.from_surface(
             self.get_scaled_surface(self.scene_manager.surfaces["PHYSICAL"], 13, 13)),
                                       x=18,
@@ -2158,43 +2124,20 @@ class BattleScene(engine.Scene):
                                       x=250,
                                       y=9)
         
-        # if can_exchange and not self.has_exchanged and not self.waiting_for_turn:
-        #     exchange_button = self.create_text_display(self.font,
-        #                                                "EXCHANGE",
-        #                                                WHITE,
-        #                                                BLACK,
-        #                                                x=10,
-        #                                                y=6,
-        #                                                width=92,
-        #                                                height=20)
-        #     exchange_button.click += self.exchange_button_click
-        #     self.add_bordered_sprite(self.energy_region, exchange_button,
-        #                              WHITE, 29, 55)
+        if can_exchange and not self.has_exchanged and not self.waiting_for_turn:
+            exchange_button = self.ui_factory.from_color(sdl2.ext.BUTTON, MENU_TRANSPARENT, (31, 30))
+            exchange_button = self.border_sprite(exchange_button, AQUA, 2)
+            exchange_button = self.blit_surface(exchange_button, self.get_scaled_surface(self.scene_manager.surfaces["exchange_icon"]), (2, 2))
+            exchange_button.click += self.exchange_button_click
+            self.energy_region.add_sprite(exchange_button, 298, 0)
 
     def show_energy_exchange(self):
         self.window_up = True
-        self.energy_region.clear()
-        self.add_bordered_sprite(
-            self.energy_region,
-            self.sprite_factory.from_color(BLACK, (150, 120)), WHITE, 0, 0)
-        trade_label = self.create_text_display(self.font,
-                                               "Trade 2",
-                                               WHITE,
-                                               BLACK,
-                                               x=0,
-                                               y=0,
-                                               width=60,
-                                               height=10)
-        self.energy_region.add_sprite(trade_label, 5, 2)
-        receive_label = self.create_text_display(self.font,
-                                                 "Receive",
-                                                 WHITE,
-                                                 BLACK,
-                                                 x=0,
-                                                 y=0,
-                                                 width=57,
-                                                 height=10)
-        self.energy_region.add_sprite(receive_label, 92, 2)
+        exchange_panel = self.sprite_factory.from_color(MENU, (150, 120))
+        exchange_panel = self.border_sprite(exchange_panel, AQUA, 2)
+        exchange_panel = self.render_bordered_text(self.font, "Trade 2", WHITE, BLACK, exchange_panel, 5, 2, 1)
+        exchange_panel = self.render_bordered_text(self.font, "Receive", WHITE, BLACK, exchange_panel, 92, 2, 1)
+        self.energy_region.add_sprite(exchange_panel, 75, 30)
         rows = 0
         for i in range(4):
             if self.player_display.team.energy_pool[Energy(i)] >= 2:
@@ -2206,8 +2149,8 @@ class BattleScene(engine.Scene):
                     offered_energy_symbol.energy_type = i
                     offered_energy_symbol.click += self.offered_click
                     self.add_bordered_sprite(self.energy_region,
-                                             offered_energy_symbol, AQUA, 26,
-                                             25 + (rows * 15))
+                                             offered_energy_symbol, ELECTRIC_BLUE, 101,
+                                             55 + (rows * 15))
                 else:
                     offered_energy_symbol = self.ui_factory.from_surface(
                         sdl2.ext.BUTTON,
@@ -2215,8 +2158,8 @@ class BattleScene(engine.Scene):
                             self.scene_manager.surfaces[Energy(i).name]))
                     offered_energy_symbol.energy_type = i
                     offered_energy_symbol.click += self.offered_click
-                    self.energy_region.add_sprite(offered_energy_symbol, 26,
-                                                  25 + (rows * 15))
+                    self.energy_region.add_sprite(offered_energy_symbol, 101,
+                                                  55 + (rows * 15))
 
             if i == self.traded_for_energy:
                 received_energy_symbol = self.ui_factory.from_surface(
@@ -2226,8 +2169,8 @@ class BattleScene(engine.Scene):
                 received_energy_symbol.energy_type = i
                 received_energy_symbol.click += self.received_click
                 self.add_bordered_sprite(self.energy_region,
-                                         received_energy_symbol, AQUA, 114,
-                                         25 + (rows * 15))
+                                         received_energy_symbol, ELECTRIC_BLUE, 189,
+                                         55 + (rows * 15))
             else:
                 received_energy_symbol = self.ui_factory.from_surface(
                     sdl2.ext.BUTTON,
@@ -2235,30 +2178,23 @@ class BattleScene(engine.Scene):
                         self.scene_manager.surfaces[Energy(i).name]))
                 received_energy_symbol.energy_type = i
                 received_energy_symbol.click += self.received_click
-                self.energy_region.add_sprite(received_energy_symbol, 114,
-                                              25 + (rows * 15))
+                self.energy_region.add_sprite(received_energy_symbol, 189,
+                                              55 + (rows * 15))
 
             rows += 1
 
-        cancel_button = self.create_text_display(self.font,
-                                                 "Cancel",
-                                                 WHITE,
-                                                 BLACK,
-                                                 x=6,
-                                                 y=0,
-                                                 width=60,
-                                                 height=10)
+        cancel_button = self.ui_factory.from_color(sdl2.ext.BUTTON, MENU, (60, 25))
+        cancel_button = self.border_sprite(cancel_button, AQUA, 2)
+        cancel_button = self.render_bordered_text(self.font, "Cancel", WHITE, BLACK, cancel_button, 6, 1, 1)
         cancel_button.click += self.exchange_cancel_click
-        self.add_bordered_sprite(self.energy_region, cancel_button, RED, 85,
-                                 90)
+        self.energy_region.add_sprite(cancel_button, 160, 120)
 
         if self.traded_for_energy != 5 and self.traded_away_energy != 5 and self.traded_for_energy != self.traded_away_energy:
-            accept_button = self.create_text_display(self.font, "Accept",
-                                                     WHITE, BLACK, 6, 0, 60,
-                                                     10)
+            accept_button = self.ui_factory.from_color(sdl2.ext.BUTTON, MENU, (60, 25))
+            accept_button = self.border_sprite(accept_button, AQUA, 2)
+            accept_button = self.render_bordered_text(self.font, "Accept", WHITE, BLACK, accept_button, 6, 1, 1)
             accept_button.click += self.exchange_accept_click
-            self.add_bordered_sprite(self.energy_region, accept_button, GREEN,
-                                     4, 90)
+            self.energy_region.add_sprite(accept_button, 80, 120)
 
     def handle_unique_startup(self, character: "CharacterManager"):
         if character.source.name == "gokudera":
