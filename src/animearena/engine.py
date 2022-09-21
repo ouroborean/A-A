@@ -16,6 +16,7 @@ import sdl2
 import sdl2.ext
 import sdl2.sdlttf
 import sdl2.surface
+import itertools
 from sdl2 import endian
 from pathlib import Path
 from animearena.text_formatter import get_lines, get_font_height
@@ -47,10 +48,16 @@ class Scene:
     ui_factory: sdl2.ext.UIFactory
     triggered_event: bool
     font: None
+    animations: list
+    animation_lock: list
+    animation_locked: bool
 
     def __init__(self, sprite_type: Union[Literal[0], Literal[1]]):
         self.animations = []
+        self.animation_lock = []
+        self.animation_locked = False
         self.region = Region()
+        self.animation_region = Region()
         self.sprite_factory = sdl2.ext.SpriteFactory(sprite_type, free=True)
         self.ui_factory = sdl2.ext.UIFactory(self.sprite_factory, free=True)
         self.surfaces = dict()
@@ -58,13 +65,40 @@ class Scene:
         self.window_up = False
         self.triggered_event = False
 
+    def add_animation(self, animation):
+        self.animations.append(animation)
+        if animation.lock:
+            self.animation_lock.append(animation)
+
+    def check_animation_lock(self, animation):
+        self.animation_lock.remove(animation)
+    
+
+    def progress_animations(self):
+        self.animation_region.clear()
+        for animation in self.animations:
+            animation.progress_frame_timer()
+            self.animation_region.add_sprite(animation.current_sprite, animation.current_x, animation.current_y)
+        
+        
+        for animation in self.animations:
+            if animation.has_ended:
+                animation.end()
+        
+        if not self.animation_lock:
+            self.animation_locked = True
+            
+
     def load_assets(self, **kwargs: str):
         log = logging.getLogger(__name__)
         for (k, v) in kwargs.items():
             self.surfaces[k] = get_image_from_path(v)
 
     def renderables(self) -> Iterator[sdl2.ext.Sprite]:
-        return iter(self.region)
+        for it in [iter(self.region), iter(self.animation_region)]:
+            for element in it:
+                yield element
+        
 
     def eventables(self) -> Iterator[sdl2.ext.Sprite]:
         return self.region.eventables()

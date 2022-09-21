@@ -24,6 +24,7 @@ from animearena.turn_timer import TurnTimer
 from animearena.resource_manager import init_font
 from animearena.color import *
 from animearena.text_formatter import get_font_height, get_lines, get_string_width
+
 import random
 if typing.TYPE_CHECKING:
     from animearena.scene_manager import SceneManager
@@ -363,6 +364,7 @@ class BattleScene(engine.Scene):
                                                    y=60,
                                                    width=300,
                                                    height=30)
+        self.animation_region = engine.Region(0, 0, 0, 0)
 
     #region On-Click event handlers
 

@@ -199,6 +199,9 @@ async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server
                 scene_manager.auto_login = False
                 scene_manager.login_scene.auto_login()
             
+        if scene_manager.current_scene.animations:
+            logging.debug("Progressing animations!")
+            scene_manager.current_scene.progress_animations()
         
         done = sdl2.SDL_GetPerformanceCounter()
         elapsed_time = (done - start) / float(sdl2.SDL_GetPerformanceFrequency())
