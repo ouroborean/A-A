@@ -2939,7 +2939,6 @@ class CharacterManager(collections.abc.Container):
         self.used_slot.ability = None
 
     def profile_click(self, _button, _sender):
-        
         if self.scene.selected_ability is not None and self.targeted:
             
             play_sound(self.scene.scene_manager.sounds["select"])
@@ -2963,9 +2962,6 @@ class CharacterManager(collections.abc.Container):
             self.scene.full_update()
 
     def set_selected_ability(self, button, _sender):
-        animation_sprite = self.scene.sprite_factory.from_surface(self.scene.get_scaled_surface(self.scene.scene_manager.surfaces[self.source.name + "allyprof"]), free=True)
-        slide_animation = MovementAnimation(button.x, button.y, [animation_sprite,], 600, 600, 1, self.scene, True)
-        self.scene.add_animation(slide_animation)
         if not self.scene.window_up and not self.scene.window_closing:
             play_sound(self.scene.scene_manager.sounds["click"])
             self.selected_ability = button.ability

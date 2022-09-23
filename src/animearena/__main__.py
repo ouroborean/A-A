@@ -17,6 +17,7 @@ from pydub import AudioSegment
 from pydub.playback import play
 import sys
 import gc
+import cProfile
 
 WHITE = sdl2.SDL_Color(255, 255, 255)
 
@@ -205,11 +206,11 @@ async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server
         
         done = sdl2.SDL_GetPerformanceCounter()
         elapsed_time = (done - start) / float(sdl2.SDL_GetPerformanceFrequency())
+        
         scene_manager.frame_count += 1
         if scene_manager.frame_count > 30:
             scene_manager.frame_count = 0
         sleep_duration = max((1.0 / target_fps.get()) - elapsed_time, 0)
-        gc.collect()
         await asyncio.sleep(sleep_duration)
     logging.debug("Broke game loop!")
 

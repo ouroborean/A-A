@@ -256,7 +256,6 @@ class CharacterSelectScene(engine.Scene):
         self.render_start_button()
         self.render_character_scroll_selection()
         self.render_search_panel()
-        gc.collect()
 
     def memory_test(self, _button, _sender):
         self.full_render()

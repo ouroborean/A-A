@@ -13,6 +13,7 @@ from animearena.energy import Energy
 from animearena.effects import Effect, EffectType
 from animearena.player import Player
 from animearena.character_manager import CharacterManager
+from animearena.animation import MovementAnimation
 from random import randint
 from playsound import playsound
 from pathlib import Path
@@ -1084,6 +1085,16 @@ class BattleScene(engine.Scene):
                     #build ability message
                     self.ability_messages.append(AbilityMessage(self.pteam[action]))
                     self.pteam[action].execute_ability()
+                    animations = []
+                    for target in self.pteam[action].current_targets:
+                        if target.id == "enemy":
+                            animation_sprite = self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[self.pteam[action].used_ability.db_name]), free=True)
+                            slide_animation = MovementAnimation(5, (115 + (155 * action)), [animation_sprite,], 795, (140 + (155 * int(target.char_id))), 1, self, True)
+                            self.add_animation(slide_animation)
+                        elif target.id == "ally":
+                            animation_sprite = self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[self.pteam[action].used_ability.db_name]), free=True)
+                            slide_animation = MovementAnimation(5, (115 + (155 * action)), [animation_sprite,], 5, (115 + (155 * int(target.char_id))), 1, self, True)
+                            self.add_animation(slide_animation)
             elif action > 2:
                 self.resolve_ticking_ability(self.cont_list[action - 3])
 
