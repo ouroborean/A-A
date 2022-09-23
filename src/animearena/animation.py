@@ -110,7 +110,7 @@ class MovementAnimation(Animation):
     
 class SizeAnimation(Animation):
     
-    def __init__(self, start_x, start_y, image, duration, scene, lock, shrink, size = None):
+    def __init__(self, start_x, start_y, image, duration, scene, lock, shrink, dest_size = None, start_size = None):
         
         self.frame_timer = 0
         self.scene = scene
@@ -120,26 +120,43 @@ class SizeAnimation(Animation):
         self.image = image
         frame_allotment = float(duration * 30)
         self.shrink = shrink
+        x_offset = 0
+        y_offset = 0
+        if start_size:
+            if start_size[0] > image.width and start_size[1] > image.height:
+                x_offset = -(start_size[0] - image.width) // 2
+                y_offset = -(start_size[1] - image.height) // 2
+            elif start_size[0] < image.width and start_size[1] < image.height:
+                x_offset = (image.width - start_size[0]) // 2
+                y_offset = (image.height - start_size[1]) // 2
         
+            
         if shrink:
             x_diff = image.width - 1
             y_diff = image.height - 1
             self.x_step = (x_diff / frame_allotment) * -1
             self.y_step = (y_diff / frame_allotment) * -1
-            self.dest_width = 1
-            self.dest_height = 1
-            self.current_width = image.width
-            self.current_height = image.height
-            self.display_width = image.width
-            self.display_height = image.height
+            if dest_size:
+                self.dest_width, self.dest_height = dest_size
+            else:
+                self.dest_width = 1
+                self.dest_height = 1
+            if start_size:
+                self.current_width, self.current_height = start_size
+                self.display_width, self.display_height = start_size
+            else:
+                self.current_width = image.width
+                self.current_height = image.height
+                self.display_width = image.width
+                self.display_height = image.height
             self.orient = -1
-            self.current_x = start_x
-            self.current_y = start_y
-            self.display_x = start_x
-            self.display_y = start_y
+            self.current_x = start_x + x_offset
+            self.current_y = start_y + y_offset
+            self.display_x = start_x + x_offset
+            self.display_y = start_y + y_offset
         else:
-            if size:
-                self.dest_width, self.dest_height = size
+            if dest_size:
+                self.dest_width, self.dest_height = dest_size
             else:
                 self.dest_width = image.width
                 self.dest_height = image.height
@@ -147,16 +164,24 @@ class SizeAnimation(Animation):
             y_diff = self.dest_height - 1
             self.x_step = (x_diff / frame_allotment)
             self.y_step = (y_diff / frame_allotment)
-            
-            self.current_width = max(round(self.x_step), 1)
-            self.current_height = max(round(self.y_step), 1)
-            self.display_width = max(round(self.x_step), 1)
-            self.display_height = max(round(self.y_step), 1)
+            if start_size:
+                self.current_width, self.current_height = start_size
+                self.display_width, self.display_height = start_size
+                self.current_x = start_x + x_offset
+                self.current_y = start_y + y_offset
+                self.display_x = start_x + x_offset
+                self.display_y = start_y + y_offset
+            else:
+                self.current_width = max(round(self.x_step), 1)
+                self.current_height = max(round(self.y_step), 1)
+                self.display_width = max(round(self.x_step), 1)
+                self.display_height = max(round(self.y_step), 1)
+                self.current_x = start_x + (x_diff // 2) 
+                self.current_y = start_y + (y_diff // 2)
+                self.display_x = start_x + (x_diff // 2)
+                self.display_y = start_y + (y_diff // 2)
             self.orient = 1
-            self.current_x = start_x + (x_diff // 2)
-            self.current_y = start_y + (y_diff // 2)
-            self.display_x = start_x + (x_diff // 2)
-            self.display_y = start_y + (y_diff // 2)
+            
     
     @property
     def current_sprite(self):
@@ -188,7 +213,19 @@ class SizeAnimation(Animation):
     def has_ended(self):
         ended = (self.display_width == self.dest_width and self.display_height == self.dest_height)
         return ended
-        
+
+def create_pulse_animation(start_x, start_y, image, pulse_duration, pulse_amount, scene, lock, dest_size):
+    image_start_size = image.size
+    animations = []
+    for i in range(pulse_amount):
+        grow_animation = SizeAnimation(start_x, start_y, image, pulse_duration, scene, lock, False, dest_size=dest_size, start_size=image_start_size)
+        if animations:
+            animations[-1].link_animation(grow_animation)
+        shrink_animation = SizeAnimation(start_x, start_y, image, pulse_duration, scene, lock, True, dest_size=image_start_size, start_size=dest_size)
+        grow_animation.link_animation(shrink_animation)
+        animations.append(grow_animation)
+        animations.append(shrink_animation)
+    scene.add_animation(animations[0])
     
 class TextAnimation(Animation):
     

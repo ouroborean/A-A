@@ -68,6 +68,7 @@ class Scene:
     def add_animation(self, animation):
         self.animations.append(animation)
         if animation.lock:
+            
             self.animation_lock.append(animation)
 
     def check_animation_lock(self, animation):
@@ -86,7 +87,7 @@ class Scene:
                 animation.end()
         
         if not self.animation_lock:
-            self.animation_locked = True
+            self.animation_locked = False
             
 
     def load_assets(self, **kwargs: str):

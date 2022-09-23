@@ -1,4 +1,5 @@
 from os import rename
+from venv import create
 import sdl2
 import sdl2.ext
 import sdl2.surface
@@ -13,7 +14,7 @@ from animearena.energy import Energy
 from animearena.effects import Effect, EffectType
 from animearena.player import Player
 from animearena.character_manager import CharacterManager
-from animearena.animation import MovementAnimation, SizeAnimation
+from animearena.animation import MovementAnimation, SizeAnimation, create_pulse_animation
 from random import randint
 from playsound import playsound
 from pathlib import Path
@@ -1085,10 +1086,9 @@ class BattleScene(engine.Scene):
                     #build ability message
                     self.ability_messages.append(AbilityMessage(self.pteam[action]))
                     self.pteam[action].execute_ability()
-                    animations = []
                     
-                    grow_animation = SizeAnimation(400, 400, self.scene_manager.surfaces[self.pteam[action].used_ability.db_name], 1, self, False, False, (150, 150))
-                    self.add_animation(grow_animation)
+                    create_pulse_animation(350, 350, self.scene_manager.surfaces[self.pteam[action].used_ability.db_name], .5, 6, self, True, (150, 150))
+                    
                     # for target in self.pteam[action].current_targets:
                     #     if target.id == "enemy":
                     #         animation_sprite = self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[self.pteam[action].used_ability.db_name]), free=True)
