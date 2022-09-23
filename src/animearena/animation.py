@@ -1,12 +1,15 @@
 import sdl2
 import sdl2.ext
 import logging
-
+from animearena.color import *
+from animearena.text_formatter import get_string_width, get_font_height
 
 class Animation():
     
     current_x: int
     current_y: int
+    display_x: int
+    display_y: int
     i: int
     frequency: int
     frame_timer: int
@@ -17,6 +20,8 @@ class Animation():
     lock: bool
     
     def __init__(self, start_x, start_y, frequency, sprites, lock, scene):
+        self.display_x = start_x
+        self.display_y = start_y
         self.current_x = start_x
         self.current_y = start_y
         self.frame_timer = 0
@@ -71,7 +76,6 @@ class MovementAnimation(Animation):
         self.dest_y = dest_y
         x_diff = float(dest_x - start_x)
         y_diff = float(dest_y - start_y)
-        logging.debug("X and Y diffs are %d and %d", x_diff, y_diff)
         if start_x < dest_x:
             self.x_orient = 1
         else:
@@ -87,20 +91,106 @@ class MovementAnimation(Animation):
         self.x_step = x_diff / frame_allotment
         self.y_step = y_diff / frame_allotment
         
-        logging.debug("During the allotted frame_count of %d, the sprite will move %d and %d each frame.", frame_allotment, self.x_step, self.y_step)
-        
         super().__init__(start_x, start_y, 1, sprites, lock, scene)
         
     def step(self):
-        self.current_x = round(self.current_x + self.x_step)
-        self.current_y = round(self.y_step + self.current_y)
-        if self.current_x * self.x_orient > self.dest_x * self.x_orient:
-            self.current_x = self.dest_x
-        if self.current_y * self.y_orient > self.dest_y * self.y_orient:
-            self.current_y = self.dest_y
+        self.current_x = self.current_x + self.x_step
+        self.current_y = self.y_step + self.current_y
+        self.display_x = round(self.current_x)
+        self.display_y = round(self.current_y)
+        if self.display_x * self.x_orient > self.dest_x * self.x_orient:
+            self.display_x = self.dest_x
+        if self.display_y * self.y_orient > self.dest_y * self.y_orient:
+            self.display_y = self.dest_y
             
     @property
     def has_ended(self):
-        ended = (self.current_x == self.dest_x and self.current_y == self.dest_y)
+        ended = (self.display_x == self.dest_x and self.display_y == self.dest_y)
         return ended
     
+class SizeAnimation(Animation):
+    
+    def __init__(self, start_x, start_y, image, duration, scene, lock, shrink, size = None):
+        
+        self.frame_timer = 0
+        self.scene = scene
+        self.lock = lock
+        self.link = None
+        self.frequency = 1
+        self.image = image
+        frame_allotment = float(duration * 30)
+        self.shrink = shrink
+        
+        if shrink:
+            x_diff = image.width - 1
+            y_diff = image.height - 1
+            self.x_step = (x_diff / frame_allotment) * -1
+            self.y_step = (y_diff / frame_allotment) * -1
+            self.dest_width = 1
+            self.dest_height = 1
+            self.current_width = image.width
+            self.current_height = image.height
+            self.display_width = image.width
+            self.display_height = image.height
+            self.orient = -1
+            self.current_x = start_x
+            self.current_y = start_y
+            self.display_x = start_x
+            self.display_y = start_y
+        else:
+            if size:
+                self.dest_width, self.dest_height = size
+            else:
+                self.dest_width = image.width
+                self.dest_height = image.height
+            x_diff = self.dest_width - 1
+            y_diff = self.dest_height - 1
+            self.x_step = (x_diff / frame_allotment)
+            self.y_step = (y_diff / frame_allotment)
+            
+            self.current_width = max(round(self.x_step), 1)
+            self.current_height = max(round(self.y_step), 1)
+            self.display_width = max(round(self.x_step), 1)
+            self.display_height = max(round(self.y_step), 1)
+            self.orient = 1
+            self.current_x = start_x + (x_diff // 2)
+            self.current_y = start_y + (y_diff // 2)
+            self.display_x = start_x + (x_diff // 2)
+            self.display_y = start_y + (y_diff // 2)
+    
+    @property
+    def current_sprite(self):
+        return self.scene.border_sprite(self.scene.sprite_factory.from_surface(self.scene.get_scaled_surface(self.image, self.display_width, self.display_height), free=True), BLACK, 2)
+    
+    def step(self):
+        self.current_width += self.x_step
+        self.current_height += self.y_step
+        self.display_height = round(self.current_height)
+        self.display_width = round(self.current_width)
+        
+        if self.shrink:
+            self.current_x += (self.x_step / 2) * self.orient
+            self.current_y += (self.y_step / 2) * self.orient
+            self.display_x = round(self.current_x)
+            self.display_y = round(self.current_y)
+        else:
+            self.current_x -= (self.x_step / 2)
+            self.current_y -= (self.y_step / 2)
+            self.display_x = round(self.current_x)
+            self.display_y = round(self.current_y)
+        
+        if self.display_height * self.orient > self.dest_height * self.orient:
+            self.display_height = self.dest_height
+        if self.display_width * self.orient > self.dest_width * self.orient:
+            self.display_width = self.dest_width
+            
+    @property
+    def has_ended(self):
+        ended = (self.display_width == self.dest_width and self.display_height == self.dest_height)
+        return ended
+        
+    
+class TextAnimation(Animation):
+    
+    def __init__(self, text, color, border_color, font, dest_x, dest_y, scene, lock, typewriter):
+        pass

@@ -78,7 +78,7 @@ class Scene:
         self.animation_region.clear()
         for animation in self.animations:
             animation.progress_frame_timer()
-            self.animation_region.add_sprite(animation.current_sprite, animation.current_x, animation.current_y)
+            self.animation_region.add_sprite(animation.current_sprite, animation.display_x, animation.display_y)
         
         
         for animation in self.animations:
