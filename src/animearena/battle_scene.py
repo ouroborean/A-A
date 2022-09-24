@@ -1,4 +1,5 @@
 from os import rename
+from posixpath import split
 from venv import create
 import sdl2
 import sdl2.ext
@@ -14,7 +15,7 @@ from animearena.energy import Energy
 from animearena.effects import Effect, EffectType
 from animearena.player import Player
 from animearena.character_manager import CharacterManager
-from animearena.animation import DisplayAnimation, MovementAnimation, SizeAnimation, create_pulse_animation
+from animearena.animation import DisplayAnimation, FadeAnimation, MovementAnimation, SizeAnimation, SplitAnimation, create_pulse_animation, JoinAnimation
 from random import randint
 from playsound import playsound
 from pathlib import Path
@@ -433,7 +434,7 @@ class BattleScene(engine.Scene):
         self.draw_turn_end_region()
         self.window_closing = True
         play_sound(self.scene_manager.sounds["turnend"])
-        self.turn_end()
+        
 
     def plus_button_click(self, button, _sender):
         attr = button.energy
@@ -864,11 +865,10 @@ class BattleScene(engine.Scene):
         if MOUSE_X > ORIGIN_X and len(self.execution_order) - 1 > self.dragging_button.index:
             if MOUSE_X > RIGHT_NEIGHBOR_X:
                 swap = self.execution_order[self.dragging_button.index]
-                logging.debug("Swap is %d", swap)
                 self.execution_order[self.dragging_button.index] = self.execution_order[self.dragging_button.index + 1]
-                logging.debug("Current index is %d", self.execution_order[self.dragging_button.index])
+
                 self.execution_order[self.dragging_button.index + 1] = swap
-                logging.debug("Right index is %d", self.execution_order[self.dragging_button.index + 1])
+
                 self.dragging_button.index += 1
         elif MOUSE_X < ORIGIN_X and self.dragging_button.index != 0:
             if MOUSE_X < LEFT_NEIGHBOR_X:
@@ -876,7 +876,6 @@ class BattleScene(engine.Scene):
                 self.execution_order[self.dragging_button.index] = self.execution_order[self.dragging_button.index - 1]
                 self.execution_order[self.dragging_button.index - 1] = swap
                 self.dragging_button.index -= 1
-        logging.debug(self.execution_order)
         
 
     def order_button_press(self, button, _sender):
@@ -908,7 +907,6 @@ class BattleScene(engine.Scene):
             self.execution_order.append(i + 3)
         for manager in self.acting_order:
             self.execution_order.append(manager.char_id)
-        logging.debug(self.cont_storage)
 
     def draw_energy_rows(self, panel):
 
@@ -955,11 +953,9 @@ class BattleScene(engine.Scene):
         
         for manager in self.pteam:
             if manager.source.hp != manager.source.current_hp:
-                logging.debug("Detected HP Bar change to render!")
                 manager.draw_hp_bar()
         for manager in self.eteam:
             if manager.source.hp != manager.source.current_hp:
-                logging.debug("Detected HP Bar change to render!")
                 manager.draw_hp_bar()
 
     def start_timer(self, time: int = 90) -> TurnTimer:
@@ -1084,8 +1080,9 @@ class BattleScene(engine.Scene):
     def execution_loop(self):
         self.execution_animations = list()
         for action in self.execution_order:
-            self.animation_locked = True
+            
             if action < 3:
+                self.animation_locked = True
                 if self.pteam[action].acted:
                     #build ability message
                     self.ability_messages.append(AbilityMessage(self.pteam[action]))
@@ -1094,31 +1091,73 @@ class BattleScene(engine.Scene):
                     
                     if not self.pteam[action].countered:
                         used_ability_grow_animation = SizeAnimation(120, 105 + (155 * action), self.scene_manager.surfaces[self.pteam[action].used_ability.db_name], .5, self, True, False, (120, 120))
-                        
+                        used_ability_join_animation = JoinAnimation(self)
+                        used_ability_join_animation.add_end_func(self.pump_execution_animations, ())
                         for target in self.pteam[action].current_targets:
                             
                             if target.id == "ally":
                                 fired_animation = MovementAnimation(120, 115 + (155 * action), [self.border_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[self.pteam[action].used_ability.db_name], 100, 100)), BLACK, 2),], 5, (115 + (155 * int(target.char_id))), .4, self, True)
                             elif target.id == "enemy":
                                 fired_animation = MovementAnimation(120, 115 + (155 * action), [self.border_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[self.pteam[action].used_ability.db_name], 100, 100)), BLACK, 2),], 795, (140 + (155 * int(target.char_id))), .4, self, True)
+                            
+                            used_ability_join_animation.await_animation(fired_animation)
                             used_ability_grow_animation.link_animation(fired_animation)
-                        used_ability_grow_animation.links[-1].add_end_func(self.end_animations, ())
+                        used_ability_grow_animation.link_animation(used_ability_join_animation)
                         self.execution_animations.append(used_ability_grow_animation)
-                        self.add_animation(used_ability_grow_animation)
+                        
                         
                     #add animation to list of animations that will play once execution completes
                     
                     
             elif action > 2:
-                #create animation for ticking effect activation
-                
+                self.animation_locked = True
+                # create animation for ticking effect activation
+                join_animation = JoinAnimation(self)
+                join_animation.add_end_func(self.pump_execution_animations, ())
+                split_animation = SplitAnimation(self)
+                split_animation.add_split(join_animation)
+                eff = self.cont_list[action - 3]
+                x_offset = 31
+                for i, tar in enumerate(self.cont_storage[eff.signature]):
+                    if tar < 3:
+                        target = self.pteam[tar]
+                        position_modifier = 1
+                    else:
+                        target = self.eteam[tar - 3]
+                        position_modifier = -1
+                    effect_clusters = target.make_effect_clusters()
+                    for j, cluster in enumerate(effect_clusters.items()):
+                        cluster_family, effect_set = cluster
+                        if eff.family == cluster_family:
+                            effect_index = j
+                            break
+                    image = self.scene_manager.surfaces[eff.source.db_name]
+                    image = image.resize((25, 25))
+                    ticking_effect_grow_animation = SizeAnimation((effect_index * x_offset * position_modifier) + target.effect_region.x, target.effect_region.y, image, .5, self, True, False, (50, 50), (25, 25))
+
+                    image = image.resize((50, 50))
+                    split_animation.add_split(ticking_effect_grow_animation)
+                    fade_animation = FadeAnimation((effect_index * x_offset * position_modifier) - 12 + target.effect_region.x, target.effect_region.y - 12, image, .5, self, True, False)
+                    join_animation.await_animation(fade_animation)
+                    ticking_effect_grow_animation.link_animation(fade_animation)
+                    
+                self.execution_animations.append(split_animation)
                 
                 #add animation to list of animations
                 
-                
-                
                 self.resolve_ticking_ability(self.cont_list[action - 3])
+                
+        self.pump_execution_animations()
 
+    def pump_execution_animations(self):
+        if self.execution_animations:
+            animation = self.execution_animations[0]
+            self.execution_animations = self.execution_animations[1:]
+            self.add_animation(animation)
+        else:
+            self.turn_end()
+            
+      
     
     def enemy_execution_loop(self, executed_abilities: list["AbilityMessage"], execution_order: list[int],
                              potential_energy: list[int]):
@@ -1209,11 +1248,12 @@ class BattleScene(engine.Scene):
         
         
         for tar in self.cont_storage[eff.signature]:
+            
             if tar < 3:
                 target = self.pteam[tar]
             else:
                 target = self.eteam[tar - 3]
-            logging.debug("Executing %s on %s", eff.name, target.source.name)
+            logging.debug("Resolving ticking ability on %s %s", target.id, target.source.name)
             if target.contains_sig(eff):
                 if eff.eff_type == EffectType.CONT_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
                     if eff.check_waiting() and self.is_allied_effect(eff, team_id) and (eff.mag >= 20 or not target.deflecting()):
@@ -1522,6 +1562,7 @@ class BattleScene(engine.Scene):
         enemy_team = self.enemy_display.team.character_managers
         for i, manager in enumerate(player_team):
             for eff in manager.source.current_effects:
+                eff.check_waiting()
                 if not enemy_tick:
                     #region Spend Turn Under Effect Mission Check
                     if not eff.eff_type == EffectType.SYSTEM:
@@ -1719,6 +1760,7 @@ class BattleScene(engine.Scene):
 
         for i, manager in enumerate(enemy_team):
             for eff in manager.source.current_effects:
+                eff.check_waiting()
                 eff.tick_duration()
                 if eff.name == "Consecutive Normal Punches":
                     if manager.has_effect(

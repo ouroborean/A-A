@@ -32,6 +32,8 @@ class Animation():
         self.lock = lock
         self.links = list()
         self.end_funcs = list()
+        self.name = ""
+        self.waiter = None
 
     @property
     def current_sprite(self):
@@ -43,6 +45,9 @@ class Animation():
     
     def link_animation(self, animation):
         self.links.append(animation)
+    
+    def add_waiter(self, animation):
+        self.waiter = animation
     
     def add_end_func(self, func, args):
         self.end_funcs.append((func, args))
@@ -60,10 +65,13 @@ class Animation():
             self.step()
     
     def end(self):
+            
         if self.links:
             for link in self.links:
                 self.scene.add_animation(link)
-        self.scene.animations.remove(self)
+        if self.waiter:
+            self.waiter.receive_animation(self)
+        self.scene.remove_animation(self)
         if not self.scene.animations:
             self.scene.animation_region.clear()
         if self.lock:
@@ -130,6 +138,7 @@ class SizeAnimation(Animation):
         self.image = image.copy()
         frame_allotment = float(duration * 30)
         self.shrink = shrink
+        self.name = ""
         x_offset = 0
         y_offset = 0
         if start_size:
@@ -139,7 +148,7 @@ class SizeAnimation(Animation):
             elif start_size[0] < image.width and start_size[1] < image.height:
                 x_offset = (image.width - start_size[0]) // 2
                 y_offset = (image.height - start_size[1]) // 2
-        
+        self.waiter = None
             
         if shrink:
             x_diff = image.width - 1
@@ -245,6 +254,7 @@ class DisplayAnimation(Animation):
         super().__init__(start_x, start_y, 1, sprites, lock, scene)
         self.duration = duration * 30
         
+        
     def step(self):
         self.duration -= 1
         
@@ -266,9 +276,9 @@ class FadeAnimation(Animation):
         self.end_funcs = list()
         self.lock = lock
         self.duration = float(duration * 30)
-        
+        self.name = ""
         self.alpha_step = 255 / self.duration
-        
+        self.waiter = None
         self.fade_in = fade_in
         
         if not self.fade_in:
@@ -291,13 +301,13 @@ class FadeAnimation(Animation):
     def step(self):
         self.current_alpha += self.alpha_step
         self.display_alpha = round(self.current_alpha)
-        
-        if self.fade_in:
+        if not self.fade_in:
             if self.display_alpha < 0:
                 self.display_alpha = 0
         else:
             if self.display_alpha > 255:
                 self.display_alpha = 255
+        
         
     @property
     def has_ended(self):
@@ -308,3 +318,69 @@ class TextAnimation(Animation):
     
     def __init__(self, text, color, border_color, font, dest_x, dest_y, scene, lock, typewriter):
         pass
+
+class JoinAnimation(Animation):
+    
+    def __init__(self, scene):
+        self.awaited_animations = dict()
+        self.scene = scene
+        self.lock = True
+        self.frame_timer = 0
+        self.frequency = 1
+        self.end_funcs = list()
+        self.links = list()
+        self.all_received = False
+        self.waiter = None
+    
+    def await_animation(self, animation):
+        self.awaited_animations[animation] = False
+        animation.add_waiter(self)
+    
+    def receive_animation(self, animation):
+        self.awaited_animations[animation] = True
+        for animation in self.awaited_animations.values():
+            if not animation:
+                self.all_received = False
+                break
+            else:
+                self.all_received = True
+    
+    def step(self):
+        pass
+    
+    @property
+    def has_ended(self):
+        return self.all_received
+
+class SplitAnimation(Animation):
+    
+    def __init__(self, scene):
+        self.scene = scene
+        self.lock = True
+        self.frequency = 1
+        self.end_funcs = list()
+        self.links = list()
+        self.all_received = False
+        self.waiter = None
+        self.split_animations = list()
+        self.frame_timer = 0
+        
+    def add_split(self, animation):
+        self.split_animations.append(animation)
+    
+    def end(self):
+        
+        for animation in self.split_animations:
+            self.scene.add_animation(animation)
+        self.scene.remove_animation(self)
+        if not self.scene.animations:
+            self.scene.animation_region.clear()
+        if self.lock:
+            self.scene.check_animation_lock(self)
+        if self.end_funcs:
+            for func in self.end_funcs:
+                func[0](*func[1])
+                
+    def has_ended(self):
+        return True
+    

@@ -19,6 +19,7 @@ import sdl2.surface
 import itertools
 from sdl2 import endian
 from pathlib import Path
+from animearena.animation import JoinAnimation, SplitAnimation
 from animearena.text_formatter import get_lines, get_font_height
 def get_image_from_path(file_name: str) -> Image:
     with importlib.resources.path('animearena.resources', file_name) as path:
@@ -68,10 +69,15 @@ class Scene:
     def add_animation(self, animation):
         self.animations.append(animation)
         if animation.lock:
+            logging.debug("Adding a locked animation of type %s", type(animation))
             self.animation_locked = True
             self.animation_lock.append(animation)
 
+    def remove_animation(self, animation):
+        self.animations.remove(animation)
+
     def check_animation_lock(self, animation):
+        logging.debug("Checking animation lock for animation of type %s", type(animation))
         self.animation_lock.remove(animation)
     
     def end_animations(self):
@@ -89,8 +95,9 @@ class Scene:
     def progress_animations(self):
         self.animation_region.clear()
         for animation in self.animations:
-            animation.progress_frame_timer()
-            self.animation_region.add_sprite(animation.current_sprite, animation.display_x, animation.display_y)
+            if not type(animation) == JoinAnimation and not type(animation) == SplitAnimation:
+                animation.progress_frame_timer()
+                self.animation_region.add_sprite(animation.current_sprite, animation.display_x, animation.display_y)
     
     def check_animations(self):
         for animation in self.animations:

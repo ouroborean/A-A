@@ -2569,6 +2569,7 @@ class CharacterManager(collections.abc.Container):
 
         if not self.has_effect(EffectType.UNIQUE, "Plasma Bomb") or effect.eff_type in stun_types or effect.eff_type == EffectType.SYSTEM or effect.system:
             self.source.current_effects.append(effect)
+            
 
     def remove_effect(self, effect: Effect):
         new_current_effects: list[Effect] = []
@@ -2600,7 +2601,7 @@ class CharacterManager(collections.abc.Container):
         else:
             position_modifier = 1
         for idx, effect_cluster in enumerate(self.make_effect_clusters().items()):
-            cluster_name, effect_set = effect_cluster
+            cluster_family, effect_set = effect_cluster
             effect_sprite = self.scene.ui_factory.from_surface(
                 sdl2.ext.BUTTON,
                 self.scene.get_scaled_surface(effect_set[0].eff_img, 25, 25),
@@ -2709,7 +2710,7 @@ class CharacterManager(collections.abc.Container):
         return True
 
     def make_effect_clusters(self) -> dict[str, list[Effect]]:
-        output: dict[str, list[Effect]] = {}
+        output = dict()
         for effect in self.source.current_effects:
             if effect.eff_type == EffectType.DEST_DEF and effect.mag == 0:
                 continue
@@ -2717,12 +2718,12 @@ class CharacterManager(collections.abc.Container):
                 continue
             if effect.system or effect.eff_type == EffectType.SYSTEM:
                 continue
-            if effect.name in output.keys() and effect.user == output[
-                    effect.name][0].user:
-                output[effect.name].append(effect)
+            if effect.family in output.keys() and effect.user == output[
+                    effect.family][0].user:
+                output[effect.family].append(effect)
             else:
-                output[effect.name] = []
-                output[effect.name].append(effect)
+                output[effect.family] = []
+                output[effect.family].append(effect)
         return output
 
     def add_current_target(self, target: "CharacterManager"):

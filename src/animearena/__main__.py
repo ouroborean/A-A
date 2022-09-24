@@ -194,7 +194,6 @@ async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server
             
         if scene_manager.current_scene.animations:
             scene_manager.current_scene.progress_animations()
-        
         scene_manager.spriterenderer.render(scene_manager.current_scene.renderables())
         window.refresh()
         

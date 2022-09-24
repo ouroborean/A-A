@@ -249,7 +249,6 @@ class ConnectionHandler:
         execution_order_count = buffer.read_int()
         for i in range(execution_order_count):
             execution_order.append(buffer.read_int())
-        logging.debug(execution_order)
         for i in range(4):
             buffer.read_int()
         

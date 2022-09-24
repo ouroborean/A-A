@@ -146,6 +146,10 @@ class Effect:
     def signature(self) -> tuple:
         return (self.eff_type, self.name, self.user.char_id, self.duration, self.mag)
 
+    @property
+    def family(self) -> tuple:
+        return (self.name, self.user.id, self.user.char_id)
+
     def get_desc(self) -> str:
         return self.desc(self)
 
