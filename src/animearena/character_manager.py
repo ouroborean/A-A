@@ -10,7 +10,7 @@ from animearena.ability_type import AbilityType
 from animearena.energy import Energy
 from animearena.mission import Mission
 from animearena.mission_handler import MissionHandler, TriggerHandler
-from animearena.animation import MovementAnimation
+from animearena.animation import FadeAnimation, MovementAnimation, SizeAnimation
 import math
 from random import randint
 import logging
@@ -53,6 +53,10 @@ class CharacterManager(collections.abc.Container):
     hp_bar_region: engine.Region
     effect_region: engine.Region
     hover_effect_region: engine.Region
+    countered: bool
+    countering_ability: Ability
+    counterer_id: int
+    counterer_team: str
     is_toga: bool
     id: str
     char_id: int
@@ -61,6 +65,10 @@ class CharacterManager(collections.abc.Container):
     
 
     def __init__(self, source: character.Character, scene: "BattleScene"):
+        self.countered = False
+        self.countering_ability = None
+        self.counterer_id = 0
+        self.counterer_team = ""
         self.source = source
         self.scene = scene
         self.selected_ability = None
@@ -767,6 +775,10 @@ class CharacterManager(collections.abc.Container):
                         self.source.change_energy_cont(-1)
                         eff.user.check_on_drain(self)
                         self.shirafune_check(eff)
+                        self.countered = True
+                        self.counterer_team = eff.user.id
+                        self.counterer_id = eff.user.char_id
+                        self.countering_ability = eff.source
                         return True
                     if eff.name == "Enkidu, Chains of Heaven":
                         src = Ability("gilgamesh2")
@@ -776,6 +788,10 @@ class CharacterManager(collections.abc.Container):
                         self.add_effect(Effect(src, EffectType.ALL_STUN, eff.user, 3, lambda eff: "This character is stunned."))
                         self.add_effect(Effect(src, EffectType.MARK, eff.user, 3, lambda eff: "This character's continuous abilities will not activate."))
                         self.shirafune_check(eff)
+                        self.countered = True
+                        self.counterer_team = eff.user.id
+                        self.counterer_id = eff.user.char_id
+                        self.countering_ability = eff.source
                         return True
                 #target counter check
                 for target in self.current_targets:
@@ -800,6 +816,10 @@ class CharacterManager(collections.abc.Container):
                                 self.receive_eff_damage(20, eff, DamageType.NORMAL)
                             target.full_remove_effect("Draw Stance", eff.user)
                             self.shirafune_check(eff)
+                            self.countered = True
+                            self.counterer_team = eff.user.id
+                            self.counterer_id = eff.user.char_id
+                            self.countering_ability = eff.source
                             return True
                         if eff.name == "Zero Point Breakthrough":
                             eff.user.progress_mission(2, 1)
@@ -830,6 +850,10 @@ class CharacterManager(collections.abc.Container):
                                        "X-Burner will deal 10 more damage.",
                                        mag=110))
                             self.shirafune_check(eff)
+                            self.countered = True
+                            self.counterer_team = eff.user.id
+                            self.counterer_id = eff.user.char_id
+                            self.countering_ability = eff.source
                             return True
                         if eff.name == "One For All - Shoot Style":
                             eff.user.progress_mission(3, 1)
@@ -843,6 +867,10 @@ class CharacterManager(collections.abc.Container):
                                     "This character was countered by One For All - Shoot Style."
                                 ))
                             self.shirafune_check(eff)
+                            self.countered = True
+                            self.counterer_team = eff.user.id
+                            self.counterer_id = eff.user.char_id
+                            self.countering_ability = eff.source
                             return True
                         if eff.name == "Minion - Tama":
                             src = Ability("ruler3")
@@ -862,6 +890,10 @@ class CharacterManager(collections.abc.Container):
                             if self.final_can_effect():
                                 self.receive_eff_damage(35, eff, DamageType.PIERCING)
                             self.shirafune_check(eff)
+                            self.countered = True
+                            self.counterer_team = eff.user.id
+                            self.counterer_id = eff.user.char_id
+                            self.countering_ability = eff.source
                             return True
                         if eff.name == "Casseur de Logistille":
                             src = Ability("astolfo1")
@@ -889,6 +921,10 @@ class CharacterManager(collections.abc.Container):
                                     if self.meets_stun_check():
                                         eff.user.check_on_stun(self)
                                 self.shirafune_check(eff)
+                                self.countered = True
+                                self.counterer_team = eff.user.id
+                                self.counterer_id = eff.user.char_id
+                                self.countering_ability = eff.source
                                 return True
 
                     gen = (eff for eff in target.source.current_effects
@@ -907,6 +943,10 @@ class CharacterManager(collections.abc.Container):
                             alt_targets.append(self)
                             self.current_targets = alt_targets
                             self.used_ability.execute(self, pteam, eteam)
+                            self.countered = True
+                            self.counterer_team = eff.user.id
+                            self.counterer_id = eff.user.char_id
+                            self.countering_ability = eff.source
                             return True
             else:
                 if self.has_effect(EffectType.COUNTER_IMMUNE, "Mental Radar"):
@@ -935,6 +975,10 @@ class CharacterManager(collections.abc.Container):
                         eff.user.progress_mission(2, 1)
                         self.add_effect(Effect(src, EffectType.MARK, eff.user, 5, lambda eff: "Mortal Wound will have triple effect against this character."))
                         self.add_effect(Effect(src, EffectType.ALL_STUN, eff.user, 5, lambda eff: "This character is stunned."))
+                        self.countered = True
+                        self.counterer_team = eff.user.id
+                        self.counterer_id = eff.user.char_id
+                        self.countering_ability = eff.source
                         return True
 
         return False
@@ -2738,6 +2782,7 @@ class CharacterManager(collections.abc.Container):
             self.source.dead = True
         self.primary_target = None
         self.acted = False
+        self.countered = False
         self.current_targets.clear()
         self.received_ability.clear()
         self.used_ability = None
@@ -2962,6 +3007,12 @@ class CharacterManager(collections.abc.Container):
             self.scene.full_update()
 
     def set_selected_ability(self, button, _sender):
+        
+        grow_animation = SizeAnimation(300, 300, self.scene.scene_manager.surfaces[button.ability.db_name], .5, self.scene, True, shrink=False)
+        fade_animation = FadeAnimation(300, 300, self.scene.scene_manager.surfaces[button.ability.db_name], 1, self.scene, True, fade_in = False)
+        grow_animation.link_animation(fade_animation)
+        self.scene.add_animation(grow_animation)
+        
         if not self.scene.window_up and not self.scene.window_closing:
             play_sound(self.scene.scene_manager.sounds["click"])
             self.selected_ability = button.ability

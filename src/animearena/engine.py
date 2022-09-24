@@ -11,7 +11,7 @@ from typing import MutableMapping
 from typing import Optional
 from typing import Tuple
 from typing import Union
-from PIL import Image
+from PIL import Image, ImageDraw
 import sdl2
 import sdl2.ext
 import sdl2.sdlttf
@@ -74,21 +74,31 @@ class Scene:
     def check_animation_lock(self, animation):
         self.animation_lock.remove(animation)
     
+    def end_animations(self):
+        end_funcs = list()
+        for animation in self.animations:
+            for func in animation.end_funcs:
+                end_funcs.append(func)
+        self.animations.clear()
+        self.animation_lock.clear()
+        self.animation_locked = False
+        self.animation_region.clear()
+        for func in end_funcs:
+            func[0](*func[1])
 
     def progress_animations(self):
         self.animation_region.clear()
         for animation in self.animations:
             animation.progress_frame_timer()
             self.animation_region.add_sprite(animation.current_sprite, animation.display_x, animation.display_y)
-        
-        
+    
+    def check_animations(self):
         for animation in self.animations:
             if animation.has_ended:
                 animation.end()
         
         if not self.animation_lock:
             self.animation_locked = False
-            
 
     def load_assets(self, **kwargs: str):
         log = logging.getLogger(__name__)
@@ -155,6 +165,19 @@ class Scene:
                 sdl2.SDL_FreeSurface(text_surf)
         
         return target
+    
+    def border_image(self, image, thickness):
+        
+        w, h = image.size
+        
+        brush = ImageDraw.Draw(image)
+        brush.rectangle([(0, 0), (w, thickness)], fill="black", outline = "black")
+        brush.rectangle([(0, 0), (thickness, h)], fill="black", outline = "black")
+        brush.rectangle([(w - 2, 0), (w, h)], fill="black", outline = "black")
+        brush.rectangle([(0, h - 2), (w, h)], fill="black", outline = "black")
+        
+        return image
+        
     
     def border_sprite(self, sprite, color, thickness):
         

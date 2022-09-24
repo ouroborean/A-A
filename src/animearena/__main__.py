@@ -191,6 +191,10 @@ async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server
         if scene_manager.current_scene.window_closing:
             scene_manager.current_scene.window_closing = False
             scene_manager.current_scene.window_up = False
+            
+        if scene_manager.current_scene.animations:
+            scene_manager.current_scene.progress_animations()
+        
         scene_manager.spriterenderer.render(scene_manager.current_scene.renderables())
         window.refresh()
         
@@ -203,8 +207,7 @@ async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server
                 scene_manager.login_scene.auto_login()
             
         if scene_manager.current_scene.animations:
-            logging.debug("Progressing animations!")
-            scene_manager.current_scene.progress_animations()
+            scene_manager.current_scene.check_animations()
         
         done = sdl2.SDL_GetPerformanceCounter()
         elapsed_time = (done - start) / float(sdl2.SDL_GetPerformanceFrequency())

@@ -13,7 +13,7 @@ class Animation():
     i: int
     frequency: int
     frame_timer: int
-    link: "Animation"
+    links: list
     sprites: list[sdl2.ext.SoftwareSprite]
     paused: bool
     pause_timer: int
@@ -30,7 +30,8 @@ class Animation():
         self.sprites = sprites
         self.scene = scene
         self.lock = lock
-        self.link = None
+        self.links = list()
+        self.end_funcs = list()
 
     @property
     def current_sprite(self):
@@ -41,7 +42,10 @@ class Animation():
         return True
     
     def link_animation(self, animation):
-        self.link = animation
+        self.links.append(animation)
+    
+    def add_end_func(self, func, args):
+        self.end_funcs.append((func, args))
     
     def step(self):
         pass
@@ -56,13 +60,17 @@ class Animation():
             self.step()
     
     def end(self):
-        if self.link:
-            self.scene.add_animation(self.link)
+        if self.links:
+            for link in self.links:
+                self.scene.add_animation(link)
         self.scene.animations.remove(self)
         if not self.scene.animations:
             self.scene.animation_region.clear()
         if self.lock:
             self.scene.check_animation_lock(self)
+        if self.end_funcs:
+            for func in self.end_funcs:
+                func[0](*func[1])
     
     def progress_pause_timer(self):
         self.pause_timer -= 1
@@ -111,13 +119,15 @@ class MovementAnimation(Animation):
 class SizeAnimation(Animation):
     
     def __init__(self, start_x, start_y, image, duration, scene, lock, shrink, dest_size = None, start_size = None):
-        
+        self.start_x = start_x
+        self.start_y = start_y
         self.frame_timer = 0
         self.scene = scene
         self.lock = lock
-        self.link = None
+        self.links = list()
+        self.end_funcs = list()
         self.frequency = 1
-        self.image = image
+        self.image = image.copy()
         frame_allotment = float(duration * 30)
         self.shrink = shrink
         x_offset = 0
@@ -185,7 +195,7 @@ class SizeAnimation(Animation):
     
     @property
     def current_sprite(self):
-        return self.scene.border_sprite(self.scene.sprite_factory.from_surface(self.scene.get_scaled_surface(self.image, self.display_width, self.display_height), free=True), BLACK, 2)
+        return self.scene.sprite_factory.from_surface(self.scene.get_scaled_surface(self.scene.border_image(self.image, 1), self.display_width, self.display_height), free=True)
     
     def step(self):
         self.current_width += self.x_step
@@ -203,12 +213,12 @@ class SizeAnimation(Animation):
             self.current_y -= (self.y_step / 2)
             self.display_x = round(self.current_x)
             self.display_y = round(self.current_y)
-        
         if self.display_height * self.orient > self.dest_height * self.orient:
             self.display_height = self.dest_height
+            
         if self.display_width * self.orient > self.dest_width * self.orient:
             self.display_width = self.dest_width
-            
+        
     @property
     def has_ended(self):
         ended = (self.display_width == self.dest_width and self.display_height == self.dest_height)
@@ -225,8 +235,75 @@ def create_pulse_animation(start_x, start_y, image, pulse_duration, pulse_amount
         grow_animation.link_animation(shrink_animation)
         animations.append(grow_animation)
         animations.append(shrink_animation)
-    scene.add_animation(animations[0])
     
+    return animations[0]
+
+
+class DisplayAnimation(Animation):
+    
+    def __init__(self, start_x, start_y, sprites, duration, scene, lock):
+        super().__init__(start_x, start_y, 1, sprites, lock, scene)
+        self.duration = duration * 30
+        
+    def step(self):
+        self.duration -= 1
+        
+    @property
+    def has_ended(self):
+        return self.duration <= 0
+
+class FadeAnimation(Animation):
+    
+    def __init__(self, start_x, start_y, image, duration, scene, lock, fade_in=True):
+        self.display_x = start_x
+        self.display_y = start_y
+        self.frequency = 1
+        self.frame_timer = 0
+        self.image = image.copy()
+        self.scene = scene
+        self.image = self.scene.border_image(self.image, 1)
+        self.links = list()
+        self.end_funcs = list()
+        self.lock = lock
+        self.duration = float(duration * 30)
+        
+        self.alpha_step = 255 / self.duration
+        
+        self.fade_in = fade_in
+        
+        if not self.fade_in:
+            self.current_alpha = 255
+            self.display_alpha = 255
+            self.target_alpha = 0
+            self.alpha_step *= -1
+            self.orient = -1
+        else:
+            self.current_alpha = 0
+            self.display_alpha = 0
+            self.target_alpha = 255
+            self.orient = 1
+        
+    @property
+    def current_sprite(self):
+        self.image.putalpha(self.display_alpha)
+        return self.scene.sprite_factory.from_surface(self.scene.get_scaled_surface(self.image), free=True)
+    
+    def step(self):
+        self.current_alpha += self.alpha_step
+        self.display_alpha = round(self.current_alpha)
+        
+        if self.fade_in:
+            if self.display_alpha < 0:
+                self.display_alpha = 0
+        else:
+            if self.display_alpha > 255:
+                self.display_alpha = 255
+        
+    @property
+    def has_ended(self):
+        return self.display_alpha == self.target_alpha
+        
+
 class TextAnimation(Animation):
     
     def __init__(self, text, color, border_color, font, dest_x, dest_y, scene, lock, typewriter):

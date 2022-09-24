@@ -14,7 +14,7 @@ from animearena.energy import Energy
 from animearena.effects import Effect, EffectType
 from animearena.player import Player
 from animearena.character_manager import CharacterManager
-from animearena.animation import MovementAnimation, SizeAnimation, create_pulse_animation
+from animearena.animation import DisplayAnimation, MovementAnimation, SizeAnimation, create_pulse_animation
 from random import randint
 from playsound import playsound
 from pathlib import Path
@@ -1079,28 +1079,42 @@ class BattleScene(engine.Scene):
 
 
     def execution_loop(self):
-        
+        self.execution_animations = list()
         for action in self.execution_order:
             if action < 3:
                 if self.pteam[action].acted:
                     #build ability message
                     self.ability_messages.append(AbilityMessage(self.pteam[action]))
                     self.pteam[action].execute_ability()
+                    #create animation for ability activation based on whether or not ability was countered
                     
-                    create_pulse_animation(350, 350, self.scene_manager.surfaces[self.pteam[action].used_ability.db_name], .5, 6, self, True, (150, 150))
+                    if not self.pteam[action].countered:
+                        used_ability_grow_animation = SizeAnimation(120, 105 + (155 * action), self.scene_manager.surfaces[self.pteam[action].used_ability.db_name], .5, self, True, False, (120, 120))
+                        
+                        for target in self.pteam[action].current_targets:
+                            
+                            if target.id == "ally":
+                                fired_animation = MovementAnimation(120, 115 + (155 * action), [self.border_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[self.pteam[action].used_ability.db_name], 100, 100)), BLACK, 2),], 5, (115 + (155 * int(target.char_id))), .5, self, True)
+                            elif target.id == "enemy":
+                                fired_animation = MovementAnimation(120, 115 + (155 * action), [self.border_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[self.pteam[action].used_ability.db_name], 100, 100)), BLACK, 2),], 795, (140 + (155 * int(target.char_id))), .5, self, True)
+                            used_ability_grow_animation.link_animation(fired_animation)
+                        used_ability_grow_animation.links[-1].add_end_func(self.end_animations, ())
+                        self.execution_animations.append(used_ability_grow_animation)
+                        
+                        
+                    #add animation to list of animations that will play once execution completes
                     
-                    # for target in self.pteam[action].current_targets:
-                    #     if target.id == "enemy":
-                    #         animation_sprite = self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[self.pteam[action].used_ability.db_name]), free=True)
-                    #         slide_animation = MovementAnimation(5, (115 + (155 * action)), [animation_sprite,], 795, (140 + (155 * int(target.char_id))), 1, self, True)
-                    #         self.add_animation(slide_animation)
-                    #     elif target.id == "ally":
-                    #         animation_sprite = self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[self.pteam[action].used_ability.db_name]), free=True)
-                    #         slide_animation = MovementAnimation(5, (115 + (155 * action)), [animation_sprite,], 5, (115 + (155 * int(target.char_id))), 1, self, True)
-                    #         self.add_animation(slide_animation)
+                    
             elif action > 2:
+                #create animation for ticking effect activation
+                
+                
+                #add animation to list of animations
+                
+                
                 self.resolve_ticking_ability(self.cont_list[action - 3])
 
+    
     def enemy_execution_loop(self, executed_abilities: list["AbilityMessage"], execution_order: list[int],
                              potential_energy: list[int]):
 
