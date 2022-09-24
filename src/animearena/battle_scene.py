@@ -952,11 +952,14 @@ class BattleScene(engine.Scene):
     #endregion
 
     def check_for_hp_bar_changes(self):
+        
         for manager in self.pteam:
             if manager.source.hp != manager.source.current_hp:
+                logging.debug("Detected HP Bar change to render!")
                 manager.draw_hp_bar()
         for manager in self.eteam:
             if manager.source.hp != manager.source.current_hp:
+                logging.debug("Detected HP Bar change to render!")
                 manager.draw_hp_bar()
 
     def start_timer(self, time: int = 90) -> TurnTimer:
@@ -1081,6 +1084,7 @@ class BattleScene(engine.Scene):
     def execution_loop(self):
         self.execution_animations = list()
         for action in self.execution_order:
+            self.animation_locked = True
             if action < 3:
                 if self.pteam[action].acted:
                     #build ability message
@@ -1094,13 +1098,13 @@ class BattleScene(engine.Scene):
                         for target in self.pteam[action].current_targets:
                             
                             if target.id == "ally":
-                                fired_animation = MovementAnimation(120, 115 + (155 * action), [self.border_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[self.pteam[action].used_ability.db_name], 100, 100)), BLACK, 2),], 5, (115 + (155 * int(target.char_id))), .5, self, True)
+                                fired_animation = MovementAnimation(120, 115 + (155 * action), [self.border_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[self.pteam[action].used_ability.db_name], 100, 100)), BLACK, 2),], 5, (115 + (155 * int(target.char_id))), .4, self, True)
                             elif target.id == "enemy":
-                                fired_animation = MovementAnimation(120, 115 + (155 * action), [self.border_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[self.pteam[action].used_ability.db_name], 100, 100)), BLACK, 2),], 795, (140 + (155 * int(target.char_id))), .5, self, True)
+                                fired_animation = MovementAnimation(120, 115 + (155 * action), [self.border_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[self.pteam[action].used_ability.db_name], 100, 100)), BLACK, 2),], 795, (140 + (155 * int(target.char_id))), .4, self, True)
                             used_ability_grow_animation.link_animation(fired_animation)
                         used_ability_grow_animation.links[-1].add_end_func(self.end_animations, ())
                         self.execution_animations.append(used_ability_grow_animation)
-                        
+                        self.add_animation(used_ability_grow_animation)
                         
                     #add animation to list of animations that will play once execution completes
                     
@@ -1112,13 +1116,13 @@ class BattleScene(engine.Scene):
                 #add animation to list of animations
                 
                 
+                
                 self.resolve_ticking_ability(self.cont_list[action - 3])
 
     
     def enemy_execution_loop(self, executed_abilities: list["AbilityMessage"], execution_order: list[int],
                              potential_energy: list[int]):
 
-        logging.debug("Started enemy execution loop")
         for ability in executed_abilities:
             
             self.eteam[ability.user_id].used_ability = self.eteam[
@@ -1389,7 +1393,6 @@ class BattleScene(engine.Scene):
         self.sharingan_reflecting = False
         self.sharingan_reflector = None
 
-
         # Kuroko invulnerability check #
         for manager in self.player_display.team.character_managers:
             if manager.source.name == "kuroko" and manager.check_invuln():
@@ -1485,7 +1488,6 @@ class BattleScene(engine.Scene):
         self.timer = self.start_timer()
         
         self.full_update()
-
 
 
         if not self.catching_up:

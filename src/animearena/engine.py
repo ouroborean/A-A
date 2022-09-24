@@ -68,7 +68,7 @@ class Scene:
     def add_animation(self, animation):
         self.animations.append(animation)
         if animation.lock:
-            
+            self.animation_locked = True
             self.animation_lock.append(animation)
 
     def check_animation_lock(self, animation):

@@ -2737,8 +2737,9 @@ class CharacterManager(collections.abc.Container):
             self.targeted = False
 
     def draw_hp_bar(self):
+        
         increment = -1
-        if self.source.current_hp != self.source.hp:
+        if self.source.current_hp != self.source.hp and not self.scene.animation_locked:
             if self.source.current_hp - self.source.hp < 0:
                 increment = 1
         else:
@@ -3008,10 +3009,6 @@ class CharacterManager(collections.abc.Container):
 
     def set_selected_ability(self, button, _sender):
         
-        grow_animation = SizeAnimation(300, 300, self.scene.scene_manager.surfaces[button.ability.db_name], .5, self.scene, True, shrink=False)
-        fade_animation = FadeAnimation(300, 300, self.scene.scene_manager.surfaces[button.ability.db_name], 1, self.scene, True, fade_in = False)
-        grow_animation.link_animation(fade_animation)
-        self.scene.add_animation(grow_animation)
         
         if not self.scene.window_up and not self.scene.window_closing:
             play_sound(self.scene.scene_manager.sounds["click"])
