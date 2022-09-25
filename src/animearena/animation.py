@@ -34,6 +34,7 @@ class Animation():
         self.end_funcs = list()
         self.name = ""
         self.waiter = None
+        self.display = True
 
     @property
     def current_sprite(self):
@@ -65,7 +66,7 @@ class Animation():
             self.step()
     
     def end(self):
-            
+        logging.debug("%s has ended!", self.name)
         if self.links:
             for link in self.links:
                 self.scene.add_animation(link)
@@ -136,6 +137,7 @@ class SizeAnimation(Animation):
         self.end_funcs = list()
         self.frequency = 1
         self.image = image.copy()
+        self.display = True
         frame_allotment = float(duration * 30)
         self.shrink = shrink
         self.name = ""
@@ -267,6 +269,7 @@ class FadeAnimation(Animation):
     def __init__(self, start_x, start_y, image, duration, scene, lock, fade_in=True):
         self.display_x = start_x
         self.display_y = start_y
+        self.display = True
         self.frequency = 1
         self.frame_timer = 0
         self.image = image.copy()
@@ -322,6 +325,7 @@ class TextAnimation(Animation):
 class JoinAnimation(Animation):
     
     def __init__(self, scene):
+        self.name = ""
         self.awaited_animations = dict()
         self.scene = scene
         self.lock = True
@@ -331,12 +335,14 @@ class JoinAnimation(Animation):
         self.links = list()
         self.all_received = False
         self.waiter = None
+        self.display = False
     
     def await_animation(self, animation):
         self.awaited_animations[animation] = False
         animation.add_waiter(self)
     
     def receive_animation(self, animation):
+        logging.debug("Joiner receiving animation of type %s", type(animation))
         self.awaited_animations[animation] = True
         for animation in self.awaited_animations.values():
             if not animation:
@@ -355,6 +361,7 @@ class JoinAnimation(Animation):
 class SplitAnimation(Animation):
     
     def __init__(self, scene):
+        self.name = ""
         self.scene = scene
         self.lock = True
         self.frequency = 1
@@ -364,6 +371,7 @@ class SplitAnimation(Animation):
         self.waiter = None
         self.split_animations = list()
         self.frame_timer = 0
+        self.display = False
         
     def add_split(self, animation):
         self.split_animations.append(animation)
@@ -371,6 +379,7 @@ class SplitAnimation(Animation):
     def end(self):
         
         for animation in self.split_animations:
+            logging.debug("Splitter adding animation of type %s", type(animation))
             self.scene.add_animation(animation)
         self.scene.remove_animation(self)
         if not self.scene.animations:
@@ -384,3 +393,24 @@ class SplitAnimation(Animation):
     def has_ended(self):
         return True
     
+class HPBarAnimation(Animation):
+    
+    def __init__(self, scene, manager):
+        self.scene = scene
+        self.lock = True
+        self.frequency = 1
+        self.end_funcs = list()
+        self.links = list()
+        self.all_received = False
+        self.waiter = None
+        self.frame_timer = 0
+        self.display = False
+        self.character = manager
+        self.name = ""
+    
+    @property
+    def has_ended(self):
+        return self.character.source.hp == self.character.source.current_hp
+    
+    def step(self):
+        self.character.draw_hp_bar(from_animation=True)

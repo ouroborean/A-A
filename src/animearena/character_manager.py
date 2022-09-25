@@ -2737,10 +2737,10 @@ class CharacterManager(collections.abc.Container):
         if self.targeted is True:
             self.targeted = False
 
-    def draw_hp_bar(self):
-        
+    def draw_hp_bar(self, from_animation=False):
+        self.hp_bar_region.clear()
         increment = -1
-        if self.source.current_hp != self.source.hp and not self.scene.animation_locked:
+        if self.source.current_hp != self.source.hp and (not self.scene.animation_locked or from_animation):
             if self.source.current_hp - self.source.hp < 0:
                 increment = 1
         else:
@@ -2767,7 +2767,7 @@ class CharacterManager(collections.abc.Container):
                     sdl2.SDL_Rect((self.source.current_hp // 2)  + 1, 0, 0, 0))
         hp_text = sdl2.sdlttf.TTF_RenderText_Blended(
             self.scene.font, str.encode(f"{self.source.current_hp}"), BLACK)
-
+        
         if self.source.current_hp >= 100:
             hp_text_x = 38
         elif self.source.current_hp > 9:
@@ -2777,6 +2777,7 @@ class CharacterManager(collections.abc.Container):
 
         sdl2.surface.SDL_BlitSurface(hp_text, None, hp_bar.surface,
                                      sdl2.SDL_Rect(hp_text_x, -3, 0, 0))
+        sdl2.SDL_FreeSurface(hp_text)
         self.hp_bar_region.add_sprite(hp_bar, 0, 7)
 
     def refresh_character(self, enemy=False):

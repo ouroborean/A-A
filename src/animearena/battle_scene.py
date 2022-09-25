@@ -15,7 +15,7 @@ from animearena.energy import Energy
 from animearena.effects import Effect, EffectType
 from animearena.player import Player
 from animearena.character_manager import CharacterManager
-from animearena.animation import DisplayAnimation, FadeAnimation, MovementAnimation, SizeAnimation, SplitAnimation, create_pulse_animation, JoinAnimation
+from animearena.animation import DisplayAnimation, FadeAnimation, HPBarAnimation, MovementAnimation, SizeAnimation, SplitAnimation, create_pulse_animation, JoinAnimation
 from random import randint
 from playsound import playsound
 from pathlib import Path
@@ -269,6 +269,7 @@ class BattleScene(engine.Scene):
         self.collapsing_ally_inviolate_shield = False
         self.collapsing_enemy_inviolate_shield = False
         self.d20 = random.Random()
+        self.execution_animations = list()
         self.ability_messages = list()
         self.timer = TurnTimer(1, self.empty_placeholder)
         self.random_spent = [0, 0, 0, 0]
@@ -422,14 +423,33 @@ class BattleScene(engine.Scene):
             output.append(mission_progress_package)
         return output
 
+    def get_ability_messages(self):
+        for action in self.execution_order:
+            
+            if action < 3:
+                self.animation_locked = True
+                if self.pteam[action].acted:
+                    #build ability message
+                    self.ability_messages.append(AbilityMessage(self.pteam[action]))
+
     def confirm_button_click(self, _button, _sender):
         
-        self.execution_loop()
-
+        self.get_ability_messages()
+        
         for attr, i in self.offered_pool.items():
             if attr < 4:
                 self.random_spent[attr] = i
             self.offered_pool[attr] = 0
+        
+        self.scene_manager.connection.send_match_communication(
+                    self.ability_messages, self.execution_order, self.random_spent)
+        self.ability_messages.clear()
+        self.random_spent = [0, 0, 0, 0]
+        
+        
+        self.pump_execution_order()
+
+        
         self.turn_expend_region.clear()
         self.draw_turn_end_region()
         self.window_closing = True
@@ -1075,12 +1095,35 @@ class BattleScene(engine.Scene):
             self.catching_up = False
             self.full_update()
 
-
-
-    def execution_loop(self):
-        self.execution_animations = list()
-        for action in self.execution_order:
+    def get_hp_bar_animation_splitter(self, ally = True):
+        if not ally:
+            func = self.pump_enemy_execution_order
+        else:
+            func = self.pump_execution_order
+        join_animation = JoinAnimation(self)
+        join_animation.name = "HP Bar join"
+        split_animation = SplitAnimation(self)
+        split_animation.add_split(join_animation)
+        for manager in self.pteam:
+            animation = HPBarAnimation(self, manager)
+            animation.name = f"{manager.source.name}HP"
+            split_animation.add_split(animation)
+            join_animation.await_animation(animation)
             
+        for manager in self.eteam:
+            animation = HPBarAnimation(self, manager)
+            animation.name = f"{manager.source.name}HP"
+            split_animation.add_split(animation)
+            join_animation.await_animation(animation)
+        join_animation.add_end_func(func, ())
+        return split_animation
+    
+    
+    
+    def pump_execution_order(self):
+        if self.execution_order:
+            action = self.execution_order[0]
+            self.execution_order = self.execution_order[1:]
             if action < 3:
                 self.animation_locked = True
                 if self.pteam[action].acted:
@@ -1092,7 +1135,6 @@ class BattleScene(engine.Scene):
                     if not self.pteam[action].countered:
                         used_ability_grow_animation = SizeAnimation(120, 105 + (155 * action), self.scene_manager.surfaces[self.pteam[action].used_ability.db_name], .5, self, True, False, (120, 120))
                         used_ability_join_animation = JoinAnimation(self)
-                        used_ability_join_animation.add_end_func(self.pump_execution_animations, ())
                         for target in self.pteam[action].current_targets:
                             
                             if target.id == "ally":
@@ -1102,8 +1144,10 @@ class BattleScene(engine.Scene):
                             
                             used_ability_join_animation.await_animation(fired_animation)
                             used_ability_grow_animation.link_animation(fired_animation)
+                        hp_bar_splitter = self.get_hp_bar_animation_splitter()
+                        used_ability_join_animation.link_animation(hp_bar_splitter)
                         used_ability_grow_animation.link_animation(used_ability_join_animation)
-                        self.execution_animations.append(used_ability_grow_animation)
+                        self.add_animation(used_ability_grow_animation)
                         
                         
                     #add animation to list of animations that will play once execution completes
@@ -1113,7 +1157,6 @@ class BattleScene(engine.Scene):
                 self.animation_locked = True
                 # create animation for ticking effect activation
                 join_animation = JoinAnimation(self)
-                join_animation.add_end_func(self.pump_execution_animations, ())
                 split_animation = SplitAnimation(self)
                 split_animation.add_split(join_animation)
                 eff = self.cont_list[action - 3]
@@ -1137,31 +1180,93 @@ class BattleScene(engine.Scene):
 
                     image = image.resize((50, 50))
                     split_animation.add_split(ticking_effect_grow_animation)
-                    fade_animation = FadeAnimation((effect_index * x_offset * position_modifier) - 12 + target.effect_region.x, target.effect_region.y - 12, image, .5, self, True, False)
+                    fade_animation = FadeAnimation((effect_index * x_offset * position_modifier) - 12 + target.effect_region.x, target.effect_region.y - 12, image, .3, self, True, False)
                     join_animation.await_animation(fade_animation)
                     ticking_effect_grow_animation.link_animation(fade_animation)
-                    
-                self.execution_animations.append(split_animation)
+                hp_bar_splitter = self.get_hp_bar_animation_splitter()
+                join_animation.link_animation(hp_bar_splitter)
+                self.add_animation(split_animation)
                 
                 #add animation to list of animations
                 
                 self.resolve_ticking_ability(self.cont_list[action - 3])
-                
-        self.pump_execution_animations()
-
-    def pump_execution_animations(self):
-        if self.execution_animations:
-            animation = self.execution_animations[0]
-            self.execution_animations = self.execution_animations[1:]
-            self.add_animation(animation)
         else:
+            self.animation_locked = False
             self.turn_end()
             
-      
+    def pump_enemy_execution_order(self):
+        if self.execution_order:
+            action = self.execution_order[0]
+            self.execution_order = self.execution_order[1:]
+            if action < 3:
+                if self.eteam[action].acted:
+                    #build ability message
+                    self.eteam[action].free_execute_ability(self.eteam, self.pteam)
+                    
+                    if not self.eteam[action].countered:
+                        used_ability_grow_animation = SizeAnimation(680, 130 + (155 * action), self.scene_manager.surfaces[self.eteam[action].used_ability.db_name], .5, self, True, False, (120, 120))
+                        used_ability_join_animation = JoinAnimation(self)
+                        for target in self.eteam[action].current_targets:
+                            
+                            if target.id == "ally":
+                                fired_animation = MovementAnimation(680, 140 + (155 * action), [self.border_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[self.eteam[action].used_ability.db_name], 100, 100)), BLACK, 2),], 5, (115 + (155 * int(target.char_id))), .4, self, True)
+                            elif target.id == "enemy":
+                                fired_animation = MovementAnimation(680, 140 + (155 * action), [self.border_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[self.eteam[action].used_ability.db_name], 100, 100)), BLACK, 2),], 795, (140 + (155 * int(target.char_id))), .4, self, True)
+                            
+                            used_ability_join_animation.await_animation(fired_animation)
+                            used_ability_grow_animation.link_animation(fired_animation)
+                        hp_bar_splitter = self.get_hp_bar_animation_splitter(False)
+                        used_ability_join_animation.link_animation(hp_bar_splitter)
+                        used_ability_grow_animation.link_animation(used_ability_join_animation)
+                        self.add_animation(used_ability_grow_animation)
+                    
+                    self.eteam[action].acted = False
+                    self.eteam[action].used_ability = None
+                    self.eteam[action].current_targets.clear()
+                    self.eteam[action].primary_target = None
+            elif action > 2:
+                
+                self.animation_locked = True
+                # create animation for ticking effect activation
+                join_animation = JoinAnimation(self)
+                split_animation = SplitAnimation(self)
+                split_animation.add_split(join_animation)
+                eff = self.cont_list[action - 3]
+                x_offset = 31
+                for i, tar in enumerate(self.cont_storage[eff.signature]):
+                    if tar < 3:
+                        target = self.pteam[tar]
+                        position_modifier = 1
+                    else:
+                        target = self.eteam[tar - 3]
+                        position_modifier = -1
+                    effect_clusters = target.make_effect_clusters()
+                    for j, cluster in enumerate(effect_clusters.items()):
+                        cluster_family, effect_set = cluster
+                        if eff.family == cluster_family:
+                            effect_index = j
+                            break
+                    image = self.scene_manager.surfaces[eff.source.db_name]
+                    image = image.resize((25, 25))
+                    ticking_effect_grow_animation = SizeAnimation((effect_index * x_offset * position_modifier) + target.effect_region.x, target.effect_region.y, image, .5, self, True, False, (50, 50), (25, 25))
+
+                    image = image.resize((50, 50))
+                    split_animation.add_split(ticking_effect_grow_animation)
+                    fade_animation = FadeAnimation((effect_index * x_offset * position_modifier) - 12 + target.effect_region.x, target.effect_region.y - 12, image, .3, self, True, False)
+                    join_animation.await_animation(fade_animation)
+                    ticking_effect_grow_animation.link_animation(fade_animation)
+                hp_bar_splitter = self.get_hp_bar_animation_splitter(False)
+                join_animation.link_animation(hp_bar_splitter)
+                self.add_animation(split_animation)
+                self.resolve_ticking_ability(self.cont_list[action - 3])
+        else:
+            self.animation_locked = False
+            self.finish_turn_start()
+        
     
     def enemy_execution_loop(self, executed_abilities: list["AbilityMessage"], execution_order: list[int],
                              potential_energy: list[int]):
-
+        self.potential_energy = potential_energy
         for ability in executed_abilities:
             
             self.eteam[ability.user_id].used_ability = self.eteam[
@@ -1182,26 +1287,19 @@ class BattleScene(engine.Scene):
                 self.eteam[ability.user_id].current_targets.append(
                     self.pteam[num])
         self.get_execution_order_base("enemy")
-        for action in execution_order:
-            
-            if action < 3:
-                if self.eteam[action].acted:
-                    #build ability message
-                    self.eteam[action].free_execute_ability(self.eteam, self.pteam)
-                    self.eteam[action].acted = False
-                    self.eteam[action].used_ability = None
-                    self.eteam[action].current_targets.clear()
-                    self.eteam[action].primary_target = None
-            elif action > 2:
-                self.resolve_ticking_ability(self.cont_list[action - 3])
+        self.execution_order = execution_order
+        
+        self.pump_enemy_execution_order()
                 
+    def finish_turn_start(self):
         self.tick_effect_duration(enemy_tick=True)
         for character in self.eteam:
             character.check_ability_swaps(ffs_shokuhou=True)
-        self.handle_energy_gain(potential_energy)
+        self.handle_energy_gain(self.potential_energy)
 
         self.turn_start()
 
+    
     def handle_energy_gain(self, potential_pool: list[int]):
 
         new_energy = [0, 0, 0, 0, 0]
@@ -1285,110 +1383,6 @@ class BattleScene(engine.Scene):
                     if eff.check_waiting() and self.is_allied_effect(eff, team_id):
                         target.check_unique_cont(eff, team_id)
             
-        
-    # def resolve_ticking_ability(self, team_id: str):
-    #     """Checks all Character Managers for continuous effects.
-        
-    #     All continuous effects that belong to the player whose turn
-    #     is currently ending are triggered and resolved."""
-    #     for manager in self.player_display.team.character_managers:
-    #         gen = (eff for eff in manager.source.current_effects
-    #             if eff.eff_type == EffectType.CONT_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-    #         for eff in gen:
-    #             if eff.check_waiting() and self.is_allied_effect(
-    #                     eff, team_id) and (eff.mag >= 20
-    #                                     or not manager.deflecting()):
-    #                 eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.NORMAL)
-    #         gen = (eff for eff in manager.source.current_effects
-    #             if eff.eff_type == EffectType.CONT_PIERCE_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-    #         for eff in gen:
-    #             if eff.check_waiting() and self.is_allied_effect(
-    #                     eff, team_id) and (eff.mag >= 20
-    #                                     or not manager.deflecting()):
-    #                 eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.PIERCING)
-    #         gen = (eff for eff in manager.source.current_effects
-    #             if eff.eff_type == EffectType.CONT_AFF_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-    #         for eff in gen:
-    #             if eff.check_waiting() and self.is_allied_effect(
-    #                     eff, team_id) and (eff.mag >= 20
-    #                                     or not manager.deflecting()):
-    #                 if eff.name == "Doping Rampage":
-    #                     self.dying_to_doping = True
-    #                 eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.AFFLICTION)
-    #         gen = (eff for eff in manager.source.current_effects
-    #             if eff.eff_type == EffectType.CONT_HEAL and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-    #         for eff in gen:
-    #             if eff.check_waiting() and self.is_allied_effect(eff, team_id):
-    #                 eff.user.give_eff_healing(eff.mag, manager, eff)
-    #         gen = (eff for eff in manager.source.current_effects
-    #             if eff.eff_type == EffectType.CONT_DEST_DEF and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-    #         for eff in gen:
-    #             if eff.check_waiting() and self.is_allied_effect(eff, team_id):
-    #                 if manager.has_effect(EffectType.DEST_DEF, eff.name):
-    #                     manager.get_effect(EffectType.DEST_DEF,
-    #                                     eff.name).alter_dest_def(eff.mag)
-    #                 else:
-    #                     manager.add_effect(
-    #                         Effect(
-    #                             eff.source, EffectType.DEST_DEF, eff.user,
-    #                             280000, lambda eff:
-    #                             f"This character has {eff.mag} destructible defense.",
-    #                             eff.mag))
-    #         gen = (eff for eff in manager.source.current_effects
-    #             if eff.eff_type == EffectType.CONT_UNIQUE and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-    #         for eff in gen:
-    #             if eff.check_waiting() and self.is_allied_effect(eff, team_id):
-    #                 manager.check_unique_cont(eff, team_id)
-
-    #     for manager in self.enemy_display.team.character_managers:
-    #         gen = (eff for eff in manager.source.current_effects
-    #             if eff.eff_type == EffectType.CONT_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-    #         for eff in gen:
-    #             if eff.check_waiting() and self.is_allied_effect(
-    #                     eff, team_id) and (eff.mag >= 20
-    #                                     or not manager.deflecting()):
-    #                 eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.NORMAL)
-    #         gen = (eff for eff in manager.source.current_effects
-    #             if eff.eff_type == EffectType.CONT_PIERCE_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-    #         for eff in gen:
-    #             if eff.check_waiting() and self.is_allied_effect(
-    #                     eff, team_id) and (eff.mag >= 20
-    #                                     or not manager.deflecting()):
-    #                 eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.PIERCING)
-    #         gen = (eff for eff in manager.source.current_effects
-    #             if eff.eff_type == EffectType.CONT_AFF_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-    #         for eff in gen:
-    #             if eff.check_waiting() and self.is_allied_effect(
-    #                     eff, team_id) and (eff.mag >= 20
-    #                                     or not manager.deflecting()):
-    #                 if eff.name == "Doping Rampage":
-    #                     self.dying_to_doping = True
-    #                 eff.user.deal_eff_damage(eff.mag, manager, eff, DamageType.AFFLICTION)
-    #         gen = (eff for eff in manager.source.current_effects
-    #             if eff.eff_type == EffectType.CONT_HEAL and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-    #         for eff in gen:
-    #             if eff.check_waiting() and self.is_allied_effect(eff, team_id):
-    #                 eff.user.give_eff_healing(eff.mag, manager, eff)
-    #         gen = (eff for eff in manager.source.current_effects
-    #             if eff.eff_type == EffectType.CONT_DEST_DEF and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-    #         for eff in gen:
-    #             if eff.check_waiting() and self.is_allied_effect(eff, team_id):
-    #                 if manager.has_effect(EffectType.DEST_DEF, eff.name):
-    #                     manager.get_effect(EffectType.DEST_DEF,
-    #                                     eff.name).alter_dest_def(eff.mag)
-    #                 else:
-    #                     manager.add_effect(
-    #                         Effect(
-    #                             eff.source, EffectType.DEST_DEF, eff.user,
-    #                             280000, lambda eff:
-    #                             f"This character has {eff.mag} destructible defense.",
-    #                             eff.mag))
-    #         gen = (eff for eff in manager.source.current_effects
-    #             if eff.eff_type == EffectType.CONT_UNIQUE and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user)
-    #         for eff in gen:
-    #             if eff.check_waiting() and self.is_allied_effect(eff, team_id):
-    #                 manager.check_unique_cont(eff, team_id)
-
     def handle_timeout(self):
         #TODO
         #     lock player out of continued input (Set waiting for turn, full_update)
@@ -1432,7 +1426,11 @@ class BattleScene(engine.Scene):
     def turn_end(self, timeout=False):
         self.sharingan_reflecting = False
         self.sharingan_reflector = None
-
+        
+        
+        
+        
+        
         # Kuroko invulnerability check #
         for manager in self.player_display.team.character_managers:
             if manager.source.name == "kuroko" and manager.check_invuln():
@@ -1529,13 +1527,6 @@ class BattleScene(engine.Scene):
         
         self.full_update()
 
-
-        if not self.catching_up:
-            if not timeout:
-                self.scene_manager.connection.send_match_communication(
-                    self.ability_messages, self.execution_order, self.random_spent)
-            self.ability_messages.clear()
-            self.random_spent = [0, 0, 0, 0]
         self.execution_order.clear()
         self.acting_order.clear()
         if game_lost:

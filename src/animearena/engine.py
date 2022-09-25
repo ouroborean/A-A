@@ -69,7 +69,6 @@ class Scene:
     def add_animation(self, animation):
         self.animations.append(animation)
         if animation.lock:
-            logging.debug("Adding a locked animation of type %s", type(animation))
             self.animation_locked = True
             self.animation_lock.append(animation)
 
@@ -77,7 +76,6 @@ class Scene:
         self.animations.remove(animation)
 
     def check_animation_lock(self, animation):
-        logging.debug("Checking animation lock for animation of type %s", type(animation))
         self.animation_lock.remove(animation)
     
     def end_animations(self):
@@ -95,8 +93,9 @@ class Scene:
     def progress_animations(self):
         self.animation_region.clear()
         for animation in self.animations:
-            if not type(animation) == JoinAnimation and not type(animation) == SplitAnimation:
-                animation.progress_frame_timer()
+            
+            animation.progress_frame_timer()
+            if animation.display:
                 self.animation_region.add_sprite(animation.current_sprite, animation.display_x, animation.display_y)
     
     def check_animations(self):
