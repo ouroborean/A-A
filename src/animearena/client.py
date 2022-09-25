@@ -258,8 +258,10 @@ class ConnectionHandler:
             potential_energy.append(buffer.read_int())
 
         
-        
-        self.scene_manager.battle_scene.enemy_execution_loop(executed_abilities, execution_order, potential_energy)
+        if self.scene_manager.battle_scene.skipping_animations:
+            self.scene_manager.battle_scene.enemy_execution_loop(executed_abilities, execution_order, potential_energy)
+        else:
+            self.scene_manager.battle_scene.start_enemy_execution(executed_abilities, execution_order, potential_energy)
         buffer.clear()
 
     def send_registration(self, username: str, password: str):

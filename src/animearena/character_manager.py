@@ -3,7 +3,7 @@ import sdl2.ext
 import typing
 import itertools
 from animearena import engine, character
-from animearena.color import DARK_GREEN, MENU_TRANSPARENT
+from animearena.color import DARK_GREEN, DULL_AQUA, HP_BAR_BACK, MENU_TRANSPARENT
 from animearena.effects import Effect, EffectType
 from animearena.ability import Ability, Target, one, two, three, DamageType
 from animearena.ability_type import AbilityType
@@ -63,8 +63,10 @@ class CharacterManager(collections.abc.Container):
     main_ability_sprites: list[sdl2.ext.SoftwareSprite]
     alt_ability_sprites: list[sdl2.ext.SoftwareSprite]
     
+    
 
     def __init__(self, source: character.Character, scene: "BattleScene"):
+        self.updated_effect_families = list()
         self.countered = False
         self.countering_ability = None
         self.counterer_id = 0
@@ -2569,6 +2571,7 @@ class CharacterManager(collections.abc.Container):
 
         if not self.has_effect(EffectType.UNIQUE, "Plasma Bomb") or effect.eff_type in stun_types or effect.eff_type == EffectType.SYSTEM or effect.system:
             self.source.current_effects.append(effect)
+            self.updated_effect_families.append(effect.family)
             
 
     def remove_effect(self, effect: Effect):
@@ -2747,37 +2750,33 @@ class CharacterManager(collections.abc.Container):
             increment = 0
         self.source.current_hp += increment
         if self.source.current_hp == 200:
-            hp_bar = self.scene.sprite_factory.from_color(GREEN,
+            hp_bar = self.scene.sprite_factory.from_color(DULL_AQUA,
                                                           size=(100, 16))
         elif self.source.current_hp == 0:
-            hp_bar = self.scene.sprite_factory.from_color(RED, size=(100, 16))
+            hp_bar = self.scene.sprite_factory.from_color(HP_BAR_BACK, size=(100, 16))
         else:
             hp_bar = self.scene.sprite_factory.from_color(BLACK,
                                                           size=(100, 16))
             green_bar = self.scene.sprite_factory.from_color(
-                GREEN, size=(self.source.current_hp // 2, 16))
+                DULL_AQUA, size=(self.source.current_hp // 2, 16))
             sdl2.surface.SDL_BlitSurface(green_bar.surface, None,
                                          hp_bar.surface,
                                          sdl2.SDL_Rect(0, 0, 0, 0))
             if self.source.current_hp <= 200:
                 red_bar = self.scene.sprite_factory.from_color(
-                    RED, size=((200 - self.source.current_hp) // 2, 16))
+                    HP_BAR_BACK, size=((200 - self.source.current_hp) // 2, 16))
                 sdl2.surface.SDL_BlitSurface(
                     red_bar.surface, None, hp_bar.surface,
                     sdl2.SDL_Rect((self.source.current_hp // 2)  + 1, 0, 0, 0))
-        hp_text = sdl2.sdlttf.TTF_RenderText_Blended(
-            self.scene.font, str.encode(f"{self.source.current_hp}"), BLACK)
-        
+       
         if self.source.current_hp >= 100:
             hp_text_x = 38
         elif self.source.current_hp > 9:
             hp_text_x = 42
         else:
             hp_text_x = 46
-
-        sdl2.surface.SDL_BlitSurface(hp_text, None, hp_bar.surface,
-                                     sdl2.SDL_Rect(hp_text_x, -3, 0, 0))
-        sdl2.SDL_FreeSurface(hp_text)
+        hp_bar = self.scene.render_bordered_text(self.scene.font, f"{self.source.current_hp}", WHITE, BLACK, hp_bar, hp_text_x, -3, 1)
+        
         self.hp_bar_region.add_sprite(hp_bar, 0, 7)
 
     def refresh_character(self, enemy=False):

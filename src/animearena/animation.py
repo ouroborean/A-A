@@ -66,7 +66,6 @@ class Animation():
             self.step()
     
     def end(self):
-        logging.debug("%s has ended!", self.name)
         if self.links:
             for link in self.links:
                 self.scene.add_animation(link)
@@ -342,7 +341,6 @@ class JoinAnimation(Animation):
         animation.add_waiter(self)
     
     def receive_animation(self, animation):
-        logging.debug("Joiner receiving animation of type %s", type(animation))
         self.awaited_animations[animation] = True
         for animation in self.awaited_animations.values():
             if not animation:
@@ -353,6 +351,8 @@ class JoinAnimation(Animation):
     
     def step(self):
         pass
+    
+    
     
     @property
     def has_ended(self):
@@ -379,7 +379,6 @@ class SplitAnimation(Animation):
     def end(self):
         
         for animation in self.split_animations:
-            logging.debug("Splitter adding animation of type %s", type(animation))
             self.scene.add_animation(animation)
         self.scene.remove_animation(self)
         if not self.scene.animations:

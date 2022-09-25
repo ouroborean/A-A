@@ -52,10 +52,12 @@ class Scene:
     animations: list
     animation_lock: list
     animation_locked: bool
+    skipping_animations: bool
 
     def __init__(self, sprite_type: Union[Literal[0], Literal[1]]):
         self.animations = []
         self.animation_lock = []
+        self.skipping_animations = True
         self.animation_locked = False
         self.region = Region()
         self.animation_region = Region()

@@ -204,7 +204,7 @@ class EnemyTeamDisplay():
 class BattleScene(engine.Scene):
     # pylint: disable=too-many-public-methods
     # pylint: disable=too-many-branches
-
+    stored_effect_animations: list
     player_display: ActiveTeamDisplay
     enemy_display: EnemyTeamDisplay
     ally_managers: list["CharacterManager"]
@@ -264,6 +264,7 @@ class BattleScene(engine.Scene):
 
     def __init__(self, scene_manager, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.stored_effect_animations = list()
         self.dying_to_doping = False
         self.catching_up = False
         self.collapsing_ally_inviolate_shield = False
@@ -425,9 +426,7 @@ class BattleScene(engine.Scene):
 
     def get_ability_messages(self):
         for action in self.execution_order:
-            
             if action < 3:
-                self.animation_locked = True
                 if self.pteam[action].acted:
                     #build ability message
                     self.ability_messages.append(AbilityMessage(self.pteam[action]))
@@ -446,8 +445,15 @@ class BattleScene(engine.Scene):
         self.ability_messages.clear()
         self.random_spent = [0, 0, 0, 0]
         
+        for manager in self.pteam:
+            manager.targeting_region.clear()
+        for manager in self.eteam:
+            manager.targeting_region.clear()
         
-        self.pump_execution_order()
+        if self.skipping_animations:
+            self.execution_loop()
+        else:
+            self.pump_execution_order()
 
         
         self.turn_expend_region.clear()
@@ -493,11 +499,7 @@ class BattleScene(engine.Scene):
             self.return_targeting_to_default()
             self.full_update()
 
-            # if self.round_any_cost == 0:
-            #     play_sound(self.scene_manager.sounds["turnend"])
-            #     self.execution_loop()
-            #     self.turn_end()
-            # else:
+            
             self.window_up = True
             self.get_execution_order_base("ally")
             self.draw_any_cost_expenditure_window()
@@ -1071,7 +1073,18 @@ class BattleScene(engine.Scene):
             self.catching_up = False
             self.timer = self.start_timer(time_remaining)
 
-
+    def execution_loop(self):
+        
+        for action in self.execution_order:
+            if action < 3:
+                if self.pteam[action].acted:
+                    #build ability message
+                    self.ability_messages.append(AbilityMessage(self.pteam[action]))
+                    self.pteam[action].execute_ability()
+            elif action > 2:
+                self.resolve_ticking_ability(self.cont_list[action - 3])
+        
+        self.turn_end()
 
     def enemy_catchup_execution(self, stored_turns: list[list["AbilityMessage"]], execution_order: list[list[int]], energy_pools: list[list[int]], all_random_expenditure: list[list[int]], time_remaining: int):
         current_turn = stored_turns[0]
@@ -1100,6 +1113,8 @@ class BattleScene(engine.Scene):
             func = self.pump_enemy_execution_order
         else:
             func = self.pump_execution_order
+        
+        
         join_animation = JoinAnimation(self)
         join_animation.name = "HP Bar join"
         split_animation = SplitAnimation(self)
@@ -1110,11 +1125,59 @@ class BattleScene(engine.Scene):
             split_animation.add_split(animation)
             join_animation.await_animation(animation)
             
+            if manager.updated_effect_families:
+                x_offset = 31
+                orient = 1
+                effect_clusters = manager.make_effect_clusters()
+                for effect in manager.updated_effect_families:
+                    for j, cluster in enumerate(effect_clusters.items()):
+                        cluster_family, effect_set = cluster
+                        if effect == cluster_family:
+                            effect_index = j
+                            eff = effect_set[0]
+                            image = self.scene_manager.surfaces[eff.source.db_name]
+                            image = image.resize((50, 50))
+                            fade_animation = FadeAnimation((effect_index * x_offset * orient) - 12 + manager.effect_region.x, manager.effect_region.y - 12, image, .3, self, True, True)
+                            
+                            effect_add_shrink_animation = SizeAnimation((effect_index * x_offset * orient) - 12 + manager.effect_region.x, manager.effect_region.y - 12, image, .5, self, True, True, (25, 25), (50, 50))
+                            effect_add_shrink_animation.add_end_func(manager.update_effect_region, ())
+                            fade_animation.link_animation(effect_add_shrink_animation)
+                            join_animation.await_animation(effect_add_shrink_animation)
+                            split_animation.add_split(fade_animation)
+                            break
+                manager.updated_effect_families.clear()
+                        
+        
         for manager in self.eteam:
             animation = HPBarAnimation(self, manager)
             animation.name = f"{manager.source.name}HP"
             split_animation.add_split(animation)
             join_animation.await_animation(animation)
+            
+            if manager.updated_effect_families:
+                x_offset = 31
+                orient = -1
+                effect_clusters = manager.make_effect_clusters()
+                for effect in manager.updated_effect_families:
+                    for j, cluster in enumerate(effect_clusters.items()):
+                        cluster_family, effect_set = cluster
+                        if effect == cluster_family:
+                            effect_index = j
+                            eff = effect_set[0]
+                            image = self.scene_manager.surfaces[eff.source.db_name]
+                            image = image.resize((50, 50))
+                            fade_animation = FadeAnimation((effect_index * x_offset * orient) - 12 + manager.effect_region.x, manager.effect_region.y - 12, image, .3, self, True, True)
+                            
+                            effect_add_shrink_animation = SizeAnimation((effect_index * x_offset * orient) - 12 + manager.effect_region.x, manager.effect_region.y - 12, image, .5, self, True, True, (25, 25), (50, 50))
+                            effect_add_shrink_animation.add_end_func(manager.update_effect_region, ())
+                            fade_animation.link_animation(effect_add_shrink_animation)
+                            join_animation.await_animation(effect_add_shrink_animation)
+                            split_animation.add_split(fade_animation)
+                            break
+                manager.updated_effect_families.clear()
+                            
+                    
+        
         join_animation.add_end_func(func, ())
         return split_animation
     
@@ -1128,7 +1191,6 @@ class BattleScene(engine.Scene):
                 self.animation_locked = True
                 if self.pteam[action].acted:
                     #build ability message
-                    self.ability_messages.append(AbilityMessage(self.pteam[action]))
                     self.pteam[action].execute_ability()
                     #create animation for ability activation based on whether or not ability was countered
                     
@@ -1148,7 +1210,8 @@ class BattleScene(engine.Scene):
                         used_ability_join_animation.link_animation(hp_bar_splitter)
                         used_ability_grow_animation.link_animation(used_ability_join_animation)
                         self.add_animation(used_ability_grow_animation)
-                        
+                    else:
+                        self.animation_locked = False
                         
                     #add animation to list of animations that will play once execution completes
                     
@@ -1200,6 +1263,9 @@ class BattleScene(engine.Scene):
             self.execution_order = self.execution_order[1:]
             if action < 3:
                 if self.eteam[action].acted:
+                    
+                    self.animation_locked = True
+                    
                     #build ability message
                     self.eteam[action].free_execute_ability(self.eteam, self.pteam)
                     
@@ -1219,6 +1285,8 @@ class BattleScene(engine.Scene):
                         used_ability_join_animation.link_animation(hp_bar_splitter)
                         used_ability_grow_animation.link_animation(used_ability_join_animation)
                         self.add_animation(used_ability_grow_animation)
+                    else:
+                        self.animation_locked = False
                     
                     self.eteam[action].acted = False
                     self.eteam[action].used_ability = None
@@ -1261,12 +1329,14 @@ class BattleScene(engine.Scene):
                 self.resolve_ticking_ability(self.cont_list[action - 3])
         else:
             self.animation_locked = False
+            for manager in self.eteam:
+                manager.current_targets.clear()
             self.finish_turn_start()
-        
     
     def enemy_execution_loop(self, executed_abilities: list["AbilityMessage"], execution_order: list[int],
                              potential_energy: list[int]):
-        self.potential_energy = potential_energy
+
+        logging.debug("Started enemy execution loop")
         for ability in executed_abilities:
             
             self.eteam[ability.user_id].used_ability = self.eteam[
@@ -1287,8 +1357,55 @@ class BattleScene(engine.Scene):
                 self.eteam[ability.user_id].current_targets.append(
                     self.pteam[num])
         self.get_execution_order_base("enemy")
+        for action in execution_order:
+            
+            if action < 3:
+                if self.eteam[action].acted:
+                    #build ability message
+                    self.eteam[action].free_execute_ability(self.eteam, self.pteam)
+                    self.eteam[action].acted = False
+                    self.eteam[action].used_ability = None
+                    self.eteam[action].current_targets.clear()
+                    self.eteam[action].primary_target = None
+            elif action > 2:
+                self.resolve_ticking_ability(self.cont_list[action - 3])
+                
+        self.tick_effect_duration(enemy_tick=True)
+        for character in self.eteam:
+            character.check_ability_swaps(ffs_shokuhou=True)
+        self.handle_energy_gain(potential_energy)
+
+        self.turn_start()
+    
+    def start_enemy_execution(self, executed_abilities: list["AbilityMessage"], execution_order: list[int],
+                             potential_energy: list[int]):
+        self.potential_energy = potential_energy
+        for ability in executed_abilities:
+            logging.debug("Received an executed ability!")
+            self.eteam[ability.user_id].used_ability = self.eteam[
+                ability.user_id].source.current_abilities[ability.ability_id]
+            self.eteam[ability.user_id].acted = True
+            
+            if ability.primary_id != 69: #lol
+                if ability.primary_id < 3:
+                    self.eteam[ability.user_id].primary_target = self.eteam[ability.primary_id]
+                else:
+                    self.eteam[ability.user_id].primary_target = self.pteam[ability.primary_id - 3]
+            
+            for num in ability.ally_targets:
+                self.eteam[ability.user_id].current_targets.append(
+                    self.eteam[num])
+
+            for num in ability.enemy_targets:
+                logging.debug("Ability has an enemy target: %s", self.pteam[num].source.name)
+                self.eteam[ability.user_id].current_targets.append(
+                    self.pteam[num])
+            
+            
+        self.get_execution_order_base("enemy")
         self.execution_order = execution_order
-        
+        logging.debug("Enemy execution order:")
+        logging.debug(self.execution_order)
         self.pump_enemy_execution_order()
                 
     def finish_turn_start(self):
@@ -1351,7 +1468,6 @@ class BattleScene(engine.Scene):
                 target = self.pteam[tar]
             else:
                 target = self.eteam[tar - 3]
-            logging.debug("Resolving ticking ability on %s %s", target.id, target.source.name)
             if target.contains_sig(eff):
                 if eff.eff_type == EffectType.CONT_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
                     if eff.check_waiting() and self.is_allied_effect(eff, team_id) and (eff.mag >= 20 or not target.deflecting()):
@@ -1426,10 +1542,6 @@ class BattleScene(engine.Scene):
     def turn_end(self, timeout=False):
         self.sharingan_reflecting = False
         self.sharingan_reflector = None
-        
-        
-        
-        
         
         # Kuroko invulnerability check #
         for manager in self.player_display.team.character_managers:
