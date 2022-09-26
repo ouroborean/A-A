@@ -5146,7 +5146,7 @@ ability_info_db = {
         +
         " will be countered and the user will be stunned and isolated for 1 turn. This ability is invisible until triggered.",
         [0, 0, 0, 1, 0, 3], Target.SINGLE,
-        default_target("HELPFUL"), exe_casseur, [AbilityType.INSTANT, AbilityType.STRATEGIC]
+        default_target("HELPFUL"), exe_casseur, [AbilityType.INVISIBLE, AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "astolfo2": [
         "Trap of Argalia - Down With A Touch!",
@@ -5238,7 +5238,7 @@ ability_info_db = {
     "chelsea1": ["Mortal Wound", "Target enemy takes 15 affliction damage each turn until they die. During this time, they deal 5 less non-affliction damage. This ability deals triple damage if used on an enemy affected by Those Who Fight In The Shadows, and cannot be used on an enemy already affected by it.",
         [0, 0, 1, 0, 1, 0], Target.SINGLE, default_target("HOSTILE", protection=(EffectType.CONT_AFF_DMG, "Mortal Wound")), exe_mortal_wound, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.AFFLICTION]],
     "chelsea2": ["Those Who Fight In The Shadows", "For one turn, the first enemy to use a helpful ability on target enemy will be countered and stunned for two turns. During this time, Mortal Wound will deal triple damage to them. This effect is invisible until triggered.",
-        [0, 0, 1, 0, 0, 3], Target.SINGLE, default_target("HOSTILE"), exe_fight_in_shadows, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]],
+        [0, 0, 1, 0, 0, 3], Target.SINGLE, default_target("HOSTILE"), exe_fight_in_shadows, [AbilityType.INVISIBLE, AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]],
     "chelsea3": ["Emergency Smoke", "All allies gain 10 points of destructible defense for one turn, and any enemy with a helpful counter effect active on them will take 15 affliction damage. This ability cannot be countered.", [0, 0, 0, 0, 1, 1], Target.ALL_TARGET, default_target("ALL"), exe_chelsea_smoke, [AbilityType.INSTANT, AbilityType.STRATEGIC]],
     "chelsea4": ["Gaia Foundation Evasion", "Chelsea becomes invulnerable for one turn.", [0,0,0,0,1,4], Target.SINGLE, default_target("SELF"), exe_gaia_evasion, [AbilityType.INSTANT, AbilityType.STRATEGIC]],
     "chrome1": [
@@ -5434,7 +5434,7 @@ ability_info_db = {
         [0, 2, 0, 0, 1, 8], Target.ALL_TARGET,
         default_target("ALL"), exe_mahapadma, [AbilityType.INSTANT, AbilityType.STUN, AbilityType.STRATEGIC]
     ],
-    "frankenstein1": ["Bridal Smash", "Frankenstein deals 30 damage to target enemy.", [1, 0, 0, 0, 0, 0], Target.SINGLE, default_target("HOSTILE"), exe_bridal_smash, [AbilityType.INSTANT, AbilityType.PHYSICAL]],
+    "frankenstein1": ["Bridal Smash", "Frankenstein deals 30 damage to target enemy.", [1, 0, 0, 0, 0, 0], Target.SINGLE, default_target("HOSTILE"), exe_bridal_smash, [AbilityType.INVISIBLE, AbilityType.INSTANT, AbilityType.PHYSICAL]],
     "frankenstein2": ["Bridal Chest", "Frankenstein deals 25 damage to all enemies. During the following two turns, she will deal 25 damage to a random enemy.", [1, 1, 0, 0, 0, 3],
                       Target.MULTI_ENEMY, default_target("HOSTILE"), exe_bridal_chest, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.UNIQUE]],
     "frankenstein3": ["Blasted Tree", "Frankenstein self-destructs, dealing her remaining health in piercing damage to target enemy. This ability cannot be countered or reflected, cannot be used while Frankenstein is at full health, and will kill her upon use.",
@@ -5455,7 +5455,7 @@ ability_info_db = {
         +
         " the damaging enemy. If Detonate is used, characters marked with Doll Trap receive 30 damage per stack of Doll Trap on them. Doll Trap is invisible until transferred.",
         [0, 0, 0, 0, 1, 0], Target.SINGLE,
-        default_target("HELPFUL"), exe_doll_trap, [AbilityType.INSTANT, AbilityType.STRATEGIC]
+        default_target("HELPFUL"), exe_doll_trap, [AbilityType.INVISIBLE, AbilityType.INSTANT, AbilityType.STRATEGIC]
     ],
     "frenda3": [
         "Detonate",
@@ -5508,8 +5508,8 @@ ability_info_db = {
     ],
     "gilgamesh1": ["Gate of Babylon", "If used on Gilgamesh, adds one stack of Gate of Babylon. If used on an enemy, deals 20 damage to that enemy plus 15 additional damage for every stack of Gate of Babylon on Gilgamesh. Removes all stacks of Gate of Babylon on use.",
                     [0, 0, 0, 0, 0, 0], Target.SINGLE, target_gate_of_babylon, exe_gate_of_babylon, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.UNIQUE]],
-    "gilgamesh2": ["Enkidu, Chains of Heaven", "If target enemy uses a harmful ability on the following turn, that ability is countered and the countered enemy is stunned for one turn. During this time, any active abilities or effects caused by that character do not deal damage or healing.",
-                    [0,0,0,1,0,3], Target.SINGLE, default_target("HOSTILE"), exe_enkidu, [AbilityType.INSTANT, AbilityType.STRATEGIC]],
+    "gilgamesh2": ["Enkidu, Chains of Heaven", "If target enemy uses a harmful ability on the following turn, that ability is countered and the countered enemy is stunned for one turn. During this time, any active abilities or effects caused by that character do not deal damage or healing. This effect is invisible.",
+                    [0,0,0,1,0,3], Target.SINGLE, default_target("HOSTILE"), exe_enkidu, [AbilityType.INVISIBLE, AbilityType.INSTANT, AbilityType.STRATEGIC]],
     "gilgamesh3": ["Enuma Elish", "Deals 50 damage to one enemy and stuns their Weapon abilities for one turn.",
                     [0, 0, 0, 2, 0, 3], Target.SINGLE, default_target("HOSTILE"), exe_enuma_elish, [AbilityType.INSTANT, AbilityType.PHYSICAL, AbilityType.STUN]],
     "gilgamesh4": ["Gate of Babylon - Interception", "Gilgamesh becomes invulnerable for one turn.",
@@ -5803,7 +5803,7 @@ ability_info_db = {
         "Copy Ninja Kakashi",
         "For one turn, Kakashi will reflect the first hostile ability that targets him. This ability is invisible until triggered.",
         [0, 0, 1, 0, 0, 3], Target.SINGLE,
-        default_target("SELF"), exe_copy_ninja, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
+        default_target("SELF"), exe_copy_ninja, [AbilityType.INVISIBLE, AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "kakashi2": [
         "Summon - Nin-dogs",
@@ -6183,7 +6183,7 @@ ability_info_db = {
         "Quirk - Permeation",
         "For one turn, Mirio will ignore all new harmful effects. Any enemy that attempts to apply a new harmful effect during this time will be marked for Phantom Menace "
         + "for one turn.", [0, 0, 0, 0, 1, 2], Target.SINGLE,
-        default_target("SELF"), exe_permeation, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
+        default_target("SELF"), exe_permeation, [AbilityType.INVISIBLE, AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "mirio2": [
         "Phantom Menace",
@@ -6194,7 +6194,7 @@ ability_info_db = {
         "Protect Ally",
         "For one turn, target ally will ignore all new harmful effects. Any enemy that attempts to apply a new harmful effect during this time will be marked for Phantom Menace "
         + "for one turn.", [0, 0, 0, 0, 2, 3], Target.SINGLE,
-        default_target("SELFLESS"), exe_protect_ally, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
+        default_target("SELFLESS"), exe_protect_ally, [AbilityType.INVISIBLE, AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "mirio4": [
         "Mirio Dodge", "Mirio becomes invulnerable for one turn.",
@@ -6340,7 +6340,7 @@ ability_info_db = {
         "If a target ally would die this turn, they instead take no damage and deal 10 additional damage on the following turn. If this ability is triggered, Neji dies. This skill is invisible until "
         + "triggered and the death cannot be prevented.", [0, 0, 0, 0, 2,
                                                            3], Target.SINGLE,
-        default_target("SELFLESS"), exe_selfless_genius, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
+        default_target("SELFLESS"), exe_selfless_genius, [AbilityType.INVISIBLE, AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "neji4": [
         "Eight Trigrams - Revolving Heaven",
@@ -6475,7 +6475,7 @@ ability_info_db = {
         "Third Dance - Shirafune",
         "The next time Rukia is countered, the countering enemy receives 40 damage and is stunned for one turn. This effect is invisible until triggered.",
         [0, 0, 1, 0, 0, 3], Target.SINGLE,
-        default_target("SELF"), exe_third_dance, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
+        default_target("SELF"), exe_third_dance, [AbilityType.INVISIBLE, AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "rukia4": [
         "Rukia Parry", "Rukia becomes invulnerable for a turn.",
@@ -6496,9 +6496,9 @@ ability_info_db = {
     ],
     "ruler3": [
         "Minion - Tama",
-        "The next time target ally receives a new harmful ability, that ability is countered and its user takes 35 piercing damage. This effect can only be active on one target at a time.",
+        "The next time target ally receives a new harmful ability, that ability is countered and its user takes 35 piercing damage. This effect can only be active on one target at a time and is invisible until triggered.",
         [0, 0, 0, 0, 2, 2], Target.SINGLE,
-        default_target("HELPFUL"), exe_tama, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
+        default_target("HELPFUL"), exe_tama, [AbilityType.INVISIBLE, AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "ruler4": [
         "Minion - Swim Swim", "Ruler becomes invulnerable for one turn.",
@@ -6717,7 +6717,7 @@ ability_info_db = {
         +
         " skill is invisible until triggered and ignores invulnerability and isolation.",
         [0, 0, 1, 0, 0, 2], Target.SINGLE,
-        default_target("ALL", def_type="BYPASS"), exe_hear_distress, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.STRATEGIC, AbilityType.UNIQUE]
+        default_target("ALL", def_type="BYPASS"), exe_hear_distress, [AbilityType.INVISIBLE, AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "snowwhite3": [
         "Lucky Rabbit's Foot",
@@ -6854,7 +6854,7 @@ ability_info_db = {
         "Nukiashi",
         "For the next 3 turns, Draw Stance and Raikou are invisible. This effect is invisible.",
         [0,0,1,0,0,4],
-        Target.SINGLE, default_target("SELF"), exe_nukiashi, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
+        Target.SINGLE, default_target("SELF"), exe_nukiashi, [AbilityType.INVISIBLE, AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "touka3":[
         "Raikou",
@@ -6884,8 +6884,8 @@ ability_info_db = {
         "For one turn, the first harmful ability used on Tsuna" +
         " will be countered, and the countered enemy will be stunned for two turns. If this successfully"
         +
-        " counters an ability, Tsuna will deal 10 additional damage with X-Burner for two turns.",
-        [0, 0, 0, 0, 2, 4], Target.SINGLE, default_target("SELF"), exe_zero_point_breakthrough, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
+        " counters an ability, Tsuna will deal 10 additional damage with X-Burner for two turns. This effect is invisible.",
+        [0, 0, 0, 0, 2, 4], Target.SINGLE, default_target("SELF"), exe_zero_point_breakthrough, [AbilityType.INVISIBLE, AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]
     ],
     "tsunayoshi3": [
         "Burning Axle",
@@ -6956,8 +6956,8 @@ ability_info_db = {
         "Utsuhi Ame",
         "On the following turn, Yamamoto will deal 25 damage to target enemy and grant himself one stack of"
         + " Asari Ugetsu. If that enemy uses a new ability " +
-        "during this time, Yamamoto deals 50 damage to them and grants himself 3 stacks of Asari Ugetsu instead.",
-        [0, 0, 0, 1, 0, 2], Target.SINGLE, default_target("HOSTILE"), exe_utsuhi_ame, [AbilityType.ACTION, AbilityType.PHYSICAL, AbilityType.UNIQUE]
+        "during this time, Yamamoto deals 50 damage to them and grants himself 3 stacks of Asari Ugetsu instead. This effect is invisible.",
+        [0, 0, 0, 1, 0, 2], Target.SINGLE, default_target("HOSTILE"), exe_utsuhi_ame, [AbilityType.INVISIBLE, AbilityType.ACTION, AbilityType.PHYSICAL, AbilityType.UNIQUE]
     ],
     "yamamoto3": [
         "Asari Ugetsu",

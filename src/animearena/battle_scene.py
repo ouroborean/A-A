@@ -10,6 +10,7 @@ import textwrap
 from animearena import engine
 from animearena.character import Character, get_character_db
 from animearena.ability import Ability, Target, DamageType, rename_i_reject
+from animearena.ability_type import AbilityType
 from animearena.color import TRANSPARENT
 from animearena.energy import Energy
 from animearena.effects import Effect, EffectType
@@ -1194,7 +1195,7 @@ class BattleScene(engine.Scene):
                     self.pteam[action].execute_ability()
                     #create animation for ability activation based on whether or not ability was countered
                     
-                    if not self.pteam[action].countered:
+                    if not self.pteam[action].countered and not AbilityType.INVISIBLE in self.pteam[action].used_ability.types:
                         used_ability_grow_animation = SizeAnimation(120, 105 + (155 * action), self.scene_manager.surfaces[self.pteam[action].used_ability.db_name], .5, self, True, False, (120, 120))
                         used_ability_join_animation = JoinAnimation(self)
                         for target in self.pteam[action].current_targets:

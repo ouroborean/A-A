@@ -12,3 +12,4 @@ class AbilityType(enum.IntEnum):
     STUN = 7
     DRAIN = 8
     UNIQUE = 9
+    INVISIBLE = 10

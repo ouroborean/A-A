@@ -2571,7 +2571,8 @@ class CharacterManager(collections.abc.Container):
 
         if not self.has_effect(EffectType.UNIQUE, "Plasma Bomb") or effect.eff_type in stun_types or effect.eff_type == EffectType.SYSTEM or effect.system:
             self.source.current_effects.append(effect)
-            self.updated_effect_families.append(effect.family)
+            if (effect.user_id == "ally" or not effect.invisible) and not effect.eff_type == EffectType.SYSTEM:
+                self.updated_effect_families.append(effect.family)
             
 
     def remove_effect(self, effect: Effect):

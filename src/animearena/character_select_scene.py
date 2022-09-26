@@ -373,7 +373,7 @@ class CharacterSelectScene(engine.Scene):
                             sdl2.SDL_Rect(7 + (total_energy * 21), 125))
                         total_energy += 1
             else:
-                detail_panel = self.render_bordered_text(self.font, "No Cost", WHITE, BLACK, detail_panel, 7, 121)
+                detail_panel = self.render_bordered_text(self.font, "No Cost", WHITE, BLACK, detail_panel, 7, 121, 1)
         else:
             text = self.detail_target.desc
 
