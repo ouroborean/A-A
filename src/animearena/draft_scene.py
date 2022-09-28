@@ -12,6 +12,7 @@ from animearena import engine
 from animearena import resource_manager
 from animearena.character import get_character_db, Character
 from animearena.color import *
+from animearena.turn_timer import TurnTimer
 import math
 import enum
 
@@ -37,9 +38,9 @@ class DraftScene(engine.Scene):
         self.player_picks = list()
         self.enemy_picks = list()
         self.mode = Mode.BAN
-        
+        self.timer = TurnTimer(1, self.empty_placeholder)
         self.waiting_for_turn = False
-        self.going_first = False
+        self.moving_first = False
         
         self.scrolling = False
         self.scroll_button = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["scroll_wheel"]), (20, 23))
@@ -65,7 +66,8 @@ class DraftScene(engine.Scene):
         self.character_select_region = self.region.subregion(135, 135, 630, 430)
         self.scroll_bar_region = self.character_select_region.subregion(608, 0, 22, 430)
         self.ban_region = self.region.subregion(200, 575, 500, 120)
-        
+        self.button_region = self.region.subregion(420, 5, 60, 40)
+        self.timer_region = self.region.subregion(x=269, y=95, width=362, height=12)
         
     def full_render(self):
         self.background = self.sprite_factory.from_surface(
@@ -76,6 +78,8 @@ class DraftScene(engine.Scene):
         self.render_player_region()
         self.render_enemy_region()
         self.render_ban_region()
+        self.render_button_region()
+        self.render_timer_region()
     
     def scroll_character_select(self):
         self.character_select_region.clear()
@@ -152,8 +156,17 @@ class DraftScene(engine.Scene):
             
                 self.character_select_region.add_sprite(self.character_sprites[character.name], X_OFFSET + (BUTTON_SPACE * column), Y_OFFSET + ROW_TOP)
         if CHARACTER_COUNT > 35:
-            self.scroll_bar_region.add_sprite(self.scroll_button, 2, self.scroll_bar_y)
+            self.scroll_bar_region.add_sprite(self.scroll_button, 1, self.scroll_bar_y)
         
+    def render_timer_region(self):
+        self.timer_region.clear()
+        bar_height = self.timer_region.size()[1] - 2
+        bar_width = self.timer_region.size()[0] - 2
+        self.timer_region.add_sprite(self.sprite_factory.from_color(AQUA, size=(self.timer_region.size())), 0, 0)
+        self.timer_region.add_sprite(self.sprite_factory.from_color(MENU_TRANSPARENT, size=(bar_width, bar_height)), 1, 1)
+        if self.timer and self.timer.time_left > 0:
+            self.timer_region.add_sprite(self.sprite_factory.from_color(DULL_AQUA, size=(self.timer.time_left * 4, bar_height)), 1, 1)
+    
     
     def render_char_select(self):
         self.character_select_region.clear()
@@ -221,9 +234,22 @@ class DraftScene(engine.Scene):
             
                 self.character_select_region.add_sprite(self.character_sprites[character.name], X_OFFSET + (BUTTON_SPACE * column), Y_OFFSET + ROW_TOP)
         if CHARACTER_COUNT > 35:
-            self.scroll_bar_region.add_sprite(self.scroll_button, 2, self.scroll_bar_y)
+            self.scroll_bar_region.add_sprite(self.scroll_button, 1, self.scroll_bar_y)
         
-            
+    def render_button_region(self):
+        self.button_region.clear()
+        if not self.waiting_for_turn:
+            button = self.ui_factory.from_color(sdl2.ext.BUTTON, MENU_TRANSPARENT, (60, 40))
+            button = self.border_sprite(button, AQUA, 2)
+            if self.mode == Mode.BAN:
+                button = self.render_bordered_text(self.font, "BAN", WHITE, BLACK, button, 15, 9, 1)
+            else:
+                button = self.render_bordered_text(self.font, "PICK", WHITE, BLACK, button, 14, 9, 1)
+            self.button_region.add_sprite(button, 0, 0)
+        else:
+            button = self.sprite_factory.from_color(TRANSPARENT, (180, 40))
+            button = self.render_bordered_text(self.font, "Waiting for opponent...", WHITE, BLACK, button, 3, 9, 1)
+            self.button_region.add_sprite(button, -60, 0)
     
     def render_player_region(self):
         self.player_region.clear()
@@ -332,8 +358,19 @@ class DraftScene(engine.Scene):
     def start_draft(self, player, enemy):
         self.player = player
         self.enemy = enemy
-        self.full_render()
         
+        if self.moving_first:
+            self.mode = Mode.PICK
+        self.timer = self.start_timer()
+        self.full_render()
+    
+    def start_timer(self, time: int = 90) -> TurnTimer:
+        if self.timer:
+            self.timer.cancel()
+        return TurnTimer(time, self.empty_placeholder)
+
+    def empty_placeholder(self):
+        pass
     
     def get_filtered_characters_list(self) -> list[Character]:
         # if not self.unlock_filtering:

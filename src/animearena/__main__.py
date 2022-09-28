@@ -179,9 +179,9 @@ async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server
                 if event.type == sdl2.SDL_MOUSEWHEEL:
                     if scene_manager.current_scene == scene_manager.char_select or scene_manager.current_scene == scene_manager.draft_scene:
                         if event.wheel.y > 0:
-                            scene_manager.current_scene.mouse_wheel_scroll(-10)
+                            scene_manager.current_scene.mouse_wheel_scroll(-20)
                         elif event.wheel.y < 0:
-                            scene_manager.current_scene.mouse_wheel_scroll(10)
+                            scene_manager.current_scene.mouse_wheel_scroll(20)
                 for sprite in scene_manager.current_scene.eventables():
                     scene_manager.uiprocessor.dispatch(sprite, event)
                     if scene_manager.current_scene.triggered_event:
@@ -193,6 +193,8 @@ async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server
                 scene_manager.battle_scene.check_for_hp_bar_changes()
                 scene_manager.battle_scene.get_hovered_button()
                 scene_manager.battle_scene.show_hover_text()
+        if scene_manager.current_scene == scene_manager.draft_scene:
+            scene_manager.draft_scene.render_timer_region()
         if scene_manager.current_scene.window_closing:
             scene_manager.current_scene.window_closing = False
             scene_manager.current_scene.window_up = False
