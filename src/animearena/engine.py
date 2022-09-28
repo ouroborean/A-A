@@ -57,7 +57,7 @@ class Scene:
     def __init__(self, sprite_type: Union[Literal[0], Literal[1]]):
         self.animations = []
         self.animation_lock = []
-        self.skipping_animations = True
+        self.skipping_animations = False
         self.animation_locked = False
         self.region = Region()
         self.animation_region = Region()
@@ -81,6 +81,7 @@ class Scene:
         self.animation_lock.remove(animation)
     
     def end_animations(self):
+        logging.debug("Calling end animations")
         end_funcs = list()
         for animation in self.animations:
             for func in animation.end_funcs:

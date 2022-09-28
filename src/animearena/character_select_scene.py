@@ -527,7 +527,7 @@ class CharacterSelectScene(engine.Scene):
             self.add_sprite_with_border(self.character_select_region, self.character_sprites[self.dragging_character], self.character_sprites[self.dragging_character].border_box, self.scene_manager.mouse_x - self.drag_offset[0] - self.character_select_region.x, self.scene_manager.mouse_y - self.drag_offset[1] - self.character_select_region.y)
     
     
-    def scroll_character_scroll_selection(self):
+    def scroll_character_scroll_selection(self):     
         self.character_scroll_selection_region.clear()
         background = self.sprite_factory.from_color(MENU_TRANSPARENT, (self.character_scroll_selection_region.size()[0], self.character_scroll_selection_region.size()[1] + 8))
         background = self.border_sprite(background, AQUA, 2)

@@ -7,6 +7,7 @@ from PIL import Image
 from animearena.character import get_character_db
 from animearena.character_select_scene import CharacterSelectScene, make_character_select_scene
 from animearena.battle_scene import BattleScene, make_battle_scene
+from animearena.draft_scene import make_draft_scene
 from animearena.login_scene import LoginScene, make_login_scene
 from animearena.tutorial_scene import TutorialScene, make_tutorial_scene
 from playsound import playsound
@@ -145,6 +146,7 @@ class SceneManager:
         self.battle_scene = make_battle_scene(self)
         self.login_scene = make_login_scene(self)
         self.tutorial_scene = make_tutorial_scene(self)
+        self.draft_scene = make_draft_scene(self)
 
     def set_scene_to_current(self, scene: "Scene"):
         self.current_scene = scene

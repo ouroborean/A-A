@@ -6450,7 +6450,7 @@ ability_info_db = {
     ],
     "ripple3": [
         "Night of Countless Stars",
-        "Ripple deals 5 piercing damage to all enemies for three turns. During this time, Shuriken Throw deals 10 additional damage.",
+        "Ripple deals 5 piercing damage to all enemies for three turns, ignoring invulnerability. During this time, Shuriken Throw deals 10 additional damage.",
         [0, 0, 0, 1, 1, 4], Target.MULTI_ENEMY,
         default_target("HOSTILE"), exe_countless_stars, [AbilityType.INSTANT, AbilityType.PHYSICAL]
     ],

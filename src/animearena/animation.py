@@ -254,8 +254,11 @@ class DisplayAnimation(Animation):
     def __init__(self, start_x, start_y, sprites, duration, scene, lock):
         super().__init__(start_x, start_y, 1, sprites, lock, scene)
         self.duration = duration * 30
-        
-        
+    
+    def add_ender(self, animation):
+        animation.add_end_func(self.end, ())
+    
+    
     def step(self):
         self.duration -= 1
         
@@ -413,3 +416,58 @@ class HPBarAnimation(Animation):
     
     def step(self):
         self.character.draw_hp_bar(from_animation=True)
+        
+class ShakeAnimation(Animation):
+    
+    def __init__(self, scene, image, start_x, start_y, intensity, duration, fade = False):
+        self.scene = scene
+        self.lock = True
+        self.intensity = intensity
+        self.frequency = 1
+        self.end_funcs = list()
+        self.links = list()
+        self.all_received = False
+        self.waiter = None
+        self.frame_timer = 0
+        self.duration = duration * 30
+        self.display = True
+        self.name = ""
+        self.image = image.copy()
+        self.image = self.scene.border_image(self.image, 1)
+        self.fade = fade
+        self.start_x = start_x
+        self.start_y = start_y
+        self.display_x = start_x
+        self.display_y = start_y
+        self.cycle = [(1, -1), (-1, 0), (1, 1), (-1, -1), (1, 0), (-1, 1)]
+        self.i = 0
+        
+        if self.fade:
+            self.current_alpha = 255
+            self.alpha_step = 255 / self.duration
+        
+    
+    @property
+    def current_sprite(self):
+        if self.fade:
+            self.image.putalpha(int(self.current_alpha))
+        return self.scene.sprite_factory.from_surface(self.scene.get_scaled_surface(self.image), free=True)
+    
+    def step(self):
+        self.display_x = self.start_x + (self.cycle[self.i % 6][0] * self.intensity)
+        self.display_y = self.start_y + (self.cycle[self.i % 6][1] * self.intensity)
+        if self.fade:
+            self.current_alpha -= self.alpha_step
+            if self.current_alpha < 0:
+                self.current_alpha = 0
+        self.i += 1
+        if self.i > self.duration:
+            self.i = self.duration
+    
+    def end(self):
+        super().end()
+    
+    @property
+    def has_ended(self):
+        return self.i == self.duration
+        

@@ -56,8 +56,14 @@ def main():
 
         scene_manager.initialize_scenes()
 
-        scene_manager.set_scene_to_current(scene_manager.login_scene)
-
+        # scene_manager.set_scene_to_current(scene_manager.login_scene)
+        
+        scene_manager.set_scene_to_current(scene_manager.draft_scene)
+        
+        scene_manager.change_window_size(900, 700)
+        
+        scene_manager.draft_scene.full_render()
+        
         server_loop_task = server_loop(scene_manager)
         
         game_loop_task = game_loop(scene_manager, window, server_loop_task)
@@ -173,10 +179,11 @@ async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server
                         
                     
                 if event.type == sdl2.SDL_MOUSEWHEEL:
-                    if event.wheel.y > 0:
-                        scene_manager.char_select.mouse_wheel_scroll(-10)
-                    elif event.wheel.y < 0:
-                        scene_manager.char_select.mouse_wheel_scroll(10)
+                    if scene_manager.current_scene == scene_manager.char_select:
+                        if event.wheel.y > 0:
+                            scene_manager.char_select.mouse_wheel_scroll(-10)
+                        elif event.wheel.y < 0:
+                            scene_manager.char_select.mouse_wheel_scroll(10)
                 for sprite in scene_manager.current_scene.eventables():
                     scene_manager.uiprocessor.dispatch(sprite, event)
                     if scene_manager.current_scene.triggered_event:

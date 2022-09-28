@@ -2598,7 +2598,6 @@ class CharacterManager(collections.abc.Container):
 
     def update_effect_region(self):
         self.effect_region.clear()
-
         x_offset = 31
         if self.character_region.x > 400:
             position_modifier = -1

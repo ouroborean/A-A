@@ -1,3 +1,4 @@
+from hashlib import shake_128
 from os import rename
 from posixpath import split
 from venv import create
@@ -16,7 +17,7 @@ from animearena.energy import Energy
 from animearena.effects import Effect, EffectType
 from animearena.player import Player
 from animearena.character_manager import CharacterManager
-from animearena.animation import DisplayAnimation, FadeAnimation, HPBarAnimation, MovementAnimation, SizeAnimation, SplitAnimation, create_pulse_animation, JoinAnimation
+from animearena.animation import DisplayAnimation, FadeAnimation, HPBarAnimation, MovementAnimation, ShakeAnimation, SizeAnimation, SplitAnimation, create_pulse_animation, JoinAnimation
 from random import randint
 from playsound import playsound
 from pathlib import Path
@@ -748,7 +749,7 @@ class BattleScene(engine.Scene):
                 sdl2.SDL_FreeSurface(energy_image)
 
         else:
-            panel = self.render_bordered_text(self.font, "No Cost", WHITE, BLACK, panel, 105, 12, 1)
+            panel = self.render_bordered_text(self.font, "No Cost", WHITE, BLACK, panel, 105, 10, 1)
         
         panel = self.render_bordered_text(self.font, "CD: " + str(ability.cooldown), WHITE, BLACK, panel, 105, 95, 1)
         
@@ -785,7 +786,7 @@ class BattleScene(engine.Scene):
                 self.get_scaled_surface(self.enemy.avatar))
             self.add_bordered_sprite(self.enemy_region, enemy_ava, BLACK, 0,
                                      5)
-            name_width = int(len(self.enemy.name) * 11.2) + 5
+            name_width = int(len(self.enemy.name) * 11.5) + 5
             transparent_box = self.sprite_factory.from_color(TRANSPARENT, (name_width, 50))
             name_panel = self.render_bordered_text(self.stack_font, self.enemy.name, RED, BLACK, transparent_box, 0, 0, thickness=2)
             self.enemy_region.add_sprite(name_panel, -name_width, 0)
@@ -1195,7 +1196,7 @@ class BattleScene(engine.Scene):
                     self.pteam[action].execute_ability()
                     #create animation for ability activation based on whether or not ability was countered
                     
-                    if not self.pteam[action].countered and not AbilityType.INVISIBLE in self.pteam[action].used_ability.types:
+                    if not self.pteam[action].countered:
                         used_ability_grow_animation = SizeAnimation(120, 105 + (155 * action), self.scene_manager.surfaces[self.pteam[action].used_ability.db_name], .5, self, True, False, (120, 120))
                         used_ability_join_animation = JoinAnimation(self)
                         for target in self.pteam[action].current_targets:
@@ -1211,10 +1212,33 @@ class BattleScene(engine.Scene):
                         used_ability_join_animation.link_animation(hp_bar_splitter)
                         used_ability_grow_animation.link_animation(used_ability_join_animation)
                         self.add_animation(used_ability_grow_animation)
-                    else:
-                        self.animation_locked = False
+                    elif self.pteam[action].countered:
+                        if self.pteam[action].counterer_team == "ally":
+                            counter_image_x = 120
+                            counter_image_y = 115
+                        else:
+                            counter_image_x = 680
+                            counter_image_y = 140
+                        counter_image_y = counter_image_y + (155 * int(self.pteam[action].counterer_id))
+                        counter_image = self.scene_manager.surfaces[self.pteam[action].countering_ability.db_name].resize((120, 120))
+                        image = self.scene_manager.surfaces[self.pteam[action].used_ability.db_name].resize((120, 120))
+                        used_ability_grow_animation = SizeAnimation(120, 115 + (155 * action), self.scene_manager.surfaces[self.pteam[action].used_ability.db_name], .5, self, True, False, (120, 120))
+                        used_ability_display_animation = DisplayAnimation(120, 115 + (155 * action), [self.border_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(image)), BLACK, 2),], 120, self, True)
+                        counter_ability_move_animation = MovementAnimation(counter_image_x - 120, counter_image_y, [self.border_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(counter_image)), BLACK, 2),], 120, 115 + (155 * action), .2, self, True)
+                        used_ability_display_animation.add_ender(counter_ability_move_animation)
                         
-                    #add animation to list of animations that will play once execution completes
+                        counter_ability_grow_animation = SizeAnimation(counter_image_x, counter_image_y, self.scene_manager.surfaces[self.pteam[action].countering_ability.db_name], .5, self, True, False, (120, 120))
+                        used_ability_grow_animation.link_animation(used_ability_display_animation)
+                        used_ability_grow_animation.link_animation(counter_ability_grow_animation)
+                        counter_ability_grow_animation.link_animation(counter_ability_move_animation)
+                        
+                        shake_animation = ShakeAnimation(self, image, 110, 105 + (155 * action), 8, .33, fade=True)
+                        split_animation = self.get_hp_bar_animation_splitter()
+                        shake_animation.link_animation(split_animation)
+                        counter_ability_move_animation.link_animation(shake_animation)
+                        self.add_animation(used_ability_grow_animation)
+                    else:
+                        self.pump_execution_order()
                     
                     
             elif action > 2:
@@ -1269,8 +1293,7 @@ class BattleScene(engine.Scene):
                     
                     #build ability message
                     self.eteam[action].free_execute_ability(self.eteam, self.pteam)
-                    
-                    if not self.eteam[action].countered:
+                    if not self.eteam[action].countered and not AbilityType.INVISIBLE in self.eteam[action].used_ability.types:
                         used_ability_grow_animation = SizeAnimation(680, 130 + (155 * action), self.scene_manager.surfaces[self.eteam[action].used_ability.db_name], .5, self, True, False, (120, 120))
                         used_ability_join_animation = JoinAnimation(self)
                         for target in self.eteam[action].current_targets:
@@ -1286,8 +1309,33 @@ class BattleScene(engine.Scene):
                         used_ability_join_animation.link_animation(hp_bar_splitter)
                         used_ability_grow_animation.link_animation(used_ability_join_animation)
                         self.add_animation(used_ability_grow_animation)
+                    elif self.eteam[action].countered:
+                        if self.eteam[action].counterer_team == "ally":
+                            counter_image_x = 120
+                            counter_image_y = 115
+                        else:
+                            counter_image_x = 680
+                            counter_image_y = 140
+                        counter_image_y = counter_image_y + (155 * int(self.eteam[action].counterer_id))
+                        counter_image = self.scene_manager.surfaces[self.eteam[action].countering_ability.db_name].resize((120, 120))
+                        image = self.scene_manager.surfaces[self.eteam[action].used_ability.db_name].resize((120, 120))
+                        used_ability_grow_animation = SizeAnimation(680, 140 + (155 * action), self.scene_manager.surfaces[self.eteam[action].used_ability.db_name], .5, self, True, False, (120, 120))
+                        used_ability_display_animation = DisplayAnimation(680, 140 + (155 * action), [self.border_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(image)), BLACK, 2),], 120, self, True)
+                        counter_ability_move_animation = MovementAnimation(counter_image_x + 120, counter_image_y, [self.border_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(counter_image)), BLACK, 2),], 680, 140 + (155 * action), .2, self, True)
+                        used_ability_display_animation.add_ender(counter_ability_move_animation)
+                        
+                        counter_ability_grow_animation = SizeAnimation(counter_image_x, counter_image_y, self.scene_manager.surfaces[self.eteam[action].countering_ability.db_name], .5, self, True, False, (120, 120))
+                        used_ability_grow_animation.link_animation(used_ability_display_animation)
+                        used_ability_grow_animation.link_animation(counter_ability_grow_animation)
+                        counter_ability_grow_animation.link_animation(counter_ability_move_animation)
+                        
+                        shake_animation = ShakeAnimation(self, image, 670, 130 + (155 * action), 8, .33, fade=True)
+                        split_animation = self.get_hp_bar_animation_splitter(False)
+                        shake_animation.link_animation(split_animation)
+                        counter_ability_move_animation.link_animation(shake_animation)
+                        self.add_animation(used_ability_grow_animation)
                     else:
-                        self.animation_locked = False
+                        self.pump_enemy_execution_order()
                     
                     self.eteam[action].acted = False
                     self.eteam[action].used_ability = None
@@ -1337,7 +1385,6 @@ class BattleScene(engine.Scene):
     def enemy_execution_loop(self, executed_abilities: list["AbilityMessage"], execution_order: list[int],
                              potential_energy: list[int]):
 
-        logging.debug("Started enemy execution loop")
         for ability in executed_abilities:
             
             self.eteam[ability.user_id].used_ability = self.eteam[
@@ -1382,7 +1429,6 @@ class BattleScene(engine.Scene):
                              potential_energy: list[int]):
         self.potential_energy = potential_energy
         for ability in executed_abilities:
-            logging.debug("Received an executed ability!")
             self.eteam[ability.user_id].used_ability = self.eteam[
                 ability.user_id].source.current_abilities[ability.ability_id]
             self.eteam[ability.user_id].acted = True
@@ -1398,15 +1444,12 @@ class BattleScene(engine.Scene):
                     self.eteam[num])
 
             for num in ability.enemy_targets:
-                logging.debug("Ability has an enemy target: %s", self.pteam[num].source.name)
                 self.eteam[ability.user_id].current_targets.append(
                     self.pteam[num])
             
             
         self.get_execution_order_base("enemy")
         self.execution_order = execution_order
-        logging.debug("Enemy execution order:")
-        logging.debug(self.execution_order)
         self.pump_enemy_execution_order()
                 
     def finish_turn_start(self):
