@@ -50,7 +50,7 @@ class ConnectionHandler:
         self.waiting_for_opponent = False
         self.waiting_for_login = False
         self.packets: dict[int, Callable] = {
-            0: self.handle_start_package,
+            0: self.handle_quick_match_start_package,
             1: self.handle_match_communication,
             2: self.handle_login_failure,
             3: self.handle_login_success,
@@ -59,7 +59,8 @@ class ConnectionHandler:
             6: self.handle_reconnection,
             7: self.handle_version_check,
             8: self.handle_timeout,
-            9: self.handle_login_nonce
+            9: self.handle_login_nonce,
+            10: self.handle_ranked_match_start_package
         }
 
     
@@ -67,7 +68,7 @@ class ConnectionHandler:
         
         self.scene_manager.battle_scene.handle_timeout()
         
-
+    
     def update_thread(self, newest_version: str):
         s = sys.argv[0]
         
@@ -315,7 +316,25 @@ class ConnectionHandler:
         self.writer.write(buffer.get_byte_array())
         buffer.clear()
 
-    def send_start_package(self, names: list[str], player_pouch: bytes):
+    def send_ranked_match_start_package(self, player_pouch: bytes):
+        buffer = ByteBuffer()
+        buffer.write_int(12)
+        
+        buffer.write_string(player_pouch[0])
+        buffer.write_int(player_pouch[1])
+        buffer.write_int(player_pouch[2])
+        buffer.write_string(player_pouch[3])
+        buffer.write_int(player_pouch[4][0])
+        buffer.write_int(player_pouch[4][1])
+        buffer.write_int(len(player_pouch[5]))
+        buffer.write_bytes(player_pouch[5])
+        
+        buffer.write_byte(b'\x1f\x1f\x1f')
+        if self.writer.write(buffer.get_byte_array()):
+            self.waiting_for_opponent = True
+        buffer.clear()
+
+    def send_quick_match_start_package(self, names: list[str], player_pouch: bytes):
         buffer = ByteBuffer()
         buffer.write_int(0)
         for name in names:
@@ -439,7 +458,7 @@ class ConnectionHandler:
 
         self.scene_manager.char_select.selected_team = [Character(name) for name in player_character_names]
 
-        self.scene_manager.char_select.start_battle(enemy_character_names, enemy_pouch, energy, seed)
+        self.scene_manager.char_select.start_quick_battle(enemy_character_names, enemy_pouch, energy, seed)
 
 
 
@@ -466,7 +485,33 @@ class ConnectionHandler:
         self.writer.write(buffer.get_byte_array())
         buffer.clear()
 
-    def handle_start_package(self, data: list[bytes]):
+    def handle_ranked_match_start_package(self, data:list[bytes]):
+        if self.waiting_for_opponent:
+            self.waiting_for_opponent = False
+        buffer = ByteBuffer()
+        buffer.write_bytes(data)
+        packet_id = buffer.read_int()
+        first_turn = buffer.read_int()
+        
+        self.scene_manager.draft_scene.waiting_for_turn = not first_turn
+        self.scene_manager.draft_scene.moving_first = not(not first_turn)
+        
+        player_pouch = list()
+
+        player_name = buffer.read_string()
+        player_wins = buffer.read_int()
+        player_losses = buffer.read_int()
+        player_image_mode = buffer.read_string()
+        player_image_width = buffer.read_int()
+        player_image_height = buffer.read_int()
+        player_image_bytes_len = buffer.read_int()
+        player_image_bytes = buffer.read_bytes(player_image_bytes_len)
+
+        player_pouch = [player_name, player_wins, player_losses, player_image_mode, player_image_width, player_image_height, player_image_bytes]
+
+        self.scene_manager.char_select.start_ranked_battle(player_pouch)
+
+    def handle_quick_match_start_package(self, data: list[bytes]):
         if self.waiting_for_opponent:
             self.waiting_for_opponent = False
         buffer = ByteBuffer()
@@ -503,7 +548,7 @@ class ConnectionHandler:
         player_pouch = [player_name, player_wins, player_losses, player_image_mode, player_image_width, player_image_height, player_image_bytes]
 
 
-        self.scene_manager.char_select.start_battle(names, player_pouch, energy, seed)
+        self.scene_manager.char_select.start_quick_battle(names, player_pouch, energy, seed)
 
 
     

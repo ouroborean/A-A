@@ -99,8 +99,10 @@ class CharacterSelectScene(engine.Scene):
         
         
         self.character_info_region = self.region.subregion(15, 15, 770, 260)
-        self.start_match_region = self.region.subregion(15, 355, 100, 40)
-        self.how_to_region = self.region.subregion(120, 355, 100, 40)
+        self.start_match_region = self.region.subregion(130, 355, 100, 40)
+        self.how_to_region = self.region.subregion(235, 355, 100, 40)
+        self.ranked_region = self.region.subregion(15, 355, 110, 40)
+        
         self.player_profile_region = self.region.subregion(15, 20, 200, 100)
         
         self.character_select_region = self.region.subregion(15, 400, 770, 285)
@@ -138,18 +140,22 @@ class CharacterSelectScene(engine.Scene):
         self.how_to_button = self.render_bordered_text(self.font, "Tutorial", WHITE, BLACK, self.how_to_button, 22, 9, 1)
         self.how_to_button = self.border_sprite(self.how_to_button, AQUA, 2)
         self.how_to_button.click += self.tutorial_click
-        self.start_button = self.ui_factory.from_color(sdl2.ext.BUTTON, MENU_TRANSPARENT, (100, 40))
-        self.start_button = self.render_bordered_text(self.font, "Quick Match", WHITE, BLACK, self.start_button, 9, 9, 1)
-        self.start_button = self.border_sprite(self.start_button, AQUA, 2)
-        self.start_button.click += self.start_click
+        self.quick_match_button = self.ui_factory.from_color(sdl2.ext.BUTTON, MENU_TRANSPARENT, (100, 40))
+        self.quick_match_button = self.render_bordered_text(self.font, "Quick Match", WHITE, BLACK, self.quick_match_button, 9, 9, 1)
+        self.quick_match_button = self.border_sprite(self.quick_match_button, AQUA, 2)
+        self.quick_match_button.click += self.quick_match_start_click
+        self.ranked_match_button = self.ui_factory.from_color(sdl2.ext.BUTTON, MENU_TRANSPARENT, (110, 40))
+        self.ranked_match_button = self.render_bordered_text(self.font, "Ranked Match", WHITE, BLACK, self.ranked_match_button, 5, 9, 1)
+        self.ranked_match_button = self.border_sprite(self.ranked_match_button, AQUA, 2)
+        self.ranked_match_button.click += self.ranked_match_start_click
         self.character_sprites = {}
         for k, v in get_character_db().items():
+            image = self.border_image(self.scene_manager.surfaces[k + "allyprof"].resize((75, 75)), 1)
             sprite = self.ui_factory.from_surface(
                 sdl2.ext.BUTTON,
-                self.get_scaled_surface(self.scene_manager.surfaces[k+"allyprof"], 75, 75), free=True)
+                self.get_scaled_surface(image, 75, 75), free=True)
             sprite.click += self.character_click
             sprite.pressed += self.char_select_press
-            sprite.border_box = self.sprite_factory.from_color(BLACK, (79, 79))
             sprite.filter_cover = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["locked"], 75, 75))
             sprite.filter_cover.click += self.character_click
             sprite.filter_cover.character = v
@@ -253,12 +259,17 @@ class CharacterSelectScene(engine.Scene):
         if self.display_character:
             self.render_main_character_info()
         self.render_tutorial_button()
-        self.render_start_button()
+        self.render_quick_match_button()
+        self.render_ranked_match_button()
         self.render_character_scroll_selection()
         self.render_search_panel()
 
     def memory_test(self, _button, _sender):
         self.full_render()
+    
+    def render_ranked_match_button(self):
+        self.ranked_region.clear()
+        self.ranked_region.add_sprite(self.ranked_match_button, 0, 0)
     
     def render_tutorial_button(self):
         self.how_to_region.clear()
@@ -460,71 +471,19 @@ class CharacterSelectScene(engine.Scene):
 
         for i in range(3):
             if i < len(self.selected_team):
-                self.team_display[i].surface = self.get_scaled_surface(self.scene_manager.surfaces[self.selected_team[i].name + "allyprof"], 75, 75)
+                self.team_display[i].surface = self.get_scaled_surface(self.border_image(self.scene_manager.surfaces[self.selected_team[i].name + "allyprof"], 1), 75, 75)
                 self.team_display[i].character = self.selected_team[i]
             else:
                 self.team_display[i].surface = self.get_scaled_surface(self.scene_manager.surfaces["locked"], 75, 75)
             self.team_display[i].free = True
-            self.add_sprite_with_border(self.team_region, self.team_display[i], self.team_display[i].border_box, i * 85, 0)
+            self.team_region.add_sprite(self.team_display[i], i*85, 0)
 
-    def render_start_button(self):
+
+    def render_quick_match_button(self):
         self.start_match_region.clear()
         if len(self.selected_team) == 3:
-            self.start_match_region.add_sprite(self.start_button, 0, 0)
+            self.start_match_region.add_sprite(self.quick_match_button, 0, 0)
 
-    def render_character_select(self):
-        self.character_select_region.clear()
-        if self.page_on_display > 1:
-            self.character_select_region.add_sprite(self.left_button, -20, 105)
-
-        column = 0
-        row = 0
-        if not self.unlock_filtering:
-            self.filtered_characters = list(get_character_db().values())
-        else:
-            self.filtered_characters = [char for char in get_character_db().values() if self.player.missions[char.name][5]]
-            
-
-        if not self.exclusive_filtering:
-            for i, filter in enumerate(self.energy_filtering):
-                if filter:
-                    self.filtered_characters = [char for char in self.filtered_characters if char.uses_energy(i)]
-        else:
-            excluded_types = []
-            for i, filter in enumerate(self.energy_filtering):
-                if not filter:
-                    excluded_types.append(i)
-            self.filtered_characters = [char for char in self.filtered_characters if not char.uses_energy_mult(excluded_types)]
-            for i, filter in enumerate(self.energy_filtering):
-                if filter:
-                    self.filtered_characters = [char for char in self.filtered_characters if char.uses_energy(i)]
-
-        if len(self.filtered_characters) > (self.page_on_display * 12):
-            self.character_select_region.add_sprite(self.right_button, 715, 105)
-        
-        for i in range(12):
-            current_slot = i + ((self.page_on_display - 1) * 12)
-            try:
-                if not self.filtered_characters[current_slot].selected:
-                    self.add_sprite_with_border(self.character_select_region, self.character_sprites[self.filtered_characters[current_slot].name], self.character_sprites[self.filtered_characters[current_slot].name].border_box, 60 + (column * 110), 35 + (row * 110))
-                if self.filtered_characters[current_slot].selected or not self.player.missions[self.filtered_characters[current_slot].name][5] or (self.dragging_picture and self.filtered_characters[current_slot].name == self.dragging_character):
-                    selected_filter = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["locked"]), free=True)
-                    selected_filter.character = self.filtered_characters[current_slot]
-                    selected_filter.click += self.character_click
-                    self.character_sprites[self.filtered_characters[current_slot].name].character = self.filtered_characters[current_slot]
-                    self.character_select_region.add_sprite(selected_filter, 60 + (column * 110), 35 + (row * 110))
-                else:
-                    self.character_sprites[self.filtered_characters[current_slot].name].character = self.filtered_characters[current_slot]
-                    
-                
-            except IndexError:
-                break
-            column += 1
-            if column == 6:
-                row += 1
-                column = 0
-        if self.dragging_picture:
-            self.add_sprite_with_border(self.character_select_region, self.character_sprites[self.dragging_character], self.character_sprites[self.dragging_character].border_box, self.scene_manager.mouse_x - self.drag_offset[0] - self.character_select_region.x, self.scene_manager.mouse_y - self.drag_offset[1] - self.character_select_region.y)
     
     
     def scroll_character_scroll_selection(self):     
@@ -546,12 +505,12 @@ class CharacterSelectScene(engine.Scene):
                 self.scroll_bar_y = 0
         self.character_sprites.clear()
         for k, v in get_character_db().items():
+            image = self.border_image(self.scene_manager.surfaces[k + "allyprof"].resize((75, 75)), 1)
             sprite = self.ui_factory.from_surface(
                 sdl2.ext.BUTTON,
-                self.get_scaled_surface(self.scene_manager.surfaces[k+"allyprof"], 75, 75), free=True)
+                self.get_scaled_surface(self.border_image(image, 1), 75, 75), free=True)
             sprite.click += self.character_click
             sprite.pressed += self.char_select_press
-            sprite.border_box = self.sprite_factory.from_color(BLACK, (79, 79))
             sprite.filter_cover = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["locked"], 75, 75))
             sprite.filter_cover.character = v
             sprite.filter_cover.click += self.character_click
@@ -581,15 +540,11 @@ class CharacterSelectScene(engine.Scene):
             ROW_TOP = PADDING + (row * BUTTON_SPACE) - VERT_OFFSET
             BASE_ROW_TOP = PADDING + (row * BUTTON_SPACE)
             ROW_BOTTOM = BASE_ROW_TOP + BUTTON_SPACE
-            BORDER_TOP = ROW_TOP - 2
             if (row + 1) * BUTTON_SPACE > VERT_OFFSET and ROW_TOP < self.character_scroll_selection_region.size()[1]:
-                image = self.scene_manager.surfaces[character.name + "allyprof"].resize((75, 75))
-                BORDER_HEIGHT = 79
+                image = self.border_image(self.scene_manager.surfaces[character.name + "allyprof"].resize((75, 75)), 1)
                 if ROW_TOP < 0:
                     image = image.crop( (0, abs(ROW_TOP), 75, 75))
-                    BORDER_HEIGHT = image.height + 2
                     ROW_TOP = 0
-                    BORDER_TOP = 0
                     sprite = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(image), free=True)
                     sprite.filter_cover = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["locked"], 75, image.height))
                     sprite.click += self.character_click
@@ -597,13 +552,11 @@ class CharacterSelectScene(engine.Scene):
                     sprite.filter_cover.click += self.character_click
                     sprite.character = character
                     sprite.filter_cover.character = character
-                    sprite.border_box = self.sprite_factory.from_color(BLACK, (79, BORDER_HEIGHT))
                     self.character_sprites[character.name] = sprite
                 elif ROW_BOTTOM - VERT_OFFSET > VIEWPORT_HEIGHT:
-                    image = image.crop( (0, 0, 75, VIEWPORT_HEIGHT - ROW_TOP ))
-                    BORDER_HEIGHT = image.height + 2
+                    image = image.crop( (0, 0, 75, min(VIEWPORT_HEIGHT - ROW_TOP, 75) ))
+                    logging.debug(image.size)
                     sprite = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(image), free=True)
-                    sprite.border_box = self.sprite_factory.from_color(BLACK, (79, BORDER_HEIGHT))
                     sprite.filter_cover = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["locked"], 75, image.height))
                     sprite.click += self.character_click
                     sprite.pressed += self.char_select_press
@@ -611,7 +564,6 @@ class CharacterSelectScene(engine.Scene):
                     sprite.character = character
                     sprite.filter_cover.character = character
                     self.character_sprites[character.name] = sprite
-                self.character_scroll_selection_region.add_sprite(self.character_sprites[character.name].border_box, (PADDING - 2) + (BUTTON_SPACE * column), BORDER_TOP)
                 self.character_scroll_selection_region.add_sprite(self.character_sprites[character.name], PADDING + (BUTTON_SPACE * column), ROW_TOP)
                 if character.selected or not self.player.missions[character.name][5] or (self.dragging_character == character.name):
                     self.character_scroll_selection_region.add_sprite(self.character_sprites[character.name].filter_cover, PADDING + (BUTTON_SPACE * column), ROW_TOP)
@@ -661,15 +613,11 @@ class CharacterSelectScene(engine.Scene):
             ROW_TOP = PADDING + (row * BUTTON_SPACE) - VERT_OFFSET
             BASE_ROW_TOP = PADDING + (row * BUTTON_SPACE)
             ROW_BOTTOM = BASE_ROW_TOP + BUTTON_SPACE
-            BORDER_TOP = ROW_TOP - 2
             if (row + 1) * BUTTON_SPACE > VERT_OFFSET and ROW_TOP < self.character_scroll_selection_region.size()[1]:
-                image = self.scene_manager.surfaces[character.name + "allyprof"].resize((75, 75))
-                BORDER_HEIGHT = 79
+                image = self.border_image(self.scene_manager.surfaces[character.name + "allyprof"].resize((75, 75)), 1)
                 if ROW_TOP < 0:
                     image = image.crop( (0, abs(ROW_TOP), 75, 75))
-                    BORDER_HEIGHT = image.height + 2
                     ROW_TOP = 0
-                    BORDER_TOP = 0
                     sprite = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(image), free=True)
                     sprite.filter_cover = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["locked"], 75, image.height))
                     sprite.click += self.character_click
@@ -677,13 +625,10 @@ class CharacterSelectScene(engine.Scene):
                     sprite.filter_cover.click += self.character_click
                     sprite.character = character
                     sprite.filter_cover.character = character
-                    sprite.border_box = self.sprite_factory.from_color(BLACK, (79, BORDER_HEIGHT))
                     self.character_sprites[character.name] = sprite
                 elif ROW_BOTTOM - VERT_OFFSET > VIEWPORT_HEIGHT:
                     image = image.crop( (0, 0, 75, VIEWPORT_HEIGHT - ROW_TOP ))
-                    BORDER_HEIGHT = image.height + 2
                     sprite = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(image), free=True)
-                    sprite.border_box = self.sprite_factory.from_color(BLACK, (79, BORDER_HEIGHT))
                     sprite.filter_cover = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["locked"], 75, image.height))
                     sprite.click += self.character_click
                     sprite.pressed += self.char_select_press
@@ -691,15 +636,15 @@ class CharacterSelectScene(engine.Scene):
                     sprite.character = character
                     sprite.filter_cover.character = character
                     self.character_sprites[character.name] = sprite
-                self.character_scroll_selection_region.add_sprite(self.character_sprites[character.name].border_box, (PADDING - 2) + (BUTTON_SPACE * column), BORDER_TOP)
                 self.character_scroll_selection_region.add_sprite(self.character_sprites[character.name], PADDING + (BUTTON_SPACE * column), ROW_TOP)
                 if character.selected or not self.player.missions[character.name][5] or (self.dragging_character == character.name):
                     self.character_scroll_selection_region.add_sprite(self.character_sprites[character.name].filter_cover, PADDING + (BUTTON_SPACE * column), ROW_TOP)
         if CHARACTER_COUNT > 18:
             self.scroll_bar_region.add_sprite(self.scroll_button, 0, self.scroll_bar_y)
         if self.dragging_picture:
-            sprite = self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[self.dragging_character + "allyprof"], 75, 75), free=True)
-            self.add_sprite_with_border(self.team_region, sprite, self.sprite_factory.from_color(BLACK, (79, 79)), self.scene_manager.mouse_x - self.drag_offset[0] - self.team_region.x, self.scene_manager.mouse_y - self.drag_offset[1] - self.team_region.y)
+            sprite = self.sprite_factory.from_surface(self.get_scaled_surface(self.border_image(self.scene_manager.surfaces[self.dragging_character + "allyprof"], 1), 75, 75), free=True)
+            self.team_region.add_sprite(sprite, self.scene_manager.mouse_x - self.drag_offset[0] - self.team_region.x, self.scene_manager.mouse_y - self.drag_offset[1] - self.team_region.y)
+            
     
     #endregion
 
@@ -759,7 +704,7 @@ class CharacterSelectScene(engine.Scene):
         self.drag_offset = (0, 0)
         self.dragging_picture = False
         self.dragging_character = ""
-        self.render_start_button()
+        self.render_quick_match_button()
         self.render_team_display()
         self.render_character_scroll_selection()
         
@@ -931,19 +876,31 @@ class CharacterSelectScene(engine.Scene):
     def init_char_select_desc(self, button):
         pass
     
-    def start_click(self, _button, _sender):
+    def quick_match_start_click(self, _button, _sender):
         if not self.clicked_search and self.scene_manager.connected and not self.window_up:
-            self.start_searching()
+            self.start_quick_match_searching()
+
+    def ranked_match_start_click(self, _button, _sender):
+        if not self.clicked_search and self.scene_manager.connected and not self.window_up:
+            self.start_ranked_searching()
 
     #endregion
 
-    def start_searching(self):
+    def start_ranked_searching(self):
+        self.clicked_search = True
+        image = {"mode": self.player_profile.mode, "size": self.player_profile.size, "pixels": self.player_profile.tobytes()}
+        player_pouch = [self.player_name, self.player_wins, self.player_losses, image["mode"], image["size"], image["pixels"]]
+        self.scene_manager.connection.send_ranked_match_start_package(player_pouch)
+        self.window_up = True
+        self.render_search_panel()
+
+    def start_quick_match_searching(self):
         play_sound(self.scene_manager.sounds["page"])
         self.clicked_search = True
         names = [x.name for x in self.selected_team]
         image = {"mode": self.player_profile.mode, "size": self.player_profile.size, "pixels": self.player_profile.tobytes()}
         player_pouch = [self.player_name, self.player_wins, self.player_losses, image["mode"], image["size"], image["pixels"]]
-        self.scene_manager.connection.send_start_package(names, player_pouch)
+        self.scene_manager.connection.send_quick_match_start_package(names, player_pouch)
         self.window_up = True
         self.render_search_panel()
     
@@ -973,7 +930,7 @@ class CharacterSelectScene(engine.Scene):
         self.add_character(sys.argv[3])
         self.add_character(sys.argv[4])
         self.add_character(sys.argv[5])
-        self.start_searching()
+        self.start_quick_match_searching()
         self.full_render()
 
     def settle_player(self, username: str, wins: int, losses: int, medals: int, mission_data: str, ava_code = None, mission_complete: dict = {}):
@@ -1015,7 +972,15 @@ class CharacterSelectScene(engine.Scene):
         
         self.full_render()
 
-    def start_battle(self, enemy_names, enemy_pouch, energy, seed):
+    def start_ranked_battle(self, enemy_pouch):
+        enemy_pouch[6] = bytes(enemy_pouch[6])
+        enemy_ava = Image.frombytes(enemy_pouch[3], (enemy_pouch[4], enemy_pouch[5]), enemy_pouch[6])
+        
+        enemy = Player(enemy_pouch[0], enemy_pouch[1], enemy_pouch[2], enemy_ava)
+        self.scene_manager.start_draft(self.player, enemy)
+        
+
+    def start_quick_battle(self, enemy_names, enemy_pouch, energy, seed):
         """Function called by Scene Manager to move from Character Select Scene to
            In-Game Scene after receiving an enemy start package from the server"""
         enemy_team = [Character(name) for name in enemy_names]

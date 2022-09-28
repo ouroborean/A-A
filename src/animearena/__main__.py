@@ -56,14 +56,8 @@ def main():
 
         scene_manager.initialize_scenes()
 
-        # scene_manager.set_scene_to_current(scene_manager.login_scene)
-        
-        scene_manager.set_scene_to_current(scene_manager.draft_scene)
-        
-        scene_manager.change_window_size(900, 700)
-        
-        scene_manager.draft_scene.full_render()
-        
+        scene_manager.set_scene_to_current(scene_manager.login_scene)
+
         server_loop_task = server_loop(scene_manager)
         
         game_loop_task = game_loop(scene_manager, window, server_loop_task)
@@ -158,6 +152,9 @@ async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server
                         if scene_manager.char_select.dragging_picture:
                             scene_manager.char_select.resolve_drag_release()
                         scene_manager.char_select.dragging_character = ""
+                    elif scene_manager.current_scene == scene_manager.draft_scene:
+                        scene_manager.draft_scene.scrolling = False
+                        logging.debug("set scrolling to false")
                     elif scene_manager.current_scene == scene_manager.battle_scene:
                         if scene_manager.battle_scene.dragging_order_button:    
                             scene_manager.battle_scene.dragging_order_button = False
@@ -176,14 +173,15 @@ async def game_loop(scene_manager: SceneManager, window: sdl2.ext.Window, server
                     if scene_manager.battle_scene.dragging_order_button:
                         scene_manager.battle_scene.check_swapped_order()
                         scene_manager.battle_scene.draw_any_cost_expenditure_window()
-                        
+                    if scene_manager.draft_scene.scrolling:
+                        scene_manager.draft_scene.scroll_character_select()
                     
                 if event.type == sdl2.SDL_MOUSEWHEEL:
-                    if scene_manager.current_scene == scene_manager.char_select:
+                    if scene_manager.current_scene == scene_manager.char_select or scene_manager.current_scene == scene_manager.draft_scene:
                         if event.wheel.y > 0:
-                            scene_manager.char_select.mouse_wheel_scroll(-10)
+                            scene_manager.current_scene.mouse_wheel_scroll(-10)
                         elif event.wheel.y < 0:
-                            scene_manager.char_select.mouse_wheel_scroll(10)
+                            scene_manager.current_scene.mouse_wheel_scroll(10)
                 for sprite in scene_manager.current_scene.eventables():
                     scene_manager.uiprocessor.dispatch(sprite, event)
                     if scene_manager.current_scene.triggered_event:

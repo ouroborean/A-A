@@ -142,11 +142,12 @@ class SceneManager:
         self.mouse_y = y
 
     def initialize_scenes(self):
+        
+        self.draft_scene = make_draft_scene(self)
         self.char_select = make_character_select_scene(self)
         self.battle_scene = make_battle_scene(self)
         self.login_scene = make_login_scene(self)
         self.tutorial_scene = make_tutorial_scene(self)
-        self.draft_scene = make_draft_scene(self)
 
     def set_scene_to_current(self, scene: "Scene"):
         self.current_scene = scene
@@ -178,6 +179,11 @@ class SceneManager:
         self.change_window_size(900, 700)
         self.battle_scene.setup_scene(player_team, enemy_team, player, enemy, energy, seed)
         self.set_scene_to_current(self.battle_scene)
+        
+    def start_draft(self, player, enemy):
+        self.change_window_size(900, 700)
+        self.draft_scene.start_draft(player, enemy)
+        self.set_scene_to_current(self.draft_scene)
 
     def start_tutorial(self, player):
         self.change_window_size(1100, 1100)

@@ -176,16 +176,16 @@ class Scene:
         return target
     
     def border_image(self, image, thickness):
-        
+        new = image.copy()
         w, h = image.size
         
-        brush = ImageDraw.Draw(image)
+        brush = ImageDraw.Draw(new)
         brush.rectangle([(0, 0), (w, thickness)], fill="black", outline = "black")
         brush.rectangle([(0, 0), (thickness, h)], fill="black", outline = "black")
         brush.rectangle([(w - 2, 0), (w, h)], fill="black", outline = "black")
         brush.rectangle([(0, h - 2), (w, h)], fill="black", outline = "black")
         
-        return image
+        return new
         
     
     def border_sprite(self, sprite, color, thickness):

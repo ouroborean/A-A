@@ -64,6 +64,8 @@ class Character:
         self.char_select_desc = None
         self.sistema_CAI_stage = 1
         self.energy_contribution = 1
+        self.picked = False
+        self.banned = False
         self.hp = 200
         self.full_dr = 0
         self.invulnerable = False
