@@ -38,16 +38,18 @@ class DraftScene(engine.Scene):
         self.player_picks = list()
         self.enemy_picks = list()
         self.mode = Mode.BAN
+        self.turns = [Mode.BAN, Mode.BAN, Mode.PICK, Mode.PICK, Mode.PICK, Mode.PICK, Mode.BAN, Mode.BAN, Mode.PICK, Mode.PICK]
         self.timer = TurnTimer(1, self.empty_placeholder)
         self.waiting_for_turn = False
         self.moving_first = False
-        
+        self.scene_stage = 0
         self.scrolling = False
         self.scroll_button = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["scroll_wheel"]), (20, 23))
         self.scroll_button.pressed += self.scroll_click
         self.scroll_button.click_offset = 0
         self.scroll_position = 0
         self.scroll_bar_y = 0
+        self.chosen_character = ""
         self.character_sprites = {}
         for k, v in get_character_db().items():
             sprite = self.ui_factory.from_surface(
@@ -70,6 +72,7 @@ class DraftScene(engine.Scene):
         self.timer_region = self.region.subregion(x=269, y=95, width=362, height=12)
         
     def full_render(self):
+        self.region.clear()
         self.background = self.sprite_factory.from_surface(
             self.get_scaled_surface(
                 self.scene_manager.surfaces["in_game_background"]))
@@ -129,7 +132,7 @@ class DraftScene(engine.Scene):
             VERT_OFFSET = int(TOTAL_HEIGHT * self.scroll_position)
         
         for i, character in enumerate(characters):
-            if character.picked or character.banned:
+            if character.name in self.player_picks or character.name in self.enemy_picks or character.name in self.enemy_bans or character.name in self.player_bans:
                 continue
             
             row = i // CHARS_PER_ROW
@@ -207,7 +210,7 @@ class DraftScene(engine.Scene):
         
         
         for i, character in enumerate(characters):
-            if character.picked or character.banned:
+            if character.name in self.player_picks or character.name in self.enemy_picks or character.name in self.enemy_bans or character.name in self.player_bans:
                 continue
             
             row = i // CHARS_PER_ROW
@@ -243,8 +246,10 @@ class DraftScene(engine.Scene):
             button = self.border_sprite(button, AQUA, 2)
             if self.mode == Mode.BAN:
                 button = self.render_bordered_text(self.font, "BAN", WHITE, BLACK, button, 15, 9, 1)
+                button.click += self.ban_click
             else:
                 button = self.render_bordered_text(self.font, "PICK", WHITE, BLACK, button, 14, 9, 1)
+                button.click += self.pick_click
             self.button_region.add_sprite(button, 0, 0)
         else:
             button = self.sprite_factory.from_color(TRANSPARENT, (180, 40))
@@ -278,7 +283,14 @@ class DraftScene(engine.Scene):
         for i, character in enumerate(self.player_picks):
             pick_sprite = self.border_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[character + "allyprof"])), BLACK, 2)
             self.player_team_region.add_sprite(pick_sprite, 10, 5 + (i * 105))
-    
+        if self.chosen_character and self.mode == Mode.PICK:
+            image = self.scene_manager.surfaces[self.chosen_character + "allyprof"]
+            choosing_sprite = self.border_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(image)), BLACK, 2)
+            null_filter = self.sprite_factory.from_color(TRANSPARENT_GRAY, (100, 100))
+            sdl2.surface.SDL_BlitSurface(null_filter.surface, None, choosing_sprite.surface, sdl2.SDL_Rect(0, 0))
+            
+            self.player_team_region.add_sprite(choosing_sprite, 10, 5 + ( len(self.player_picks) * 105 ))
+
     def render_enemy_region(self):
         self.enemy_region.clear()
         enemy_ava = self.sprite_factory.from_surface(
@@ -321,10 +333,18 @@ class DraftScene(engine.Scene):
             ban_sprite = self.border_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[character + "allyprof"])), DARK_BLUE, thickness=2)
             
             self.ban_region.add_sprite(ban_sprite, 5 + (105 * i), 15)
+        if self.chosen_character and self.mode == Mode.BAN:
+            image = self.scene_manager.surfaces[self.chosen_character + "allyprof"]
+            choosing_sprite = self.border_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(image)), BLACK, 2)
+            null_filter = self.sprite_factory.from_color(TRANSPARENT_GRAY, (100, 100))
+            sdl2.surface.SDL_BlitSurface(null_filter.surface, None, choosing_sprite.surface, sdl2.SDL_Rect(0, 0))
+            self.ban_region.add_sprite(choosing_sprite, 5 + (105 * len(self.player_bans) ), 15)
+        
+        
         
         for i, character in enumerate(self.enemy_bans):
             ban_sprite = self.border_sprite(self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces[character + "allyprof"])), DARK_RED, thickness=2)
-            self.ban_region.add_sprite(ban_sprite, 500 - (105 * (i + 1)), 10)
+            self.ban_region.add_sprite(ban_sprite, 500 - (105 * (i + 1)), 15)
     
     def scroll_click(self, button, _sender):
         self.scrolling = True
@@ -349,8 +369,74 @@ class DraftScene(engine.Scene):
         self.scroll_character_select()
         self.scroll_click(self.scroll_button, sender)
     
-    def character_click(self, _button, _sender):
-        pass
+    def character_click(self, button, _sender):
+        if not self.waiting_for_turn:
+            self.chosen_character = button.character.name
+            self.full_render()
+    
+    def pick_click(self, button, sender):
+        if self.chosen_character:
+            self.player_picks.append(self.chosen_character)
+            self.scene_stage += 1
+            
+            self.scene_manager.connection.send_draft_message(self.chosen_character)
+            if not self.scene_stage == 4:
+                self.waiting_for_turn = True
+            self.chosen_character = ""
+            if self.scene_stage == 10:
+                self.waiting_for_turn = False
+                self.scene_manager.connection.send_draft_finalization(self.player_picks)
+            else:
+                self.mode = self.turns[self.scene_stage]
+            self.full_render()
+    
+    def ban_click(self, button, sender):
+        if self.chosen_character:
+            self.player_bans.append(self.chosen_character)
+            self.scene_stage += 1
+            self.mode = self.turns[self.scene_stage]
+            self.scene_manager.connection.send_draft_message(self.chosen_character)
+            self.waiting_for_turn = True
+            self.chosen_character = ""
+            self.full_render()
+    
+    def start_ranked_battle(self, energy, seed):
+        enemy_team = [Character(name) for name in self.enemy_picks]
+        player_team = [Character(name) for name in self.player_picks]
+        self.enemy_picks.clear()
+        self.player_picks.clear()
+        self.scene_manager.start_battle(player_team, enemy_team, self.player, self.enemy, energy, seed)
+    
+    def receive_message(self, character):
+        if self.scene_stage == 0:
+            self.enemy_bans.append(character)
+        elif self.scene_stage == 1:
+            self.enemy_bans.append(character)
+        elif self.scene_stage == 2:
+            self.enemy_picks.append(character)
+        elif self.scene_stage == 3:
+            self.enemy_picks.append(character)
+        elif self.scene_stage == 4:
+            self.enemy_picks.append(character)
+        elif self.scene_stage == 5:
+            self.enemy_picks.append(character)
+        elif self.scene_stage == 6:
+            self.enemy_bans.append(character)
+        elif self.scene_stage == 7:
+            self.enemy_bans.append(character)
+        elif self.scene_stage == 8:
+            self.enemy_picks.append(character)
+        elif self.scene_stage == 9:
+            self.enemy_picks.append(character)
+        self.scene_stage += 1
+        if self.scene_stage != 4:
+            self.waiting_for_turn = False
+        if self.scene_stage == 10:
+            self.waiting_for_turn = True
+            self.scene_manager.connection.send_draft_finalization(self.player_picks)
+        else:
+            self.mode = self.turns[self.scene_stage]
+        self.full_render()
     
     def get_click_coordinates(self, button):
         return (self.scene_manager.mouse_x - button.x, self.scene_manager.mouse_y - button.y)
@@ -359,8 +445,6 @@ class DraftScene(engine.Scene):
         self.player = player
         self.enemy = enemy
         
-        if self.moving_first:
-            self.mode = Mode.PICK
         self.timer = self.start_timer()
         self.full_render()
     

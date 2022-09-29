@@ -60,15 +60,15 @@ class ConnectionHandler:
             7: self.handle_version_check,
             8: self.handle_timeout,
             9: self.handle_login_nonce,
-            10: self.handle_ranked_match_start_package
+            10: self.handle_ranked_match_start_package,
+            11: self.handle_draft_message,
+            12: self.handle_draft_finalization
         }
 
-    
     def handle_timeout(self, data:list[bytes]):
         
         self.scene_manager.battle_scene.handle_timeout()
-        
-    
+
     def update_thread(self, newest_version: str):
         s = sys.argv[0]
         
@@ -89,8 +89,6 @@ class ConnectionHandler:
         new_env.pop("PYSDL2_DLL_PATH")
         os.execve(final_path, [final_path,], new_env)
         
-        
-
     def handle_version_check(self, data:list[bytes]):
         buffer = ByteBuffer()
         buffer.write_bytes(data)
@@ -170,8 +168,6 @@ class ConnectionHandler:
         self.writer.write(buffer.get_byte_array())
         buffer.clear()
     
-    
-
     def handle_registration(self, data:list[bytes]):
         buffer = ByteBuffer()
         buffer.write_bytes(data)
@@ -180,7 +176,6 @@ class ConnectionHandler:
         buffer.clear()
         self.scene_manager.login_scene.receive_message(message)
         self.scene_manager.login_scene.clicked_register = False
-
 
     def handle_login_failure(self, data:list[bytes]):
         buffer = ByteBuffer()
@@ -224,7 +219,6 @@ class ConnectionHandler:
         self.writer.write(buffer.get_byte_array())
 
         buffer.clear()
-
 
     def handle_match_communication(self, data:list[bytes]):
 
@@ -294,7 +288,6 @@ class ConnectionHandler:
         nonced_digest = nonce_the_digest(digest, nonce_key)
         self.send_login_attempt(nonced_digest)
         
-
     def send_login_attempt(self, password_digest: str):
         buffer = ByteBuffer()
         buffer.write_int(2)
@@ -485,6 +478,30 @@ class ConnectionHandler:
         self.writer.write(buffer.get_byte_array())
         buffer.clear()
 
+    def send_draft_message(self, character):
+        buffer = ByteBuffer()
+        buffer.write_int(13)
+        buffer.write_string(character)
+        buffer.write_byte(b'\x1f\x1f\x1f')
+        self.writer.write(buffer.get_byte_array())
+        buffer.clear()
+        
+    def handle_draft_message(self, data:list[bytes]):
+        buffer = ByteBuffer()
+        buffer.write_bytes(data)
+        packet_id = buffer.read_int()
+        drafted_character = buffer.read_string()
+        self.scene_manager.draft_scene.receive_message(drafted_character)
+        
+    def send_draft_finalization(self, character_list):
+        buffer = ByteBuffer()
+        buffer.write_int(14)
+        for character in character_list:
+            buffer.write_string(character)
+        buffer.write_byte(b'\x1f\x1f\x1f')
+        self.writer.write(buffer.get_byte_array())
+        buffer.clear()
+
     def handle_ranked_match_start_package(self, data:list[bytes]):
         if self.waiting_for_opponent:
             self.waiting_for_opponent = False
@@ -510,6 +527,29 @@ class ConnectionHandler:
         player_pouch = [player_name, player_wins, player_losses, player_image_mode, player_image_width, player_image_height, player_image_bytes]
 
         self.scene_manager.char_select.start_ranked_battle(player_pouch)
+
+    def handle_draft_finalization(self, data:list[bytes]):
+        buffer = ByteBuffer()
+        buffer.write_bytes(data)
+        buffer.read_int()
+        seed = buffer.read_int()
+        first_turn = not self.scene_manager.draft_scene.waiting_for_turn
+        
+        if first_turn:
+            self.scene_manager.battle_scene.waiting_for_turn = False
+            self.scene_manager.battle_scene.moving_first = True
+        else:
+            self.scene_manager.battle_scene.waiting_for_turn = True
+            self.scene_manager.battle_scene.moving_first = False
+        
+        start_pool = [buffer.read_int() for i in range(6)]
+        energy = [0, 0, 0, 0]
+        if first_turn:
+            energy[start_pool[0]] += 1
+        else:
+            for i in range(3):
+                energy[start_pool[i]] += 1
+        self.scene_manager.draft_scene.start_ranked_battle(energy, seed)
 
     def handle_quick_match_start_package(self, data: list[bytes]):
         if self.waiting_for_opponent:
