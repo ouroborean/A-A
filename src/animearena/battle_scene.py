@@ -37,6 +37,7 @@ if typing.TYPE_CHECKING:
 FONTSIZE = 16
 COOLDOWN_FONTSIZE = 80
 STACK_FONTSIZE = 25
+MESSAGE_FONTSIZE = 35
 LARGE_STACK_FONTSIZE = 20
 HUGE_STACK_FONTSIZE = 16
 TIMER_FONTSIZE = 100
@@ -307,6 +308,7 @@ class BattleScene(engine.Scene):
         self.large_stack_font = init_font(LARGE_STACK_FONTSIZE)
         self.huge_stack_font = init_font(HUGE_STACK_FONTSIZE)
         self.timer_font = init_font(TIMER_FONTSIZE)
+        self.message_font = init_font(MESSAGE_FONTSIZE)
         self.selected_ability = None
         self.acting_character = None
         self.exchanging_energy = False
@@ -365,7 +367,7 @@ class BattleScene(engine.Scene):
         self.surrender_button_region = self.region.subregion(725, 625, 0, 0)
         self.enemy_info_region = self.region.subregion(5, 578, 670, 120)
         self.hover_effect_region = self.region.subregion(0, 0, 0, 0)
-        self.game_end_region = self.region.subregion(60, 207, 781, 484)
+        self.game_end_region = self.region.subregion(50, 110, 800, 480)
         self.timer_region = self.region.subregion(x=269, y=95, width=362, height=12)
         self.energy_region = self.region.subregion(x=300,
                                                    y=60,
@@ -2164,15 +2166,36 @@ class BattleScene(engine.Scene):
 
         
         self.window_up = True
-        loss_panel = self.sprite_factory.from_surface(
-            self.get_scaled_surface(self.scene_manager.surfaces["lost"]))
-        self.add_bordered_sprite(self.game_end_region, loss_panel, BLACK, 0, 0)
-        return_button = self.create_text_display(self.font,
-                                                 "Return To Character Select",
-                                                 WHITE, BLACK, 14, 5, 220)
+        
+        
+        loss_image = self.border_sprite(self.sprite_factory.from_surface(
+            self.get_scaled_surface(self.scene_manager.surfaces["lost"])), DULL_AQUA, 2)
+        loss_image = self.render_bordered_text(self.message_font, "Defeat...", BLACK, DARK_RED, loss_image, 525, 20, 1)
+        
+        
+        loss_panel = self.sprite_factory.from_color(MENU_TRANSPARENT, (102, 480))
+        loss_panel = self.border_sprite(loss_panel, DULL_AQUA, 2)
+        self.game_end_region.add_sprite(loss_image, 0, 0)
+        self.game_end_region.add_sprite(loss_panel, 698, 0)
+        return_button = self.ui_factory.from_color(sdl2.ext.BUTTON, MENU, (80, 40))
+        return_button = self.border_sprite(return_button, DULL_AQUA, 2)
+        return_button = self.render_bordered_text(self.font, "Return", WHITE, BLACK, return_button, 16, 9, 1)
         return_button.click += self.return_to_char_select
-        self.add_bordered_sprite(self.game_end_region, return_button, WHITE,
-                                 550, 400)
+        save_button = self.ui_factory.from_color(sdl2.ext.BUTTON, MENU, (80, 40))
+        save_button = self.border_sprite(save_button, DULL_AQUA, 2)
+        save_button = self.render_bordered_text(self.font, "Save", WHITE, BLACK, save_button, 22, 1, 1)
+        save_button = self.render_bordered_text(self.font, "Replay", WHITE, BLACK, save_button, 14, 16, 1)
+        # save_button.click += self.save_replay
+        missions_button = self.ui_factory.from_color(sdl2.ext.BUTTON, MENU, (80, 40))
+        missions_button = self.border_sprite(missions_button, DULL_AQUA, 2)
+        missions_button = self.render_bordered_text(self.font, "Missions", WHITE, BLACK, missions_button, 11, 9, 1)
+        # missions_button.click += self.check_mission_progress
+        
+        
+        self.game_end_region.add_sprite(return_button, 710, 10)
+        self.game_end_region.add_sprite(save_button, 710, 60)
+        self.game_end_region.add_sprite(missions_button, 710, 110)
+        
         self.scene_manager.connection.send_match_ending(won=False)
         self.scene_manager.connection.send_player_update(self.player)
         self.scene_manager.connection.send_match_statistics([
@@ -2271,15 +2294,31 @@ class BattleScene(engine.Scene):
                     i].source.mission5progress
         
         self.window_up = True
-        win_panel = self.sprite_factory.from_surface(
-            self.get_scaled_surface(self.scene_manager.surfaces["won"]))
-        self.add_bordered_sprite(self.game_end_region, win_panel, BLACK, 0, 0)
-        return_button = self.create_text_display(self.font,
-                                                 "Return To Character Select",
-                                                 WHITE, BLACK, 14, 5, 220)
+        win_image = self.border_sprite(self.sprite_factory.from_surface(
+            self.get_scaled_surface(self.scene_manager.surfaces["won"])), DULL_AQUA, 2)
+        win_image = self.render_bordered_text(self.message_font, "Victory!", WHITE, AQUA, win_image, 525, 20, 1)
+        
+        
+        win_panel = self.sprite_factory.from_color(MENU_TRANSPARENT, (102, 480))
+        win_panel = self.border_sprite(win_panel, DULL_AQUA, 2)
+        self.game_end_region.add_sprite(win_image, 0, 0)
+        self.game_end_region.add_sprite(win_panel, 698, 0)
+        return_button = self.ui_factory.from_color(sdl2.ext.BUTTON, MENU, (80, 40))
+        return_button = self.border_sprite(return_button, DULL_AQUA, 2)
+        return_button = self.render_bordered_text(self.font, "Return", WHITE, BLACK, return_button, 16, 9, 1)
         return_button.click += self.return_to_char_select
-        self.add_bordered_sprite(self.game_end_region, return_button, WHITE,
-                                 20, 25)
+        save_button = self.ui_factory.from_color(sdl2.ext.BUTTON, MENU, (80, 40))
+        save_button = self.border_sprite(save_button, DULL_AQUA, 2)
+        save_button = self.render_bordered_text(self.font, "Save", WHITE, BLACK, save_button, 22, 1, 1)
+        save_button = self.render_bordered_text(self.font, "Replay", WHITE, BLACK, save_button, 14, 16, 1)
+        # save_button.click += self.save_replay
+        missions_button = self.ui_factory.from_color(sdl2.ext.BUTTON, MENU, (80, 40))
+        missions_button = self.border_sprite(missions_button, DULL_AQUA, 2)
+        missions_button = self.render_bordered_text(self.font, "Missions", WHITE, BLACK, missions_button, 11, 9, 1)
+        # missions_button.click += self.check_mission_progress
+        self.game_end_region.add_sprite(return_button, 710, 10)
+        self.game_end_region.add_sprite(save_button, 710, 60)
+        self.game_end_region.add_sprite(missions_button, 710, 110)
         
         self.scene_manager.connection.send_match_ending(won=True)
         self.scene_manager.connection.send_player_update(self.player)

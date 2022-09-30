@@ -1,4 +1,5 @@
 from pathlib import Path
+from re import search
 from typing import Union, TYPE_CHECKING
 import threading
 import gc
@@ -30,6 +31,7 @@ def play_sound(file_name: str):
     #     playsound(str(path), False)
     pass
 FONTSIZE = 16
+SEARCH_FONTSIZE = 24
 
 RESOURCES = Path(__file__).parent.parent.parent / "resources"
 
@@ -76,7 +78,9 @@ class CharacterSelectScene(engine.Scene):
         self.searching = False
         self.dragging_picture = False
         self.player_name = ""
+        self.queue_type = ""
         self.font = init_font(FONTSIZE)
+        self.panel_font = init_font(SEARCH_FONTSIZE)
         self.player_profile_lock = threading.Lock()
         self.selected_team = []
         self.clicked_search = False
@@ -112,7 +116,7 @@ class CharacterSelectScene(engine.Scene):
         self.player_profile_region = self.character_scroll_selection_region.subregion(515, 20, 0, 0)
         self.team_region = self.character_scroll_selection_region.subregion(515, 150, 245, 75)
         self.mission_region = self.region.subregion(210, 158, 0, 0)
-        self.search_panel_region = self.region.subregion(144, 158, 0, 0)
+        self.search_panel_region = self.region.subregion(250, 300, 300, 200)
         #endregion
         #region sprite initialization
         self.banner_border = self.sprite_factory.from_color(BLACK, (179, 254))
@@ -311,10 +315,18 @@ class CharacterSelectScene(engine.Scene):
     def render_search_panel(self):
         self.search_panel_region.clear()
         if self.clicked_search:
-            self.add_sprite_with_border(self.search_panel_region, self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces["search"])), self.search_panel_border, 0, 0)
-            cancel_search_button = self.create_text_display(self.font, "Cancel", WHITE, BLACK, 5, 5, 80)
+            search_panel = self.sprite_factory.from_color(MENU, self.search_panel_region.size())
+            search_panel = self.border_sprite(search_panel, DULL_AQUA, 2)
+            search_panel = self.render_bordered_text(self.panel_font, "Searching for opponent...", WHITE, BLACK, search_panel, 20, 35, 1)
+            search_panel = self.render_bordered_text(self.panel_font, "Queue type: " + self.queue_type, WHITE, BLACK, search_panel, 17, 80, 1)
+            
+            self.search_panel_region.add_sprite(search_panel, 0, 0)
+            
+            cancel_search_button = self.ui_factory.from_color(sdl2.ext.BUTTON, MENU_TRANSPARENT, (60, 40))
+            cancel_search_button = self.border_sprite(cancel_search_button, DULL_AQUA, 2)
+            cancel_search_button = self.render_bordered_text(self.font, "Cancel", WHITE, BLACK, cancel_search_button, 7, 8, 1)
             cancel_search_button.click += self.cancel_search_click
-            self.search_panel_region.add_sprite(cancel_search_button, 5, 5)
+            self.search_panel_region.add_sprite(cancel_search_button, 120, 140)
             
     def render_player_profile(self):
         self.player_profile_region.clear()
@@ -755,7 +767,9 @@ class CharacterSelectScene(engine.Scene):
         play_sound(self.scene_manager.sounds["undo"])
         self.window_up = False
         self.clicked_search = False
+        self.queue_type = ""
         self.scene_manager.connection.send_search_cancellation()
+        self.triggered_event = True
         self.render_search_panel()
 
     def avatar_upload_click(self, button, sender):
@@ -878,10 +892,12 @@ class CharacterSelectScene(engine.Scene):
     
     def quick_match_start_click(self, _button, _sender):
         if not self.clicked_search and self.scene_manager.connected and not self.window_up:
+            self.queue_type = "Quick Match"
             self.start_quick_match_searching()
 
     def ranked_match_start_click(self, _button, _sender):
         if not self.clicked_search and self.scene_manager.connected and not self.window_up:
+            self.queue_type = "Ranked Match"
             self.start_ranked_searching()
 
     #endregion

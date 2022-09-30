@@ -2973,12 +2973,13 @@ class CharacterManager(collections.abc.Container):
                 (vertical_offset * idx) + (idx * 25))
 
     def target_sprite_click(self, button, _sender):
-        play_sound(self.scene.scene_manager.sounds["undo"])
-        self.scene.remove_targets(self.received_ability[button.idx])
+        if not self.scene.window_up:
+            play_sound(self.scene.scene_manager.sounds["undo"])
+            self.scene.remove_targets(self.received_ability[button.idx])
         
     
     def used_slot_click(self, button, _sender):
-        if self.used_slot.ability != None:
+        if self.used_slot.ability != None and not self.scene.window_up:
             self.scene.remove_targets(self.used_slot.ability)
             self.set_used_slot_to_none()
 
@@ -2986,23 +2987,24 @@ class CharacterManager(collections.abc.Container):
         self.used_slot.ability = None
 
     def profile_click(self, _button, _sender):
-        if self.scene.selected_ability is not None and self.targeted:
+        if not self.scene.window_up:
+            if self.scene.selected_ability is not None and self.targeted:
+                
+                play_sound(self.scene.scene_manager.sounds["select"])
+                self.scene.target_clicked = True
+                self.scene.expend_energy(self.scene.selected_ability)
+                self.scene.apply_targeting(self)
+                
+                self.scene.return_targeting_to_default()
+            else:
+                self.scene.enemy_detail_ability = None
+                self.scene.enemy_detail_character = self.source
             
-            play_sound(self.scene.scene_manager.sounds["select"])
-            self.scene.target_clicked = True
-            self.scene.expend_energy(self.scene.selected_ability)
-            self.scene.apply_targeting(self)
             
-            self.scene.return_targeting_to_default()
-        else:
-            self.scene.enemy_detail_ability = None
-            self.scene.enemy_detail_character = self.source
-        
-        
-        self.scene.full_update()
+            self.scene.full_update()
 
     def detail_click(self, _button, _sender):
-        if not self.scene.target_clicked:
+        if not self.scene.target_clicked and not self.scene.window_up:
             play_sound(self.scene.scene_manager.sounds["select"])
             self.scene.enemy_detail_character = self.source
             self.scene.enemy_detail_ability = None

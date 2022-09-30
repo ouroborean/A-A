@@ -15,7 +15,7 @@ import hashlib
 if typing.TYPE_CHECKING:
     from animearena.scene_manager import SceneManager
 
-VERSION = "0.9.92"
+VERSION = "0.9.95"
 
 SALT = b'gawr gura for president'
 
