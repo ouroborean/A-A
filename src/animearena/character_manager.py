@@ -1525,7 +1525,7 @@ class CharacterManager(collections.abc.Container):
         self.source = self.scene.return_character(target_name)
         try:
             for i, sprite in enumerate(self.main_ability_sprites):
-                sprite.surface = self.scene.get_scaled_surface(self.scene.scene_manager.surfaces[self.source.main_abilities[i].db_name])
+                sprite.surface = self.scene.get_scaled_surface(self.scene.scene_manager.surfaces[self.source.main_abilities[i].db_name], 75, 75)
                 sprite.ability = self.source.main_abilities[i]
                 sprite.null_pane.ability = self.source.main_abilities[i]
                 sprite.null_pane.in_battle_desc = self.scene.create_text_display(self.scene.font, sprite.null_pane.ability.name + ": " + sprite.null_pane.ability.desc, BLACK, WHITE, 5, 0, 520, 110)
@@ -1533,7 +1533,7 @@ class CharacterManager(collections.abc.Container):
             
             self.alt_ability_sprites.clear()
             for ability in self.source.alt_abilities:
-                self.alt_ability_sprites.append(self.scene.ui_factory.from_surface(sdl2.ext.BUTTON, self.scene.get_scaled_surface(self.scene.scene_manager.surfaces[ability.db_name]), free=True))
+                self.alt_ability_sprites.append(self.scene.ui_factory.from_surface(sdl2.ext.BUTTON, self.scene.get_scaled_surface(self.scene.scene_manager.surfaces[ability.db_name], 75, 75), free=True))
             for j, sprite in enumerate(self.alt_ability_sprites):
                 sprite.selected_pane = self.scene.ui_factory.from_surface(sdl2.ext.BUTTON, self.scene.get_scaled_surface(self.scene.scene_manager.surfaces["selected"]), free=True)
                 sprite.ability = self.source.alt_abilities[j]

@@ -282,7 +282,9 @@ class CharacterSelectScene(engine.Scene):
     def render_mission_panel(self):
         self.mission_region.clear()
         self.window_up = True
-        self.add_bordered_sprite(self.mission_region, self.sprite_factory.from_color(BLACK, (512,384)), WHITE, 0, 0)
+        mission_panel = self.sprite_factory.from_color(MENU, (512, 384))
+        mission_panel = self.border_sprite(mission_panel, DULL_AQUA, 2)
+        
         MISSION_MAX_WIDTH = 492
         MISSION_Y_BUFFER = 10
         MISSION_MAX_HEIGHT = 72
@@ -290,8 +292,9 @@ class CharacterSelectScene(engine.Scene):
         
         for i in range(5):
             current = min(self.player.missions[self.display_character.name][i], mission_db[self.display_character.name][i].max)
-            text_sprite = self.create_text_display(self.font, f"{mission_db[self.display_character.name][i].description} ({current}/{mission_db[self.display_character.name][i].max})", WHITE, BLACK, 0, 0, MISSION_MAX_WIDTH)
-            self.mission_region.add_sprite(text_sprite, MISSION_X_BUFFER, (MISSION_MAX_HEIGHT * i) + MISSION_Y_BUFFER)
+            mission_panel = self.render_bordered_text(self. font, f"{mission_db[self.display_character.name][i].description} ({current}/{mission_db[self.display_character.name][i].max})", WHITE, BLACK, mission_panel, MISSION_X_BUFFER, (MISSION_MAX_HEIGHT * i) + MISSION_Y_BUFFER)
+            
+        self.mission_region.add_sprite(mission_panel, 0, 0)
 
     def render_filter_options(self):
         self.filter_region.clear()
@@ -331,9 +334,23 @@ class CharacterSelectScene(engine.Scene):
     def render_player_profile(self):
         self.player_profile_region.clear()
 
-        self.player_profile_region.add_sprite(self.player_region_panel, -4, -4)
+        player_region_panel = self.sprite_factory.from_color(MENU_TRANSPARENT, (245, 123))
+        player_region_panel = self.border_sprite(player_region_panel, AQUA, 2)
         
-
+        self.render_bordered_text(self.font, self.player.name, RED, BLACK, player_region_panel, 84, 2, 1)
+        self.render_bordered_text(self.font, self.player.title, WHITE, BLACK, player_region_panel, 84, 21, 1)
+        self.render_bordered_text(self.font, "Wins: ", WHITE, BLACK, player_region_panel, 84, 51, 1)
+        self.render_bordered_text(self.font, "Losses: ", WHITE, BLACK, player_region_panel, 84, 67, 1)
+        self.render_bordered_text(self.font, "Medals: ", WHITE, BLACK, player_region_panel, 84, 83, 1)
+        self.render_bordered_text(self.font, "Clan: ", WHITE, BLACK, player_region_panel, 84, 99, 1)
+        
+        self.render_bordered_text(self.font, str(self.player.wins), WHITE, BLACK, player_region_panel, 149, 51, 1)
+        self.render_bordered_text(self.font, str(self.player.losses), WHITE, BLACK, player_region_panel, 149, 67, 1)
+        self.render_bordered_text(self.font, str(self.player.medals), WHITE, BLACK, player_region_panel, 149, 83, 1)
+        self.render_bordered_text(self.font, "None", WHITE, BLACK, player_region_panel, 149, 99, 1)
+    
+        self.player_profile_region.add_sprite(player_region_panel, -4, -4)
+        
         self.player_profile_lock.acquire()
         if self.player_profile == None:
             self.player_profile = self.scene_manager.surfaces["default_prof"]
@@ -970,21 +987,6 @@ class CharacterSelectScene(engine.Scene):
             self.player_profile = Image.frombytes(mode = new_image["mode"], size = new_image["size"], data=new_image["pixels"])
         
         self.player = Player(self.player_name, self.player_wins, self.player_losses, self.player_profile, mission_data, self.player_medals, missions_complete=mission_complete)
-        
-        self.render_bordered_text(self.font, self.player.name, RED, BLACK, self.player_region_panel, 84, 2, 1)
-        self.render_bordered_text(self.font, self.player.title, WHITE, BLACK, self.player_region_panel, 84, 21, 1)
-        self.render_bordered_text(self.font, "Wins: ", WHITE, BLACK, self.player_region_panel, 84, 51, 1)
-        self.render_bordered_text(self.font, "Losses: ", WHITE, BLACK, self.player_region_panel, 84, 67, 1)
-        self.render_bordered_text(self.font, "Medals: ", WHITE, BLACK, self.player_region_panel, 84, 83, 1)
-        self.render_bordered_text(self.font, "Clan: ", WHITE, BLACK, self.player_region_panel, 84, 99, 1)
-        
-        self.render_bordered_text(self.font, str(self.player.wins), WHITE, BLACK, self.player_region_panel, 149, 51, 1)
-        self.render_bordered_text(self.font, str(self.player.losses), WHITE, BLACK, self.player_region_panel, 149, 67, 1)
-        self.render_bordered_text(self.font, str(self.player.medals), WHITE, BLACK, self.player_region_panel, 149, 83, 1)
-        self.render_bordered_text(self.font, "None", WHITE, BLACK, self.player_region_panel, 149, 99, 1)
-        
-        
-        
         
         self.full_render()
 
