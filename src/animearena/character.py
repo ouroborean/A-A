@@ -57,7 +57,7 @@ class Character:
     
     
 
-    def __init__(self, name:str, desc:str = None):
+    def __init__(self, name:str, desc:str = None, hidden=False):
         self.name = name
         if desc:
             self.desc = desc
@@ -66,6 +66,7 @@ class Character:
         self.energy_contribution = 1
         self.picked = False
         self.banned = False
+        self.hidden = hidden
         self.hp = 200
         self.full_dr = 0
         self.invulnerable = False
@@ -91,6 +92,7 @@ class Character:
         self.mission3complete = False
         self.mission4complete = False
         self.mission5complete = False
+        self.dying = False
         self.main_abilities = [Ability(f"{name}{i + 1}") for i in range(4)]
         self.current_abilities = self.main_abilities
         self.alt_abilities = []
@@ -112,6 +114,12 @@ class Character:
             ability.cost = ability._base_cost
             ability.cooldown = ability._base_cooldown
             ability.target_type = ability._base_target_type
+
+    def kill(self):
+        if not self.dying:
+            self.dying = True
+        else:
+            self.dead = True
 
     def clear_effects(self, final=False):
         if not final:
@@ -297,6 +305,7 @@ def make_character_db():
                 " loyally with a wide variety of versatile functions."),
                 "mirai": Character("mirai", "Kuriyama Mirai, an isolated Spirit World Warrior. Mirai is the last of her clan, who were feared and reviled due to their ability to manipulate their cursed blood to use in battle."),
                 "touka": Character("touka", "Toudou Touka, Student Council President of Hagun Academy and its strongest Blazer. While wielding her Device, Narukami, Touka is a deadly swordswoman, utilizing lightning and electromagnetism in conjunction with her unrivaled blade."),
-                "killua": Character("killua", "Killua Zoldyck, second son of the infamous Zoldyck family. An assassin by birth, Killua's childhood was an endless procession of torturous punishment and even harsher training. After tiring of the life of a killer, Killua meets and joins Gon on his quest to become a licensed Hunter, utilizing his quick wit and his Nen lightning powers to dismantle his foes.")
-                
+                "killua": Character("killua", "Killua Zoldyck, second son of the infamous Zoldyck family. An assassin by birth, Killua's childhood was an endless procession of torturous punishment and even harsher training. After tiring of the life of a killer, Killua meets and joins Gon on his quest to become a licensed Hunter, utilizing his quick wit and his Nen lightning powers to dismantle his foes."),
+                "rikka": Character("rikka", "Takanashi Rikka, wielder of the Tyrant's Eye. The strongest practicioner of the dark arts from this or any age, the Jaou Shingan and its bearer are invincible, immortal, and bring forth a power none can match to crush their enemies.", hidden=True),
+                "anya": Character("anya", "Anya Forger, adopted daughter of the spy Loid Forger and the assassin Yor Forger. Originally adopted as a tactical ploy to get closer to her father's target, Anya's telepathy and love for excitement often gets her into trouble, interfering with her father's mission and drawing the concerned protection of her entire family.")
                 }

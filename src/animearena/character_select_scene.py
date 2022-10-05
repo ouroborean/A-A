@@ -67,6 +67,7 @@ class CharacterSelectScene(engine.Scene):
     char_select_pressed: bool
     team_select_pressed: bool
     removing_from_team: bool
+    code: int
 
     def __init__(self, scene_manager, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -75,6 +76,7 @@ class CharacterSelectScene(engine.Scene):
         self.player_profile = self.scene_manager.surfaces["default_prof"]
         self.page_on_display = 1
         self.display_character = None
+        self.code = 0
         self.searching = False
         self.dragging_picture = False
         self.player_name = ""
@@ -154,17 +156,18 @@ class CharacterSelectScene(engine.Scene):
         self.ranked_match_button.click += self.ranked_match_start_click
         self.character_sprites = {}
         for k, v in get_character_db().items():
-            image = self.border_image(self.scene_manager.surfaces[k + "allyprof"].resize((75, 75)), 1)
-            sprite = self.ui_factory.from_surface(
-                sdl2.ext.BUTTON,
-                self.get_scaled_surface(image, 75, 75), free=True)
-            sprite.click += self.character_click
-            sprite.pressed += self.char_select_press
-            sprite.filter_cover = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["locked"], 75, 75))
-            sprite.filter_cover.click += self.character_click
-            sprite.filter_cover.character = v
-            sprite.character = v
-            self.character_sprites[k] = sprite
+            if not v.hidden:
+                image = self.border_image(self.scene_manager.surfaces[k + "allyprof"].resize((75, 75)), 1)
+                sprite = self.ui_factory.from_surface(
+                    sdl2.ext.BUTTON,
+                    self.get_scaled_surface(image, 75, 75), free=True)
+                sprite.click += self.character_click
+                sprite.pressed += self.char_select_press
+                sprite.filter_cover = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["locked"], 75, 75))
+                sprite.filter_cover.click += self.character_click
+                sprite.filter_cover.character = v
+                sprite.character = v
+                self.character_sprites[k] = sprite
         
         self.character_info_prof = self.ui_factory.from_color(
             sdl2.ext.BUTTON,
@@ -267,9 +270,6 @@ class CharacterSelectScene(engine.Scene):
         self.render_ranked_match_button()
         self.render_character_scroll_selection()
         self.render_search_panel()
-
-    def memory_test(self, _button, _sender):
-        self.full_render()
     
     def render_ranked_match_button(self):
         self.ranked_region.clear()
@@ -292,7 +292,7 @@ class CharacterSelectScene(engine.Scene):
         
         for i in range(5):
             current = min(self.player.missions[self.display_character.name][i], mission_db[self.display_character.name][i].max)
-            mission_panel = self.render_bordered_text(self. font, f"{mission_db[self.display_character.name][i].description} ({current}/{mission_db[self.display_character.name][i].max})", WHITE, BLACK, mission_panel, MISSION_X_BUFFER, (MISSION_MAX_HEIGHT * i) + MISSION_Y_BUFFER)
+            mission_panel = self.render_bordered_text(self. font, f"{mission_db[self.display_character.name][i].description} ({current}/{mission_db[self.display_character.name][i].max})", WHITE, BLACK, mission_panel, MISSION_X_BUFFER, (MISSION_MAX_HEIGHT * i) + MISSION_Y_BUFFER, 1)
             
         self.mission_region.add_sprite(mission_panel, 0, 0)
 
@@ -474,7 +474,7 @@ class CharacterSelectScene(engine.Scene):
                             sdl2.SDL_Rect(7 + (total_energy * 21), 125))
                         total_energy += 1
             else:
-                detail_panel = self.render_bordered_text(self.font, "No Cost", WHITE, BLACK, detail_panel, 7, 121)
+                detail_panel = self.render_bordered_text(self.font, "No Cost", WHITE, BLACK, detail_panel, 7, 121, 1)
         else:
             text = self.detail_target.desc
 
@@ -534,17 +534,18 @@ class CharacterSelectScene(engine.Scene):
                 self.scroll_bar_y = 0
         self.character_sprites.clear()
         for k, v in get_character_db().items():
-            image = self.border_image(self.scene_manager.surfaces[k + "allyprof"].resize((75, 75)), 1)
-            sprite = self.ui_factory.from_surface(
-                sdl2.ext.BUTTON,
-                self.get_scaled_surface(self.border_image(image, 1), 75, 75), free=True)
-            sprite.click += self.character_click
-            sprite.pressed += self.char_select_press
-            sprite.filter_cover = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["locked"], 75, 75))
-            sprite.filter_cover.character = v
-            sprite.filter_cover.click += self.character_click
-            sprite.character = v
-            self.character_sprites[k] = sprite
+            if not v.hidden:
+                image = self.border_image(self.scene_manager.surfaces[k + "allyprof"].resize((75, 75)), 1)
+                sprite = self.ui_factory.from_surface(
+                    sdl2.ext.BUTTON,
+                    self.get_scaled_surface(self.border_image(image, 1), 75, 75), free=True)
+                sprite.click += self.character_click
+                sprite.pressed += self.char_select_press
+                sprite.filter_cover = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["locked"], 75, 75))
+                sprite.filter_cover.character = v
+                sprite.filter_cover.click += self.character_click
+                sprite.character = v
+                self.character_sprites[k] = sprite
         
         self.scroll_position = self.scroll_bar_y / (280 - self.scroll_button.size[1])
         
@@ -558,7 +559,7 @@ class CharacterSelectScene(engine.Scene):
         CHARACTER_COUNT = len(characters)
         ROW_COUNT = math.ceil(CHARACTER_COUNT / CHARS_PER_ROW)
         VIEWPORT_HEIGHT = self.character_scroll_selection_region.size()[1]
-        TOTAL_HEIGHT = (ROW_COUNT * BUTTON_SPACE) - VIEWPORT_HEIGHT - 5
+        TOTAL_HEIGHT = (ROW_COUNT * BUTTON_SPACE) - VIEWPORT_HEIGHT + 5
         if CHARACTER_COUNT <= 18:
             VERT_OFFSET = 0
         else:
@@ -568,7 +569,7 @@ class CharacterSelectScene(engine.Scene):
             column = i % CHARS_PER_ROW
             ROW_TOP = PADDING + (row * BUTTON_SPACE) - VERT_OFFSET
             BASE_ROW_TOP = PADDING + (row * BUTTON_SPACE)
-            ROW_BOTTOM = BASE_ROW_TOP + BUTTON_SPACE
+            ROW_BOTTOM = BASE_ROW_TOP + BUTTON_HEIGHT
             if (row + 1) * BUTTON_SPACE > VERT_OFFSET and ROW_TOP < self.character_scroll_selection_region.size()[1]:
                 image = self.border_image(self.scene_manager.surfaces[character.name + "allyprof"].resize((75, 75)), 1)
                 if ROW_TOP < 0:
@@ -584,7 +585,6 @@ class CharacterSelectScene(engine.Scene):
                     self.character_sprites[character.name] = sprite
                 elif ROW_BOTTOM - VERT_OFFSET > VIEWPORT_HEIGHT:
                     image = image.crop( (0, 0, 75, min(VIEWPORT_HEIGHT - ROW_TOP, 75) ))
-                    logging.debug(image.size)
                     sprite = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(image), free=True)
                     sprite.filter_cover = self.ui_factory.from_surface(sdl2.ext.BUTTON, self.get_scaled_surface(self.scene_manager.surfaces["locked"], 75, image.height))
                     sprite.click += self.character_click
@@ -630,7 +630,7 @@ class CharacterSelectScene(engine.Scene):
         CHARACTER_COUNT = len(characters)
         ROW_COUNT = math.ceil(CHARACTER_COUNT / CHARS_PER_ROW)
         VIEWPORT_HEIGHT = self.character_scroll_selection_region.size()[1]
-        TOTAL_HEIGHT = (ROW_COUNT * BUTTON_SPACE) - VIEWPORT_HEIGHT -5
+        TOTAL_HEIGHT = (ROW_COUNT * BUTTON_SPACE) - VIEWPORT_HEIGHT + 5
         if CHARACTER_COUNT <= 18:
             VERT_OFFSET = 0
         else:
@@ -723,13 +723,45 @@ class CharacterSelectScene(engine.Scene):
         self.selected_team.append(character)
         self.team_display[len(self.selected_team) - 1].character = character
 
+    def check_code(self, character, adding):
+        if adding:
+            if self.code == 0 and character == "toga":
+                self.change_code(1)
+                return
+            if self.code == 1 and character == "kuroko":
+                self.change_code(2)
+                return
+            if self.code == 3 and character == "jack":
+                self.change_code(4)
+                return
+            if self.code == 6 and character == "nemu":
+                self.change_code(7)
+                return
+        else:
+            if self.code == 2 and character == "toga":
+                self.change_code(3)
+                return
+            if self.code == 4 and character == "jack":
+                self.change_code(5)
+                return
+            if self.code == 5 and character == "kuroko":
+                self.change_code(6)
+                return
+            if self.code == 7 and character == "nemu":
+                self.add_character(get_character_db()["rikka"].name)
+        self.change_code(0)
+
+    def change_code(self, code):
+        self.code = code
+        logging.debug("Changed code to %d", self.code)
+
     def resolve_drag_release(self):
         
         selected = self.is_dropping_to_selected()
         
         if selected and len(self.selected_team) < 3:
             self.add_character(self.dragging_character)
-        
+            self.check_code(self.dragging_character, True)
         self.drag_offset = (0, 0)
         self.dragging_picture = False
         self.dragging_character = ""
@@ -896,6 +928,7 @@ class CharacterSelectScene(engine.Scene):
                 if character.name == self.dragging_character:
                     get_character_db()[character.name].selected = False
                     self.selected_team.remove(character)
+                    self.check_code(character.name, False)
                     
         self.render_team_display()
         self.render_character_scroll_selection()
@@ -939,9 +972,9 @@ class CharacterSelectScene(engine.Scene):
     
     def get_filtered_characters_list(self) -> list[Character]:
         if not self.unlock_filtering:
-            filtered_characters = list(get_character_db().values())
+            filtered_characters = [character for character in get_character_db().values() if not character.hidden]
         else:
-            filtered_characters = [char for char in get_character_db().values() if self.player.missions[char.name][5]]
+            filtered_characters = [char for char in get_character_db().values() if self.player.missions[char.name][5] and not char.hidden]
             
 
         if not self.exclusive_filtering:

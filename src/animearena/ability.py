@@ -1063,6 +1063,19 @@ def exe_rapid_deflection(user: "CharacterManager", playerTeam: list["CharacterMa
     user.add_effect(Effect(Ability("akame4"), EffectType.ALL_INVULN, user, 2, lambda eff: "Akame is invulnerable."))
     user.check_on_use()
 #endregion
+#region Anya Execution
+def exe_yor_the_mother(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_loid_the_father(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_smirk(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_bond_the_guardian(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+#endregion
 #region Astolfo Execution
 def exe_casseur(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
     if not user.check_countered(playerTeam, enemyTeam):
@@ -3862,6 +3875,25 @@ def exe_ripple_block(user: "CharacterManager", playerTeam: list["CharacterManage
     user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Ripple is invulnerable."))
     user.check_on_use()
 #endregion
+#region Rikka Execution
+def exe_banishment(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_judgement_lucifer(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_nergal_blast(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_impervious_shielding(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+def exe_dark_matter_blaze(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
+    pass
+
+
+
+#endregion
 #region Rukia Execution
 
 def dance_step(user:"CharacterManager", step: int):
@@ -4192,6 +4224,7 @@ def exe_decaying_touch(user: "CharacterManager", playerTeam: list["CharacterMana
             if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                 if target.has_effect(EffectType.CONT_UNIQUE, "Decaying Touch"):
                     target.get_effect(EffectType.CONT_UNIQUE, "Decaying Touch").alter_mag(1)
+                    target.get_effect(EffectType.CONT_UNIQUE, "Decaying Touch").duration = 280000
                 else:
                     target.add_effect(Effect(user.used_ability, EffectType.CONT_UNIQUE, user, 280000, lambda eff: f"This character will take {10 * (2 ** (eff.mag - 1))} affliction damage.", mag = 1, print_mag=True))
                     user.deal_active_damage(10, target, DamageType.AFFLICTION)
@@ -4214,6 +4247,7 @@ def exe_decaying_breakthrough(user: "CharacterManager", playerTeam: list["Charac
             if target.final_can_effect(user.check_bypass_effects()) and not target.deflecting():
                 if target.has_effect(EffectType.CONT_UNIQUE, "Decaying Touch"):
                     target.get_effect(EffectType.CONT_UNIQUE, "Decaying Touch").alter_mag(1)
+                    target.get_effect(EffectType.CONT_UNIQUE, "Decaying Touch").duration = 280000
                 else:
                     target.add_effect(Effect(Ability("shigaraki1"), EffectType.CONT_UNIQUE, user, 280000, lambda eff: f"This character will take {10 * (2 ** (eff.mag - 1))} affliction damage.", mag = 1, print_mag=True))
                     user.deal_active_damage(10, target, DamageType.AFFLICTION)
@@ -5086,6 +5120,10 @@ ability_info_db = {
         "Naruto deals 40 damage to all enemies and stuns them for one turn.", [0, 1, 1, 0, 1, 0], Target.MULTI_ENEMY,
         default_target("HOSTILE"), exe_rasenshuriken, [AbilityType.INSTANT, AbilityType.ENERGY, AbilityType.STUN]
     ],
+    "anya1": ["Yor, the Mother", "While this move is not active, Anya deals 15 damage to any enemy that uses a new harmful skill on her and increases the cost of their skills by one random energy for one turn. She can activate it to permanently deal 20 damage per turn to target enemy. This effect will end if Anya suffers new damage and cannot be used while active.", [0, 0, 0, 0, 2, 2], Target.SINGLE, default_target("HOSTILE", lockout=(EffectType.UNIQUE, "Yor, the Mother")), exe_yor_the_mother, [AbilityType.PHYSICAL, AbilityType.INSTANT]],
+    "anya2": ["Loid, the Father", "While this move is not active, Anya deals 15 damage to any enemy that uses a new harmful skill on her and increases the damage they receive from non-affliction abilities by 5 for one turn. She can activate it to permanently deal 10 damage per turn to the enemy team. This effect will end if Anya suffers new damage and cannot be used while active.", [0, 0, 0, 0, 3, 2], Target.MULTI_ENEMY, default_target("HOSTILE", lockout=(EffectType.UNIQUE, "Loid, the Father")), exe_loid_the_father, [AbilityType.PHYSICAL, AbilityType.INSTANT]],
+    "anya3": ["Smirk", "While this move is not active, Anya has 10 points of damage reduction. She can activate it to permanently decrease target enemy's non-affliction damage by 15 and drain one energy from them per turn. This skill will end Anya suffers new damage and cannot be used while active.", [0, 0, 0, 0, 2, 4], Target.SINGLE, default_target("HOSTILE", lockout=(EffectType.UNIQUE, "Smirk")), exe_smirk, [AbilityType.MENTAL, AbilityType.INSTANT]],
+    "anya4": ["Bond, the Guardian", "Anya becomes invulnerable for one turn.", [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_bond_the_guardian, [AbilityType.INSTANT, AbilityType.STRATEGIC]],
     "accelerator1": ["Vector Scatter", "Accelerator deals 25 damage to target enemy and stuns them for one turn.", [0, 0, 1, 0, 0, 1], Target.SINGLE, default_target("HOSTILE"), exe_vector_scatter, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.STUN]],
     "accelerator2": ["Plasma Bomb", "Accelerator deals 15 damage to all enemies for 3 turns. During this time, only stun effects can be applied to Accelerator.", [0, 0, 2, 0, 1, 5], Target.MULTI_ENEMY, default_target("HOSTILE"), exe_plasma_bomb, [AbilityType.ACTION, AbilityType.ENERGY]],
     "accelerator3": ["Vector Reflection", "For one turn, Accelerator will ignore all harmful effects. Any enemy that targets him with a new harmful ability will be targeted by Vector Scatter. This ability is invisible.", [0, 0, 1, 0, 0, 2], Target.SINGLE, default_target("SELF"), exe_vector_reflection, [AbilityType.INSTANT, AbilityType.STRATEGIC, AbilityType.UNIQUE]],
@@ -6437,6 +6475,12 @@ ability_info_db = {
         "",
         [0, 0, 0, 0, 0, 0], Target.SINGLE, [AbilityType.INSTANT, AbilityType.ENERGY]
     ],
+    "rikka1": ["Banishment, This World!", "Rikka calls on the true power of the Tyrant's Eye, awakening her dormant power for the rest of the game and replacing this skill with Dark Matter Blaze.", [0, 0, 0, 0, 0, 0], Target.SINGLE, default_target("SELF", lockout="Banishment, This World!"), exe_banishment, [AbilityType.STRATEGIC,AbilityType.INSTANT]],
+    "rikka2": ["Judgement Lucifer", "Engulfs the enemy team in the flames of hell, tormenting their souls for two turns as it burns the flesh from their blackened bones.", [0, 0, 0, 0, 0, 2], Target.MULTI_ENEMY, default_target("HOSTILE", prep_req="Banishment, This World!"), exe_judgement_lucifer, [AbilityType.ENERGY, AbilityType.INSTANT]],
+    "rikka3": ["Nergal Blast", "Summons the force of the underworld, overwhelming the enemy team with lava and misery.", [0, 0, 0, 0, 0, 0], Target.MULTI_ENEMY, default_target("HOSTILE", prep_req="Banishment, This World!"), exe_nergal_blast, [AbilityType.ENERGY, AbilityType.INSTANT]],
+    "rikka4": ["Impervious Shielding", "The Tyrant's Eye is always invincible, but Rikka summons an impenetrable shield magic, just in case.", [0, 0, 0, 0, 0, 0], Target.SINGLE, default_target("SELF", prep_req="Banishment, This World!"), exe_impervious_shielding, [AbilityType.STRATEGIC, AbilityType.INSTANT]],
+    "rikkaalt1": ["Dark Matter Blaze", "Using the Konigin Der Nacht, Rikka tears a gleaming (but dark) hole in reality to annihilate one enemy.", [0, 0, 0, 0, 0, 0], Target.SINGLE, default_target("HOSTILE", prep_req="Banishment, This World!"), exe_dark_matter_blaze, [AbilityType.ENERGY, AbilityType.INSTANT]],
+    
     "ripple1": [
         "Perfect Accuracy",
         "Targets one enemy with Ripple's perfect accuracy. For the rest of the game, Shuriken Throw will target that enemy in addition to any other targets, ignoring invulnerability and dealing 10 additional damage.",

@@ -144,7 +144,7 @@ class Effect:
 
     @property
     def signature(self) -> tuple:
-        return (self.eff_type, self.name, self.user.char_id, self.duration, self.mag)
+        return (self.eff_type, self.name, self.user.char_id, self.user.id, self.duration)
 
     @property
     def family(self) -> tuple:
@@ -174,6 +174,3 @@ class Effect:
             self.waiting = False
             return False
         return True
-
-
-

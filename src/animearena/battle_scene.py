@@ -769,7 +769,7 @@ class BattleScene(engine.Scene):
             self.add_bordered_sprite(self.player_region, player_ava, BLACK, 5,
                                      5)
             transparent_box = self.sprite_factory.from_color(TRANSPARENT, (200, 50))
-            name_panel = self.render_bordered_text(self.stack_font, self.player.name, RED, BLACK, transparent_box, 0, 0, thickness=2)
+            name_panel = self.render_bordered_text(self.stack_font, self.player.name, RED, BLACK, transparent_box, 2, 0, thickness=2)
             self.player_region.add_sprite(name_panel, 110, 0)
             if not self.player.clan:
                 transparent_box = self.sprite_factory.from_color(TRANSPARENT, (200, 50))
@@ -788,9 +788,9 @@ class BattleScene(engine.Scene):
                 self.get_scaled_surface(self.enemy.avatar))
             self.add_bordered_sprite(self.enemy_region, enemy_ava, BLACK, 0,
                                      5)
-            name_width = int(len(self.enemy.name) * 11.5) + 5
-            transparent_box = self.sprite_factory.from_color(TRANSPARENT, (name_width, 50))
-            name_panel = self.render_bordered_text(self.stack_font, self.enemy.name, RED, BLACK, transparent_box, 0, 0, thickness=2)
+            name_width = get_string_width(STACK_FONTSIZE, self.enemy.name) + 7
+            transparent_box = self.sprite_factory.from_color(TRANSPARENT, (name_width + 4, 50))
+            name_panel = self.render_bordered_text(self.stack_font, self.enemy.name, RED, BLACK, transparent_box, 2, 0, thickness=2)
             self.enemy_region.add_sprite(name_panel, -name_width, 0)
             if not self.enemy.clan:
                 transparent_box = self.sprite_factory.from_color(TRANSPARENT, (200, 50))
@@ -1210,6 +1210,8 @@ class BattleScene(engine.Scene):
                             
                             used_ability_join_animation.await_animation(fired_animation)
                             used_ability_grow_animation.link_animation(fired_animation)
+                            if target.source.dying:
+                                target.kill()
                         hp_bar_splitter = self.get_hp_bar_animation_splitter()
                         used_ability_join_animation.link_animation(hp_bar_splitter)
                         used_ability_grow_animation.link_animation(used_ability_join_animation)
@@ -1239,11 +1241,14 @@ class BattleScene(engine.Scene):
                         shake_animation.link_animation(split_animation)
                         counter_ability_move_animation.link_animation(shake_animation)
                         self.add_animation(used_ability_grow_animation)
+                        if self.pteam[action].source.dying:
+                            self.pteam[action].kill()
                     else:
                         self.pump_execution_order()
                     
                     
             elif action > 2:
+                self.resolve_ticking_ability(self.cont_list[action - 3])
                 self.animation_locked = True
                 # create animation for ticking effect activation
                 join_animation = JoinAnimation(self)
@@ -1254,14 +1259,20 @@ class BattleScene(engine.Scene):
                 for i, tar in enumerate(self.cont_storage[eff.signature]):
                     if tar < 3:
                         target = self.pteam[tar]
+                        if target.dead:
+                            continue
                         position_modifier = 1
                     else:
                         target = self.eteam[tar - 3]
+                        if target.dead:
+                            continue
                         position_modifier = -1
                     effect_clusters = target.make_effect_clusters()
                     for j, cluster in enumerate(effect_clusters.items()):
                         cluster_family, effect_set = cluster
+                        logging.debug("Looking for match for effect %s", cluster_family)
                         if eff.family == cluster_family:
+                            logging.debug("found match!")
                             effect_index = j
                             break
                     image = self.scene_manager.surfaces[eff.source.db_name]
@@ -1273,13 +1284,13 @@ class BattleScene(engine.Scene):
                     fade_animation = FadeAnimation((effect_index * x_offset * position_modifier) - 12 + target.effect_region.x, target.effect_region.y - 12, image, .3, self, True, False)
                     join_animation.await_animation(fade_animation)
                     ticking_effect_grow_animation.link_animation(fade_animation)
+                    if target.source.dying:
+                        target.kill()
                 hp_bar_splitter = self.get_hp_bar_animation_splitter()
                 join_animation.link_animation(hp_bar_splitter)
                 self.add_animation(split_animation)
-                
                 #add animation to list of animations
                 
-                self.resolve_ticking_ability(self.cont_list[action - 3])
         else:
             self.animation_locked = False
             self.turn_end()
@@ -1307,10 +1318,13 @@ class BattleScene(engine.Scene):
                             
                             used_ability_join_animation.await_animation(fired_animation)
                             used_ability_grow_animation.link_animation(fired_animation)
+                            if target.source.dying:
+                                target.kill()
                         hp_bar_splitter = self.get_hp_bar_animation_splitter(False)
                         used_ability_join_animation.link_animation(hp_bar_splitter)
                         used_ability_grow_animation.link_animation(used_ability_join_animation)
                         self.add_animation(used_ability_grow_animation)
+                        
                     elif self.eteam[action].countered:
                         if self.eteam[action].counterer_team == "ally":
                             counter_image_x = 120
@@ -1336,6 +1350,8 @@ class BattleScene(engine.Scene):
                         shake_animation.link_animation(split_animation)
                         counter_ability_move_animation.link_animation(shake_animation)
                         self.add_animation(used_ability_grow_animation)
+                        if self.eteam[action].source.dying:
+                            self.eteam[action].kill()
                     else:
                         self.pump_enemy_execution_order()
                     
@@ -1344,25 +1360,32 @@ class BattleScene(engine.Scene):
                     self.eteam[action].current_targets.clear()
                     self.eteam[action].primary_target = None
             elif action > 2:
-                
+                self.resolve_ticking_ability(self.cont_list[action - 3])
                 self.animation_locked = True
                 # create animation for ticking effect activation
                 join_animation = JoinAnimation(self)
                 split_animation = SplitAnimation(self)
                 split_animation.add_split(join_animation)
                 eff = self.cont_list[action - 3]
+                
                 x_offset = 31
                 for i, tar in enumerate(self.cont_storage[eff.signature]):
                     if tar < 3:
                         target = self.pteam[tar]
+                        if target.source.dead:
+                            continue
                         position_modifier = 1
                     else:
                         target = self.eteam[tar - 3]
+                        if target.source.dead:
+                            continue
                         position_modifier = -1
                     effect_clusters = target.make_effect_clusters()
-                    for j, cluster in enumerate(effect_clusters.items()):
+                    for j, cluster in enumerate(effect_clusters.items()):                        
                         cluster_family, effect_set = cluster
+                        logging.debug("looking for an enemy match for %s", cluster_family)
                         if eff.family == cluster_family:
+                            logging.debug("cluster match found!")
                             effect_index = j
                             break
                     image = self.scene_manager.surfaces[eff.source.db_name]
@@ -1374,10 +1397,11 @@ class BattleScene(engine.Scene):
                     fade_animation = FadeAnimation((effect_index * x_offset * position_modifier) - 12 + target.effect_region.x, target.effect_region.y - 12, image, .3, self, True, False)
                     join_animation.await_animation(fade_animation)
                     ticking_effect_grow_animation.link_animation(fade_animation)
+                    if target.source.dying:
+                        target.kill()
                 hp_bar_splitter = self.get_hp_bar_animation_splitter(False)
                 join_animation.link_animation(hp_bar_splitter)
                 self.add_animation(split_animation)
-                self.resolve_ticking_ability(self.cont_list[action - 3])
         else:
             self.animation_locked = False
             for manager in self.eteam:
@@ -1507,14 +1531,13 @@ class BattleScene(engine.Scene):
     def resolve_ticking_ability(self, eff: Effect):
         team_id = eff.user.id
         
-        
         for tar in self.cont_storage[eff.signature]:
             
             if tar < 3:
                 target = self.pteam[tar]
             else:
                 target = self.eteam[tar - 3]
-            if target.contains_sig(eff):
+            if target.contains_sig(eff) and not target.dead:
                 if eff.eff_type == EffectType.CONT_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
                     if eff.check_waiting() and self.is_allied_effect(eff, team_id) and (eff.mag >= 20 or not target.deflecting()):
                         eff.user.deal_eff_damage(eff.mag, target, eff, DamageType.NORMAL)
@@ -1681,6 +1704,8 @@ class BattleScene(engine.Scene):
 
         #endregion
 
+        
+        
         self.timer = self.start_timer()
         
         self.full_update()
@@ -2087,7 +2112,7 @@ class BattleScene(engine.Scene):
                                    system=True))
             manager.source.energy_contribution = 1
             if manager.source.hp <= 0:
-                manager.source.dead = True
+                manager.kill()
             manager.refresh_character()
             if not manager.source.dead:
                 game_lost = False
@@ -2095,40 +2120,45 @@ class BattleScene(engine.Scene):
         game_won = True
         for manager in self.enemy_display.team.character_managers:
             if manager.source.hp <= 0:
-                manager.source.dead = True
+                manager.kill()
+                manager.source.clear_effects()
             manager.refresh_character(True)
+            
             if not manager.source.dead:
                 game_won = False
 
         #region Yatsufusa resurrection handling
         for manager in self.player_display.team.character_managers:
-            if manager.source.dead and manager.has_effect(
+            if manager.source.dead:
+                if manager.has_effect(
                     EffectType.MARK, "Yatsufusa"):
-                yatsu = manager.get_effect(EffectType.MARK, "Yatsufusa")
-                manager.source.dead = False
-                manager.source.hp = 40
-                manager.remove_effect(
-                    manager.get_effect(EffectType.MARK, "Yatsufusa"))
-                manager.add_effect(
-                    Effect(
-                        yatsu.source, EffectType.UNIQUE, yatsu.user, 280000,
-                        lambda eff:
-                        "This character has been animated by Kurome."))
-                manager.add_effect(
-                    Effect(
-                        yatsu.source, EffectType.DEF_NEGATE, yatsu.user,
-                        280000, lambda eff:
-                        "This character cannot reduce damage or become invulnerable."
-                    ))
-                manager.add_effect(
-                    Effect(
-                        yatsu.source,
-                        EffectType.COST_ADJUST,
-                        yatsu.user,
-                        280000,
-                        lambda eff:
-                        "This character's abilities costs have been increased by one random energy.",
-                        mag=51))
+                    yatsu = manager.get_effect(EffectType.MARK, "Yatsufusa")
+                    manager.source.dead = False
+                    manager.source.hp = 40
+                    manager.remove_effect(
+                        manager.get_effect(EffectType.MARK, "Yatsufusa"))
+                    manager.add_effect(
+                        Effect(
+                            yatsu.source, EffectType.UNIQUE, yatsu.user, 280000,
+                            lambda eff:
+                            "This character has been animated by Kurome."))
+                    manager.add_effect(
+                        Effect(
+                            yatsu.source, EffectType.DEF_NEGATE, yatsu.user,
+                            280000, lambda eff:
+                            "This character cannot reduce damage or become invulnerable."
+                        ))
+                    manager.add_effect(
+                        Effect(
+                            yatsu.source,
+                            EffectType.COST_ADJUST,
+                            yatsu.user,
+                            280000,
+                            lambda eff:
+                            "This character's abilities costs have been increased by one random energy.",
+                            mag=51))
+                else:
+                    manager.source.clear_effects()
         #endregion
         self.full_update()
         if game_lost:

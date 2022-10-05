@@ -390,4 +390,14 @@ mission_db = {
                                 Mission(max=15, description="Damage countering enemies with Emergency Smoke."), #
                                 Mission(max=5, description="Win matches where Chelsea only uses Mortal Wound against enemies affected by Those Who Fight In The Shadows (at least one)."), #
                                 ),
+                "rikka": (Mission(max=0, description=""),
+                          Mission(max=0, description=""),
+                          Mission(max=0, description=""),
+                          Mission(max=0, description=""),
+                          Mission(max=0, description=""),),
+                "anya": (Mission(max=0, description=""),
+                          Mission(max=0, description=""),
+                          Mission(max=0, description=""),
+                          Mission(max=0, description=""),
+                          Mission(max=0, description=""),),
             }

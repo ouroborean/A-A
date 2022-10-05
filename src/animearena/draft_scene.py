@@ -12,6 +12,7 @@ from animearena import engine
 from animearena import resource_manager
 from animearena.character import get_character_db, Character
 from animearena.color import *
+from animearena.text_formatter import get_string_width
 from animearena.turn_timer import TurnTimer
 import math
 import enum
@@ -52,12 +53,13 @@ class DraftScene(engine.Scene):
         self.chosen_character = ""
         self.character_sprites = {}
         for k, v in get_character_db().items():
-            sprite = self.ui_factory.from_surface(
-                sdl2.ext.BUTTON,
-                self.get_scaled_surface(self.border_image(self.scene_manager.surfaces[k+"allyprof"], 2), 75, 75), free=True)
-            sprite.click += self.character_click
-            sprite.character = v
-            self.character_sprites[k] = sprite
+            if not v.hidden:
+                sprite = self.ui_factory.from_surface(
+                    sdl2.ext.BUTTON,
+                    self.get_scaled_surface(self.border_image(self.scene_manager.surfaces[k+"allyprof"], 2), 75, 75), free=True)
+                sprite.click += self.character_click
+                sprite.character = v
+                self.character_sprites[k] = sprite
         
         #region initialization
                 
@@ -90,13 +92,14 @@ class DraftScene(engine.Scene):
         self.character_select_region.add_sprite(char_select_panel, 0, 0)
         self.character_sprites.clear()
         for k, v in get_character_db().items():
-            image = self.border_image(self.scene_manager.surfaces[k + "allyprof"].resize( ( 75, 75 )), 1)
-            sprite = self.ui_factory.from_surface(
-                sdl2.ext.BUTTON,
-                self.get_scaled_surface(image), free=True )
-            sprite.click += self.character_click
-            sprite.character = v
-            self.character_sprites[k] = sprite
+            if not v.hidden:
+                image = self.border_image(self.scene_manager.surfaces[k + "allyprof"].resize( ( 75, 75 )), 1)
+                sprite = self.ui_factory.from_surface(
+                    sdl2.ext.BUTTON,
+                    self.get_scaled_surface(image), free=True )
+                sprite.click += self.character_click
+                sprite.character = v
+                self.character_sprites[k] = sprite
         
         if self.scrolling:
             self.scroll_bar_y = self.scene_manager.mouse_y - 137 - self.scroll_button.click_offset
@@ -124,8 +127,8 @@ class DraftScene(engine.Scene):
         characters = self.get_filtered_characters_list()
         CHARACTER_COUNT = len(characters)
         ROW_COUNT = math.ceil(CHARACTER_COUNT/CHARS_PER_ROW)
-        VIEWPORT_HEIGHT = self.character_select_region.size()[1] - 10
-        TOTAL_HEIGHT = (ROW_COUNT * BUTTON_SPACE) - VIEWPORT_HEIGHT
+        VIEWPORT_HEIGHT = self.character_select_region.size()[1]
+        TOTAL_HEIGHT = (ROW_COUNT * BUTTON_SPACE) - VIEWPORT_HEIGHT - 5
         if CHARACTER_COUNT <= 35:
             VERT_OFFSET = 0
         else:
@@ -297,7 +300,7 @@ class DraftScene(engine.Scene):
                 self.get_scaled_surface(self.enemy.avatar))
         self.add_bordered_sprite(self.enemy_region, enemy_ava, BLACK, -100,
                                     5)
-        name_width = int(len(self.enemy.name) * 11.5) + 5
+        name_width = get_string_width(STACK_FONTSIZE, self.enemy.name) + 7
         transparent_box = self.sprite_factory.from_color(TRANSPARENT, (name_width, 50))
         name_panel = self.render_bordered_text(self.stack_font, self.enemy.name, RED, BLACK, transparent_box, 0, 0, thickness=2)
         self.enemy_region.add_sprite(name_panel, -name_width - 100, 0)

@@ -341,6 +341,9 @@ class CharacterManager(collections.abc.Container):
                     "Tsukuyomi",
                     target.get_effect(EffectType.UNIQUE, "Tsukuyomi").user)
 
+    def kill(self):
+        self.source.kill()
+
     def check_on_use(self):
         for target in self.current_targets:
             #region Receive Ability Mission Tracking
@@ -451,6 +454,10 @@ class CharacterManager(collections.abc.Container):
             if not self.is_aff_immune() and not self.is_ignoring():
                 target.deal_eff_damage(20, self, target.get_effect(EffectType.UNIQUE, "Sage Mode"), DamageType.AFFLICTION)
 
+    @property
+    def dead(self):
+        return self.source.dead
+
     def check_damage_drain(self) -> int:
         gen = [
             eff for eff in self.source.current_effects
@@ -472,6 +479,7 @@ class CharacterManager(collections.abc.Container):
         if eff.name == "Utsuhi Ame":
             if self.final_can_effect(eff.user.check_bypass_effects()):
                 eff.user.deal_eff_damage(eff.mag * 25, self, eff, DamageType.NORMAL)
+                self.add_effect(Effect(Ability("yamamoto2"), EffectType.MARK, eff.user, 2, lambda eff:"This character was damaged by Utsuhi Ame."))
                 if eff.mag == 1:
                     eff.user.apply_stack_effect(
                         Effect(
@@ -513,7 +521,7 @@ class CharacterManager(collections.abc.Container):
                 eff.user.deal_eff_damage(eff.mag * 10, self, eff, DamageType.AFFLICTION)
         if eff.name == "Decaying Touch":
             if self.final_can_effect(eff.user.check_bypass_effects()):
-                eff.user.deal_eff_damage((10 * (2**eff.mag)), self, eff, DamageType.AFFLICTION)
+                eff.user.deal_eff_damage((10 * (2**(eff.mag - 1))), self, eff, DamageType.AFFLICTION)
         if eff.name == "Nemurin Nap":
             if not self.has_effect(EffectType.SYSTEM, "NemurinActivityMarker"):
                 eff.alter_mag(1, 3)
@@ -2249,15 +2257,7 @@ class CharacterManager(collections.abc.Container):
                                 mag=1), targeter)        
                 
                 self.source.hp = 0
-                self.source.dead = True
-                temp_yatsufusa_storage = None
-                if self.has_effect(EffectType.MARK, "Yatsufusa"):
-                    temp_yatsufusa_storage = self.get_effect(
-                        EffectType.MARK, "Yatsufusa")
-                self.source.clear_effects()
-                self.update_effect_region()
-                if temp_yatsufusa_storage:
-                    self.source.current_effects.append(temp_yatsufusa_storage)
+                self.kill()
                 
                 #region Checking for winning killing blow mission progress
                 winning_kb = True
@@ -2315,15 +2315,9 @@ class CharacterManager(collections.abc.Container):
                         source.user.receive_eff_healing(20, self.get_effect(EffectType.MARK,
                                                    "Beast Instinct"))
                 self.source.hp = 0
-                self.source.dead = True
-                temp_yatsufusa_storage = None
-                if self.has_effect(EffectType.MARK, "Yatsufusa"):
-                    temp_yatsufusa_storage = self.get_effect(
-                        EffectType.MARK, "Yatsufusa")
-                self.source.clear_effects()
+                self.kill()
+                
                 self.update_effect_region()
-                if temp_yatsufusa_storage:
-                    self.source.current_effects.append(temp_yatsufusa_storage)
                 
                 #region Checking for winning killing blow mission progress
 
@@ -2781,7 +2775,7 @@ class CharacterManager(collections.abc.Container):
 
     def refresh_character(self, enemy=False):
         if self.source.hp <= 0:
-            self.source.dead = True
+            self.kill()
         self.primary_target = None
         self.acted = False
         self.countered = False
