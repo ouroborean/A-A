@@ -479,7 +479,7 @@ class CharacterSelectScene(engine.Scene):
             for abi_class in self.detail_target.types:
                 ability_classes = ability_classes + abi_class.capitalize() + ","
             ability_classes = ability_classes[:len(ability_classes) - 1]
-            detail_panel = self.render_bordered_text(self.font, ability_classes, WHITE, BLACK, detail_panel, 35, )
+            detail_panel = self.render_bordered_text(self.font, ability_classes, WHITE, BLACK, detail_panel, 35, 500, 1)
         else:
             text = self.detail_target.desc
 
