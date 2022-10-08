@@ -932,6 +932,7 @@ class BattleScene(engine.Scene):
         for i, eff in enumerate(self.cont_list):
             self.execution_order.append(i + 3)
         for manager in self.acting_order:
+            
             self.execution_order.append(manager.char_id)
 
     def draw_energy_rows(self, panel):

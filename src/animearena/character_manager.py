@@ -1077,7 +1077,6 @@ class CharacterManager(collections.abc.Container):
                 self.get_effect(EffectType.COUNTER_IMMUNE,
                                 "Beast Instinct").duration = 5
             
-
     def apply_stack_effect(self, effect: Effect, user: "CharacterManager"):
         gen = [
             eff for eff in self.source.current_effects
@@ -1513,8 +1512,6 @@ class CharacterManager(collections.abc.Container):
         if damage > 0:
             self.eff_damage_taken_check(damage, source)
 
-    
-
     def toga_flush_effects(self):
         DANGER_TYPES = (EffectType.ABILITY_SWAP, EffectType.PROF_SWAP, EffectType.ALL_BOOST, EffectType.COST_ADJUST, EffectType.TARGET_SWAP)
         for eff in self.source.current_effects:
@@ -1526,7 +1523,6 @@ class CharacterManager(collections.abc.Container):
                 elif eff.eff_type in DANGER_TYPES:
                     self.remove_effect(eff)
                 
-
     def toga_transform(self, target_name: str):
         swap_hp = self.source.hp
         swap_effects = self.source.current_effects
@@ -1565,8 +1561,6 @@ class CharacterManager(collections.abc.Container):
         if damage < 0:
             damage = 0
 
-
-        
         self.source.hp -= damage
 
         if dealer.has_effect(EffectType.ALL_BOOST, "Nemurin Beam"):
