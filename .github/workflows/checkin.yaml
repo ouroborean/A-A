@@ -16,13 +16,14 @@ jobs:
         python-version: ["3.9", "3.10"]
 
     steps:
+      - uses: actions/checkout@v3
+      
       - id: 'auth'
         name: 'Authenticate to Google Cloud'
         uses: 'google-github-actions/auth@v0.4.0'
         with:
           workload_identity_provider: 'projects/${{ secrets.SERVER_ACCT_NO }}/locations/global/workloadIdentityPools/git-workflow/providers/git-workflow'
           service_account: 'git-workflow-account@${{ secrets.SERVER_ID }}.iam.gserviceaccount.com'
-      - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
@@ -36,8 +37,6 @@ jobs:
         run: pip install pytest pytest-cov
       - name: Install project
         run: pip install -e .
-      - name: Login to Google Cloud
-        run: gcloud auth login
       - name: Get resource tar file
         run: gcloud storage cp gs://a-a-resources/resources-2022-10-08.tar.gz src/animearena
       - name: Remove old resource directory
