@@ -12,6 +12,7 @@ from animearena.login_scene import LoginScene, make_login_scene
 from animearena.tutorial_scene import TutorialScene, make_tutorial_scene
 from playsound import playsound
 import sys
+import logging
 
 if typing.TYPE_CHECKING:
     from animearena.client import ConnectionHandler
