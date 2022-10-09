@@ -456,7 +456,7 @@ def character_data():
 
 @pytest.fixture(scope="package")
 def setup_scene_manager():
-    scene_manager = SceneManager(testing=True)
+    scene_manager = SceneManager()
     yield scene_manager
 
 @pytest.fixture
