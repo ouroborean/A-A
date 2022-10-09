@@ -4,7 +4,6 @@ __pycache__/
 *$py.class
 *.sh
 *.exe
-*.tar.gz
 # C extensions
 *.so
 *.yaml
@@ -28,7 +27,6 @@ wheels/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
-.github/
 *.egg
 MANIFEST
 
