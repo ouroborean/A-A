@@ -2,12 +2,12 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+*.sh
 *.exe
-
+*.tar.gz
 # C extensions
 *.so
-
+*.yaml
 # No pictures so WOTC no get angy
 *.png
 
@@ -28,6 +28,7 @@ wheels/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
+.github/
 *.egg
 MANIFEST
 
