@@ -65,7 +65,10 @@ class Ability():
     def __init__(self, name: str = None):
         if name:
             self.db_name = name
-            self.image = Image.open(get_path(name + ".png"))
+            try:
+                self.image = Image.open(get_path(name + ".png"))
+            except FileNotFoundError:
+                self.image = Image.open(get_path(name + ".PNG"))
             
         self.char_select_desc = None
         self.in_battle_desc = None
