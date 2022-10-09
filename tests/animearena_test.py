@@ -12,6 +12,9 @@ import pytest
 
 from animearena.battle_scene import BattleScene, make_battle_scene, CharacterManager, AbilityMessage
 
+logging.basicConfig(level=logging.DEBUG,
+                        format="%(levelname)s:%(relativeCreated)d:%(module)s:%(message)s")
+logging.getLogger("PIL").setLevel(69) # turn off PIL logging
 
 class TestGame:
 
@@ -20,7 +23,7 @@ class TestGame:
     active_player_id = int
 
     def __init__(self, player1_team: list[Character], player2_team: list[Character], scene_manager):
-
+        
         self.player1 = make_battle_scene(scene_manager)
         self.player1.setup_scene(player1_team, player2_team)
         self.player1.player_display.team.energy_pool[0] = 20
