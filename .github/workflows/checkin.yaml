@@ -36,6 +36,8 @@ jobs:
         run: pip install pytest pytest-cov
       - name: Install project
         run: pip install -e .
+      - name: Login to Google Cloud
+        run: gcloud auth login
       - name: Get resource tar file
         run: gcloud storage cp gs://a-a-resources/resources-2022-10-08.tar.gz src/animearena
       - name: Remove old resource directory
