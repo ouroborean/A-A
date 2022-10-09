@@ -43,7 +43,9 @@ jobs:
         run: rm -r resources
       - name: Unpack resources into resource folder
         run: tar -xvf src/animearena/resources-2022-10-08.tar.gz
-      - name: Rename resources folder
-        run: mv src/animearena/resources-2022-10-08 src/animearena/resources
+      - name: Check file structure, part 1
+        run: cd src/animearena
+      - name: Check file structure, part 2
+        run: ls
       - name: Run tests
         run: pytest tests/animearena_test.py --junitxml=junit/test-results.xml --cov=com --cov-report=xml --cov-report=html
