@@ -59,6 +59,7 @@ class SceneManager:
             self.factory = sdl2.ext.SpriteFactory(sdl2.ext.SOFTWARE, free=False)
             self.spriterenderer = self.factory.create_sprite_render_system(window)
         for char in get_character_db().keys():
+            logging.debug("Initializing %s", char)
             self.surfaces[char + "allyprof"] = get_image_from_path(char + "prof.png")
             self.surfaces[char + "enemyprof"] = get_image_from_path(char + "prof.png").transpose(Image.FLIP_LEFT_RIGHT)
             self.surfaces[char + "banner"] = get_image_from_path(char + "banner.png")
