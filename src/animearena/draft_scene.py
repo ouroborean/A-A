@@ -1,7 +1,6 @@
 from pathlib import Path
 import importlib.resources
 import os
-from symbol import return_stmt
 import sys
 import sdl2
 import sdl2.ext
