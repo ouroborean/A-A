@@ -38,7 +38,7 @@ jobs:
       - name: Install project
         run: pip install -e .
       - name: Get resource tar file
-        run: gcloud storage cp gs://a-a-resources/resources-2022-10-08.tar.gz src/animearena
+        run: gcloud storage cp gs://a-a-resources/resources-2022-10-15.tar.gz src/animearena
       - name: Remove old resource directory
         run: rm -r resources
       - name: Unpack resources into resource folder
