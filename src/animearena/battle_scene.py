@@ -932,7 +932,6 @@ class BattleScene(engine.Scene):
         for i, eff in enumerate(self.cont_list):
             self.execution_order.append(i + 3)
         for manager in self.acting_order:
-            
             self.execution_order.append(manager.char_id)
 
     def draw_energy_rows(self, panel):
@@ -1410,7 +1409,7 @@ class BattleScene(engine.Scene):
             self.finish_turn_start()
     
     def enemy_execution_loop(self, executed_abilities: list["AbilityMessage"], execution_order: list[int],
-                             potential_energy: list[int]):
+                             potential_energy: list[int], timeout = False):
 
         for ability in executed_abilities:
             
@@ -1432,7 +1431,9 @@ class BattleScene(engine.Scene):
                 self.eteam[ability.user_id].current_targets.append(
                     self.pteam[num])
         self.get_execution_order_base("enemy")
-        for action in execution_order:
+        if not timeout:
+            self.execution_order = execution_order
+        for action in self.execution_order:
             
             if action < 3:
                 if self.eteam[action].acted:
@@ -1453,7 +1454,7 @@ class BattleScene(engine.Scene):
         self.turn_start()
     
     def start_enemy_execution(self, executed_abilities: list["AbilityMessage"], execution_order: list[int],
-                             potential_energy: list[int]):
+                             potential_energy: list[int], timeout=False):
         self.potential_energy = potential_energy
         for ability in executed_abilities:
             self.eteam[ability.user_id].used_ability = self.eteam[
@@ -1476,7 +1477,8 @@ class BattleScene(engine.Scene):
             
             
         self.get_execution_order_base("enemy")
-        self.execution_order = execution_order
+        if not timeout:
+            self.execution_order = execution_order
         self.pump_enemy_execution_order()
                 
     def finish_turn_start(self):
@@ -1576,6 +1578,14 @@ class BattleScene(engine.Scene):
         #     clear character's acted status
         #     resolve continuous effects
         #
+        
+        self.get_execution_order_base("ally")
+        
+        if self.skipping_animations:
+            self.execution_loop()
+        else:
+            self.pump_execution_order()
+        
         self.waiting_for_turn = True
         self.exchanging_energy = False
         self.return_targeting_to_default()
@@ -1588,7 +1598,6 @@ class BattleScene(engine.Scene):
         self.random_spent = [0,0,0,0]
         self.turn_end(timeout=True)
         self.full_update()
-        pass
 
     def tick_ability_cooldown(self):
         for manager in self.player_display.team.character_managers:

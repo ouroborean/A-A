@@ -1,6 +1,7 @@
 from pathlib import Path
 import importlib.resources
 import os
+from symbol import return_stmt
 import sys
 import sdl2
 import sdl2.ext
@@ -72,6 +73,7 @@ class DraftScene(engine.Scene):
         self.ban_region = self.region.subregion(200, 575, 500, 120)
         self.button_region = self.region.subregion(420, 5, 60, 40)
         self.timer_region = self.region.subregion(x=269, y=95, width=362, height=12)
+        self.disconnect_region = self.region.subregion(100, 100, 700, 500)
         
     def full_render(self):
         self.region.clear()
@@ -85,6 +87,8 @@ class DraftScene(engine.Scene):
         self.render_ban_region()
         self.render_button_region()
         self.render_timer_region()
+        
+        
     
     def scroll_character_select(self):
         self.character_select_region.clear()
@@ -259,6 +263,20 @@ class DraftScene(engine.Scene):
             button = self.render_bordered_text(self.font, "Waiting for opponent...", WHITE, BLACK, button, 3, 9, 1)
             self.button_region.add_sprite(button, -60, 0)
     
+    def render_disconnect_region(self):
+        self.disconnect_region.clear()
+        panel = self.sprite_factory.from_color(MENU_TRANSPARENT, self.disconnect_region.size())
+        panel = self.border_sprite(panel, AQUA, 2)
+        disconnect_image = self.sprite_factory.from_surface(self.get_scaled_surface(self.scene_manager.surfaces["disconnect"]), free=True)
+        disconnect_image = self.render_bordered_text(self.font, "Enemy player disconnected...", WHITE, BLACK, disconnect_image, 25, 25, 1)
+        disconnect_image = self.border_sprite(disconnect_image, AQUA, 2)
+        return_button = self.ui_factory.from_color(sdl2.ext.BUTTON, DULL_AQUA, (70, 40))
+        return_button = self.border_sprite(return_button, AQUA, 2)
+        return_button = self.render_bordered_text(self.font, "Return", WHITE, BLACK, return_button, 7, 7, 1)
+        self.disconnect_region.add_sprite(panel, 0, 0)
+        self.disconnect_region.add_sprite(disconnect_image, 2, 25)
+        self.disconnect_region.add_sprite(return_button, 617, 25)
+    
     def render_player_region(self):
         self.player_region.clear()
         player_ava = self.sprite_factory.from_surface(
@@ -391,7 +409,23 @@ class DraftScene(engine.Scene):
                 self.scene_manager.connection.send_draft_finalization(self.player_picks)
             else:
                 self.mode = self.turns[self.scene_stage]
+            self.timer = self.start_timer()
             self.full_render()
+            
+    def timeout_pick(self):
+        char = self.get_first_available_character()
+        self.player_picks.append(char)
+        self.scene_stage += 1
+        if not self.scene_stage == 4:
+            self.waiting_for_turn = True
+        self.chosen_character = ""
+        if self.scene_stage == 10:
+            self.waiting_for_turn = False
+            self.scene_manager.connection.send_draft_finalization(self.player_picks)
+        else:
+            self.mode = self.turns[self.scene_stage]
+        self.timer = self.start_timer()
+        self.full_render()
     
     def ban_click(self, button, sender):
         if self.chosen_character:
@@ -401,7 +435,23 @@ class DraftScene(engine.Scene):
             self.scene_manager.connection.send_draft_message(self.chosen_character)
             self.waiting_for_turn = True
             self.chosen_character = ""
+            self.timer = self.start_timer()
             self.full_render()
+    
+    def timeout_ban(self):
+        char = self.get_first_available_character()
+        self.player_bans.append(char)
+        self.scene_stage += 1
+        self.mode = self.turns[self.scene_stage]
+        self.waiting_for_turn = True
+        self.chosen_character = ""
+        self.timer = self.start_timer()
+        self.full_render()
+    
+    def handle_disconnect(self):
+        self.waiting_for_turn = True
+        self.full_render()
+        self.render_disconnect_region()
     
     def start_ranked_battle(self, energy, seed):
         enemy_team = [Character(name) for name in self.enemy_picks]
@@ -411,6 +461,7 @@ class DraftScene(engine.Scene):
         self.scene_manager.start_battle(player_team, enemy_team, self.player, self.enemy, energy, seed)
     
     def receive_message(self, character):
+        logging.debug("received enemy draft message")
         if self.scene_stage == 0:
             self.enemy_bans.append(character)
         elif self.scene_stage == 1:
@@ -439,6 +490,7 @@ class DraftScene(engine.Scene):
             self.scene_manager.connection.send_draft_finalization(self.player_picks)
         else:
             self.mode = self.turns[self.scene_stage]
+        self.timer = self.start_timer()
         self.full_render()
     
     def get_click_coordinates(self, button):
@@ -451,13 +503,29 @@ class DraftScene(engine.Scene):
         self.timer = self.start_timer()
         self.full_render()
     
-    def start_timer(self, time: int = 90) -> TurnTimer:
+    def handle_timeout(self):
+        if self.waiting_for_turn:
+            print("Waiting for turn when timeout received")
+            self.receive_message(self.get_first_available_character())
+        else:
+            print("Currently acting when timeout received")
+            if self.mode == Mode.PICK:
+                self.timeout_pick()
+            elif self.mode == Mode.BAN:
+                self.timeout_ban()
+    
+    def get_first_available_character(self) -> str:
+        for character in get_character_db().keys():
+            if not (character in self.enemy_bans or character in self.enemy_picks or character in self.player_bans or character in self.player_picks):
+                return character
+    
+    def start_timer(self, time: int = 91) -> TurnTimer:
         if self.timer:
             self.timer.cancel()
         return TurnTimer(time, self.empty_placeholder)
 
     def empty_placeholder(self):
-        pass
+        return 0
     
     def get_filtered_characters_list(self) -> list[Character]:
         # if not self.unlock_filtering:

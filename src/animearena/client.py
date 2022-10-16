@@ -62,8 +62,16 @@ class ConnectionHandler:
             9: self.handle_login_nonce,
             10: self.handle_ranked_match_start_package,
             11: self.handle_draft_message,
-            12: self.handle_draft_finalization
+            12: self.handle_draft_finalization,
+            13: self.handle_draft_timeout,
+            14: self.handle_draft_disconnection
         }
+    
+    def handle_draft_disconnection(self, data:list[bytes]):
+        self.scene_manager.draft_scene.handle_disconnect()
+    
+    def handle_draft_timeout(self, data:list[bytes]):
+        self.scene_manager.draft_scene.handle_timeout()
 
     def handle_timeout(self, data:list[bytes]):
         
@@ -225,7 +233,7 @@ class ConnectionHandler:
         buffer = ByteBuffer()
         buffer.write_bytes(data)
         buffer.read_int()
-
+        timeout = bool(buffer.read_int())
         used_ability_count = buffer.read_int()
         executed_abilities = list()
         for i in range(used_ability_count):
@@ -254,11 +262,11 @@ class ConnectionHandler:
 
         
         if self.scene_manager.battle_scene.skipping_animations:
-            self.scene_manager.battle_scene.enemy_execution_loop(executed_abilities, execution_order, potential_energy)
+            self.scene_manager.battle_scene.enemy_execution_loop(executed_abilities, execution_order, potential_energy, timeout)
         else:
-            self.scene_manager.battle_scene.start_enemy_execution(executed_abilities, execution_order, potential_energy)
+            self.scene_manager.battle_scene.start_enemy_execution(executed_abilities, execution_order, potential_energy, timeout)
         buffer.clear()
-
+  
     def send_registration(self, username: str, password: str):
         buffer = ByteBuffer()
         
@@ -350,6 +358,7 @@ class ConnectionHandler:
     def send_match_communication(self, ability_messages: list[AbilityMessage], execution_order: list[int], random_spent: list[int]):
         buffer = ByteBuffer()
         buffer.write_int(1)
+        buffer.write_int(0)
         buffer.write_int(len(ability_messages))
         for message in ability_messages:
             buffer.write_int(message.user_id)

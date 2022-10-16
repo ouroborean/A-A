@@ -172,6 +172,7 @@ class LoginScene(engine.Scene):
         self.full_render()
 
     def edit_username_text(self, entry, event):
+        logging.debug("Text change event!")
         self.reset_username_box()
         
         
