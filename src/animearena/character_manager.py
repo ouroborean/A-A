@@ -2080,8 +2080,7 @@ class CharacterManager(collections.abc.Container):
                 self.remove_effect(
                     self.get_effect(EffectType.COST_ADJUST,
                                     "Dream Manipulation"))
-        if self.has_effect(EffectType.MARK,
-                           "You Are Needed") and self.source.hp < 80:
+        if self.has_effect(EffectType.MARK, "You Are Needed") and self.source.hp < 80:
             self.full_remove_effect("You Are Needed", self)
             src = Ability("chrome1")
             self.add_effect(
@@ -2151,6 +2150,18 @@ class CharacterManager(collections.abc.Container):
                         manager.get_effect(EffectType.MARK,
                                            "Mental Immolation"))
             self.check_ability_swaps()
+        if self.has_effect(EffectType.UNIQUE, "Yor, the Mother"):
+            damager.receive_eff_damage(
+                15, self.get_effect(EffectType.UNIQUE,
+                                         "Yor, the Mother"), DamageType.NORMAL)
+            damager.add_effect(Effect(Ability("anya1"), EffectType.COST_ADJUST, self, 3, lambda eff: "This character's ability costs are increased by 1 random.", mag = 51))
+        if self.has_effect(EffectType.UNIQUE, "Loid, the Father"):
+            damager.receive_eff_damage(
+                15, self.get_effect(EffectType.UNIQUE,
+                                         "Loid, the Father"), DamageType.NORMAL)
+            damager.add_effect(Effect(Ability("anya2"), EffectType.ALL_DR, self, 2, lambda eff: "This character's will receive 5 more damage from non-affliction skills.", mag = -5))
+        if self.has_effect(EffectType.MARK, "Yor, the Mother"):
+            self.remove_effect(self.get_effect(EffectType.MARK, "Yor, the Mother"))
         if self.has_effect(EffectType.CONT_AFF_DMG, "Susano'o"):
             if self.source.hp < 50 or self.get_effect(EffectType.DEST_DEF,
                                                       "Susano'o").mag <= 0:
@@ -2569,7 +2580,29 @@ class CharacterManager(collections.abc.Container):
         for eff in self.source.current_effects:
             if not (eff == effect):
                 new_current_effects.append(eff)
+        
         self.source.current_effects = new_current_effects
+        
+        # if Anya is losing her active mark
+        # check every character in the game, and if they have a different team allegiance
+        # then remove any active "Yor, the Mother" effects that Anya has used on them.
+        if effect.name == "Yor, the Mother" and effect.eff_type == EffectType.MARK:
+            for character in self.scene.all_chars:
+                if character.id != self.id and character.has_effect_with_user(EffectType.CONT_DMG, "Yor, the Mother", self):
+                    character.remove_effect(character.get_effect_with_user(EffectType.CONT_DMG, "Yor, the Mother", self))
+            self.add_effect(Effect(Ability("anya1"), EffectType.UNIQUE, self, 280000, lambda eff: "Any enemy that damages Anya will receive 15 damage and have the cost of their skills increased by 1 random for 1 turn."))
+        if effect.name == "Loid, the Father" and effect.eff_type == EffectType.MARK:
+            logging.debug("%s, %s", effect.name, effect.eff_type)
+            for character in self.scene.all_chars:
+                if character.id != self.id and character.has_effect_with_user(EffectType.CONT_DMG, "Loid, the Father", self):
+                    character.remove_effect(character.get_effect_with_user(EffectType.CONT_DMG, "Loid, the Father", self))
+            self.add_effect(Effect(Ability("anya2"), EffectType.UNIQUE, self, 280000, lambda eff: "Any enemy that damages Anya will receive 15 damage and take 5 more damage from non-affliction skills for 1 turn."))
+        if effect.name == "Smirk" and effect.eff_type == EffectType.MARK:
+            for character in self.scene.all_chars:
+                if character.id != self.id and character.has_effect_with_user(EffectType.CONT_DRAIN, "Smirk", self):
+                    character.remove_effect(character.get_effect_with_user(EffectType.CONT_DRAIN, "Smirk", self))
+            self.add_effect(Effect(Ability("anya3"), EffectType.ALL_DR, self, 280000, lambda eff: "This character has 10 points of damage reduction.", mag = 10))
+        
         
 
     def full_remove_effect(self, eff_name: str, user: "CharacterManager"):
@@ -2577,6 +2610,8 @@ class CharacterManager(collections.abc.Container):
         for eff in self.source.current_effects:
             if not (eff.name == eff_name and eff.user == user):
                 new_current_effects.append(eff)
+            else:
+                self.remove_effect(eff)
         self.source.current_effects = new_current_effects
 
     def is_enemy(self) -> bool:
@@ -3028,6 +3063,8 @@ class CharacterManager(collections.abc.Container):
             self.current_ability_sprites = [
                 sprite for sprite in self.main_ability_sprites
             ]
+        else:
+            logging.debug("Failed to make current ability sprites")
         gen = (eff for eff in self.source.current_effects
                if eff.eff_type == EffectType.ABILITY_SWAP)
         for eff in gen:

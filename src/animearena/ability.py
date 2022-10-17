@@ -1069,16 +1069,44 @@ def exe_rapid_deflection(user: "CharacterManager", playerTeam: list["CharacterMa
 #endregion
 #region Anya Execution
 def exe_yor_the_mother(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            base_damage = 20
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_active_damage(base_damage, target, DamageType.NORMAL)
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 280000, lambda eff: "This character will take 20 damage. This effect will end if Anya takes new damage.", mag=20))
+        user.remove_effect(EffectType.UNIQUE, "Yor, the Mother")
+        user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "Yor is attacking an enemy. This effect will end if Anya takes new damage."))
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_loid_the_father(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            base_damage = 10
+            if target.final_can_effect(user.check_bypass_effects()):
+                user.deal_active_damage(base_damage, target, DamageType.NORMAL)
+                target.add_effect(Effect(user.used_ability, EffectType.CONT_DMG, user, 280000, lambda eff: "This character will take 10 damage. This effect will end if Anya takes new damage.", mag=10))
+        user.remove_effect(user.get_effect(EffectType.UNIQUE, "Loid, the Father"))
+        user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "Loid is attacking the enemy. This effect will end if Anya takes new damage."))
+        user.check_on_use()
+        user.check_on_harm()
 
 def exe_smirk(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    if not user.check_countered(playerTeam, enemyTeam):
+        for target in user.current_targets:
+            target.add_effect(Effect(user.used_ability, EffectType.CONT_DRAIN, user, 280000, lambda eff: "This character will lose 1 random energy.", mag=1))
+            target.drain_energy(1, user)
+        user.remove_effect(EffectType.ALL_DR, "Smirk")
+        user.add_effect(Effect(user.used_ability, EffectType.MARK, user, 280000, lambda eff: "Anya is taunting an enemy. This effect will end if Anya takes new damage."))
+        user.check_on_use()
+        user.check_on_harm()
+    
 
 def exe_bond_the_guardian(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
-    pass
+    user.add_effect(Effect(user.used_ability, EffectType.ALL_INVULN, user, 2, lambda eff: "Anya is invulnerable."))
+    user.check_on_use()
+    
 #endregion
 #region Astolfo Execution
 def exe_casseur(user: "CharacterManager", playerTeam: list["CharacterManager"], enemyTeam: list["CharacterManager"]):
@@ -5124,8 +5152,8 @@ ability_info_db = {
         "Naruto deals 40 damage to all enemies and stuns them for one turn.", [0, 1, 1, 0, 1, 0], Target.MULTI_ENEMY,
         default_target("HOSTILE"), exe_rasenshuriken, [AbilityType.INSTANT, AbilityType.ENERGY, AbilityType.STUN]
     ],
-    "anya1": ["Yor, the Mother", "While this move is not active, Anya deals 15 damage to any enemy that uses a new harmful skill on her and increases the cost of their skills by one random energy for one turn. She can activate it to permanently deal 20 damage per turn to target enemy. This effect will end if Anya suffers new damage and cannot be used while active.", [0, 0, 0, 0, 2, 2], Target.SINGLE, default_target("HOSTILE", lockout=(EffectType.UNIQUE, "Yor, the Mother")), exe_yor_the_mother, [AbilityType.PHYSICAL, AbilityType.INSTANT]],
-    "anya2": ["Loid, the Father", "While this move is not active, Anya deals 15 damage to any enemy that uses a new harmful skill on her and increases the damage they receive from non-affliction abilities by 5 for one turn. She can activate it to permanently deal 10 damage per turn to the enemy team. This effect will end if Anya suffers new damage and cannot be used while active.", [0, 0, 0, 0, 3, 2], Target.MULTI_ENEMY, default_target("HOSTILE", lockout=(EffectType.UNIQUE, "Loid, the Father")), exe_loid_the_father, [AbilityType.PHYSICAL, AbilityType.INSTANT]],
+    "anya1": ["Yor, the Mother", "While this move is not active, Anya deals 15 damage to any enemy that uses a new harmful skill on her and increases the cost of their skills by one random energy for one turn. She can activate it to permanently deal 20 damage per turn to target enemy. This effect will end if Anya suffers new damage and cannot be used while active.", [0, 0, 0, 0, 2, 2], Target.SINGLE, default_target("HOSTILE", lockout=(EffectType.MARK, "Yor, the Mother")), exe_yor_the_mother, [AbilityType.PHYSICAL, AbilityType.INSTANT]],
+    "anya2": ["Loid, the Father", "While this move is not active, Anya deals 15 damage to any enemy that uses a new harmful skill on her and increases the damage they receive from non-affliction abilities by 5 for one turn. She can activate it to permanently deal 10 damage per turn to the enemy team. This effect will end if Anya suffers new damage and cannot be used while active.", [0, 0, 0, 0, 3, 2], Target.MULTI_ENEMY, default_target("HOSTILE", lockout=(EffectType.MARK, "Loid, the Father")), exe_loid_the_father, [AbilityType.PHYSICAL, AbilityType.INSTANT]],
     "anya3": ["Smirk", "While this move is not active, Anya has 10 points of damage reduction. She can activate it to permanently decrease target enemy's non-affliction damage by 15 and drain one energy from them per turn. This skill will end Anya suffers new damage and cannot be used while active.", [0, 0, 0, 0, 2, 4], Target.SINGLE, default_target("HOSTILE", lockout=(EffectType.UNIQUE, "Smirk")), exe_smirk, [AbilityType.MENTAL, AbilityType.INSTANT]],
     "anya4": ["Bond, the Guardian", "Anya becomes invulnerable for one turn.", [0, 0, 0, 0, 1, 4], Target.SINGLE, default_target("SELF"), exe_bond_the_guardian, [AbilityType.INSTANT, AbilityType.STRATEGIC]],
     "accelerator1": ["Vector Scatter", "Accelerator deals 25 damage to target enemy and stuns them for one turn.", [0, 0, 1, 0, 0, 1], Target.SINGLE, default_target("HOSTILE"), exe_vector_scatter, [AbilityType.INSTANT, AbilityType.MENTAL, AbilityType.STUN]],

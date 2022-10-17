@@ -262,6 +262,10 @@ class BattleScene(engine.Scene):
         return self.enemy_display.team.character_managers
 
     @property
+    def all_chars(self) -> list["CharacterManager"]:
+        return self.pteam + self.eteam
+
+    @property
     def ally_energy_pool(self):
         return self.player_display.team.energy_pool
 
@@ -1541,6 +1545,9 @@ class BattleScene(engine.Scene):
             else:
                 target = self.eteam[tar - 3]
             if target.contains_sig(eff) and not target.dead:
+                if eff.eff_type == EffectType.CONT_DRAIN and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
+                    if eff.check_waiting() and self.is_allied_effect(eff, team_id):
+                        target.drain_energy(eff.mag, eff.user)
                 if eff.eff_type == EffectType.CONT_DMG and not (EffectType.MARK, "Enkidu, Chains of Heaven") in eff.user:
                     if eff.check_waiting() and self.is_allied_effect(eff, team_id) and (eff.mag >= 20 or not target.deflecting()):
                         eff.user.deal_eff_damage(eff.mag, target, eff, DamageType.NORMAL)
@@ -2497,6 +2504,11 @@ class BattleScene(engine.Scene):
             self.energy_region.add_sprite(accept_button, 80, 120)
 
     def handle_unique_startup(self, character: "CharacterManager"):
+        if character.source.name == "anya":
+            character.add_effect(Effect(character.source.main_abilities[0], EffectType.UNIQUE, character, 280000, lambda eff: "Any enemy that damages Anya will receive 15 damage and have the cost of their skills increased by 1 random for 1 turn."))
+            character.add_effect(Effect(character.source.main_abilities[1], EffectType.UNIQUE, character, 280000, lambda eff: "Any enemy that damages Anya will receive 15 damage and take 5 more damage from non-affliction skills for 1 turn."))
+            character.add_effect(Effect(character.source.main_abilities[2], EffectType.ALL_DR, character, 280000, lambda eff: "This character has 10 points of damage reduction.", mag = 10))
+
         if character.source.name == "gokudera":
             character.add_effect(
                 Effect(
