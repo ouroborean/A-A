@@ -292,9 +292,9 @@ class CharacterSelectScene(engine.Scene):
         
         for i in range(5):
             current = min(self.player.missions[self.display_character.name][i], mission_db[self.display_character.name][i].max)
-            mission_panel = self.render_bordered_text(self. font, f"{mission_db[self.display_character.name][i].description} ({current}/{mission_db[self.display_character.name][i].max})", WHITE, BLACK, mission_panel, MISSION_X_BUFFER, (MISSION_MAX_HEIGHT * i) + MISSION_Y_BUFFER, 1)
+            mission_panel = self.render_bordered_text(self. font, f"{mission_db[self.display_character.name][i].description} ({current}/{mission_db[self.display_character.name][i].max})", WHITE, BLACK, mission_panel, MISSION_X_BUFFER, (MISSION_MAX_HEIGHT * i) + MISSION_Y_BUFFER, 1, flow=True, target_width=500, fontsize=16)
             
-        self.mission_region.add_sprite(mission_panel, 0, 0)
+        self.mission_region.add_sprite(mission_panel, -30, 0)
 
     def render_filter_options(self):
         self.filter_region.clear()

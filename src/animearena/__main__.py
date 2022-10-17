@@ -79,7 +79,7 @@ async def server_loop(scene_manager: SceneManager):
     while not scene_manager.connected:
         try:
             #34.125.193.105
-            reader, writer = await asyncio.wait_for(asyncio.open_connection("34.125.193.105", 5692, limit = 1024 * 256, happy_eyeballs_delay=0.25), 1)
+            reader, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", 5692, limit = 1024 * 256, happy_eyeballs_delay=0.25), 1)
             
             scene_manager.connected = True
             scene_manager.connection.writer = writer
@@ -93,10 +93,10 @@ async def server_loop(scene_manager: SceneManager):
             cancelled = True
             break
     while True and not cancelled:
-        if not VERSION_CHECKED:
-            print("Checking version")
-            scene_manager.connection.send_version_request()
-            VERSION_CHECKED = True
+        # if not VERSION_CHECKED:
+        #     print("Checking version")
+        #     scene_manager.connection.send_version_request()
+        #     VERSION_CHECKED = True
         try:
             data = await reader.readuntil(b'\x1f\x1f\x1f')
         except CancelledError:

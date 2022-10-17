@@ -87,7 +87,12 @@ class DraftScene(engine.Scene):
         self.render_button_region()
         self.render_timer_region()
         
-        
+    def reset_scene(self):
+        self.player_bans.clear()
+        self.player_picks.clear()
+        self.enemy_bans.clear()
+        self.enemy_picks.clear()
+        self.scene_stage = 0
     
     def scroll_character_select(self):
         self.character_select_region.clear()
@@ -272,9 +277,14 @@ class DraftScene(engine.Scene):
         return_button = self.ui_factory.from_color(sdl2.ext.BUTTON, DULL_AQUA, (70, 40))
         return_button = self.border_sprite(return_button, AQUA, 2)
         return_button = self.render_bordered_text(self.font, "Return", WHITE, BLACK, return_button, 7, 7, 1)
+        return_button.click += self.disconnect_return_click
         self.disconnect_region.add_sprite(panel, 0, 0)
         self.disconnect_region.add_sprite(disconnect_image, 2, 25)
         self.disconnect_region.add_sprite(return_button, 617, 25)
+    
+    def disconnect_return_click(self, button, sender):
+        self.reset_scene()
+        self.scene_manager.return_to_select(self.player)
     
     def render_player_region(self):
         self.player_region.clear()
@@ -487,6 +497,7 @@ class DraftScene(engine.Scene):
         if self.scene_stage == 10:
             self.waiting_for_turn = True
             self.scene_manager.connection.send_draft_finalization(self.player_picks)
+            self.reset_scene()
         else:
             self.mode = self.turns[self.scene_stage]
         self.timer = self.start_timer()

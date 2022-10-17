@@ -68,8 +68,9 @@ class EffectType(enum.IntEnum):
     CONSECUTIVE_BUFFER = 50
     SPECIFIC_STUN = 51
     COUNTER_USE = 52
+    CONT_DRAIN = 53
 
-CONT_TYPES = [EffectType.CONT_DMG, EffectType.CONT_HEAL, EffectType.CONT_AFF_DMG, EffectType.CONT_PIERCE_DMG, EffectType.CONT_UNIQUE, EffectType.CONT_DEST_DEF]
+CONT_TYPES = [EffectType.CONT_DMG, EffectType.CONT_HEAL, EffectType.CONT_AFF_DMG, EffectType.CONT_PIERCE_DMG, EffectType.CONT_UNIQUE, EffectType.CONT_DEST_DEF, EffectType.CONT_DRAIN]
 
 class Effect:
     eff_type: EffectType

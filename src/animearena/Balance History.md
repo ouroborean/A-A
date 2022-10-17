@@ -78,3 +78,16 @@ It was brought to my attention that 35 piercing damage that ignores invulnerabil
 * **Flying Raijin**: Damage reduced to 25, from 35. Cooldown reduced to 1, from 2.
 
 
+***
+
+## Balance Change 0.9.951 (10/16/2022)
+
+Update to some characters that are lagging behind in power, as well as maneuvering some character's kits to make them more polarized so they can compete with the frontrunners in their ideal states (looking at you, Naruto). This is a design philosophy that Anime Arena is going to stick with during its lifetime: We don't want to nerf characters if we don't have to. When a character really kicks ass, that's cool! We like that. If they become oppressive in the meta (perma-ban, oceans of complaints, etc) then what we need to look at is *boosting* the roster that can't deal with them, or are meant to keep them in check.
+
+## New Character
+
+### Anya Forger
+Anya is a new disruption tank added to bolster the ranks of energy drain options, as well as giving players another pick for a team that only really wants someone to soak up excess random energy. Her kit includes a variety of tools that both create permanent, ticking threats, and *punish* enemies who target her without thinking.
+
+## Character Changes
+
